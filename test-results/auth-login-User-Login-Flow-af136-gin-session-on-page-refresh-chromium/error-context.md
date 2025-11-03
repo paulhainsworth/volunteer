@@ -1,0 +1,47 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e3]:
+  - navigation [ref=e4]:
+    - generic [ref=e5]:
+      - link "🚴 Volunteer Manager" [ref=e7] [cursor=pointer]:
+        - /url: /
+      - generic [ref=e8]:
+        - link "Login" [ref=e9] [cursor=pointer]:
+          - /url: "#/auth/login"
+        - link "Sign Up" [ref=e10] [cursor=pointer]:
+          - /url: "#/auth/signup"
+  - main [ref=e11]:
+    - generic [ref=e13]:
+      - heading "Create Account" [level=1] [ref=e14]
+      - paragraph [ref=e15]: Join as a volunteer
+      - generic [ref=e16]:
+        - generic [ref=e17]:
+          - generic [ref=e18]:
+            - generic [ref=e19]: First Name
+            - textbox "First Name" [ref=e20]:
+              - /placeholder: John
+          - generic [ref=e21]:
+            - generic [ref=e22]: Last Name
+            - textbox "Last Name" [ref=e23]:
+              - /placeholder: Doe
+        - generic [ref=e24]:
+          - generic [ref=e25]: Email
+          - textbox "Email" [ref=e26]:
+            - /placeholder: you@example.com
+        - generic [ref=e27]:
+          - generic [ref=e28]: Password
+          - textbox "Password" [ref=e29]:
+            - /placeholder: At least 6 characters
+        - generic [ref=e30]:
+          - generic [ref=e31]: Confirm Password
+          - textbox "Confirm Password" [ref=e32]:
+            - /placeholder: Re-enter password
+        - button "Create Account" [ref=e33] [cursor=pointer]
+      - generic [ref=e34]:
+        - text: Already have an account?
+        - link "Sign in" [ref=e35] [cursor=pointer]:
+          - /url: "#/auth/login"
+  - contentinfo [ref=e36]:
+    - paragraph [ref=e37]: © 2025 Berkeley Bicycle Club. All rights reserved.
+```
