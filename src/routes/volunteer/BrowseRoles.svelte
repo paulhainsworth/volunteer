@@ -11,6 +11,7 @@
   let sortBy = 'date';
   let filterDate = '';
   let filterStatus = 'all';
+  let selectedRole = null; // For modal
 
   onMount(async () => {
     // Redirect to onboarding if no emergency contact
@@ -114,7 +115,23 @@
       alert('Link copied to clipboard!');
     }
   }
+
+  function showMoreInfo(role) {
+    selectedRole = role;
+  }
+
+  function closeModal() {
+    selectedRole = null;
+  }
+
+  function handleKeydown(event) {
+    if (event.key === 'Escape' && selectedRole) {
+      closeModal();
+    }
+  }
 </script>
+
+<svelte:window on:keydown={handleKeydown} />
 
 <div class="browse-roles">
   <div class="header">
@@ -195,10 +212,6 @@
             </div>
           </div>
 
-          {#if role.description}
-            <p class="description">{role.description}</p>
-          {/if}
-
           <div class="role-actions">
             <button
               class="btn btn-primary"
@@ -210,10 +223,10 @@
             
             <button
               class="btn btn-secondary"
-              on:click={() => handleShare(role)}
-              title="Share this opportunity"
+              on:click={() => showMoreInfo(role)}
+              title="View full details"
             >
-              Share
+              More Info
             </button>
           </div>
         </div>
@@ -221,6 +234,87 @@
     </div>
   {/if}
 </div>
+
+{#if selectedRole}
+  {@const status = getFillStatus(selectedRole)}
+  {@const duration = calculateDuration(selectedRole.start_time, selectedRole.end_time)}
+  {@const isFull = selectedRole.positions_filled >= selectedRole.positions_total}
+  
+  <div class="modal-overlay" on:click={closeModal}>
+    <div class="modal-content" on:click|stopPropagation>
+      <button class="modal-close" on:click={closeModal} aria-label="Close">
+        ✕
+      </button>
+      
+      <div class="modal-header">
+        <h2>{selectedRole.name}</h2>
+        <span class="status-badge {status.class}">{status.label}</span>
+      </div>
+
+      <div class="modal-body">
+        <div class="modal-details">
+          <div class="detail-row">
+            <span class="icon">📅</span>
+            <div>
+              <strong>Date</strong>
+              <p>{format(new Date(selectedRole.event_date), 'EEEE, MMMM d, yyyy')}</p>
+            </div>
+          </div>
+          
+          <div class="detail-row">
+            <span class="icon">🕐</span>
+            <div>
+              <strong>Time</strong>
+              <p>{formatTime(selectedRole.start_time)} - {formatTime(selectedRole.end_time)} ({duration}h)</p>
+            </div>
+          </div>
+
+          {#if selectedRole.location}
+            <div class="detail-row">
+              <span class="icon">📍</span>
+              <div>
+                <strong>Location</strong>
+                <p>{selectedRole.location}</p>
+              </div>
+            </div>
+          {/if}
+
+          <div class="detail-row">
+            <span class="icon">👥</span>
+            <div>
+              <strong>Positions</strong>
+              <p>{selectedRole.positions_filled} / {selectedRole.positions_total} spots filled</p>
+            </div>
+          </div>
+        </div>
+
+        {#if selectedRole.description}
+          <div class="description-section">
+            <strong>Description</strong>
+            <p>{selectedRole.description}</p>
+          </div>
+        {/if}
+      </div>
+
+      <div class="modal-actions">
+        <button
+          class="btn btn-primary btn-large"
+          on:click={() => handleSignup(selectedRole.id)}
+          disabled={isFull}
+        >
+          {isFull ? 'This role is full' : 'Sign Up for This Role'}
+        </button>
+        
+        <button
+          class="btn btn-secondary"
+          on:click={() => handleShare(selectedRole)}
+        >
+          Share This Opportunity
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
 
 <style>
   .browse-roles {
@@ -356,13 +450,6 @@
     font-size: 1.1rem;
   }
 
-  .description {
-    color: #6c757d;
-    line-height: 1.5;
-    margin: 1rem 0;
-    font-size: 0.95rem;
-  }
-
   .role-actions {
     display: flex;
     gap: 0.75rem;
@@ -403,6 +490,149 @@
     background: #f8f9fa;
   }
 
+  /* Modal Styles */
+  .modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 1rem;
+  }
+
+  .modal-content {
+    background: white;
+    border-radius: 16px;
+    max-width: 600px;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+    position: relative;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  }
+
+  .modal-close {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    background: #f8f9fa;
+    border: none;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    font-size: 1.5rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #6c757d;
+    transition: background 0.2s, color 0.2s;
+    z-index: 1;
+  }
+
+  .modal-close:hover {
+    background: #e2e3e5;
+    color: #1a1a1a;
+  }
+
+  .modal-header {
+    padding: 2rem 2rem 1rem 2rem;
+    border-bottom: 1px solid #dee2e6;
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    padding-right: 4rem; /* Space for close button */
+  }
+
+  .modal-header h2 {
+    margin: 0;
+    color: #1a1a1a;
+    font-size: 1.75rem;
+    flex: 1;
+  }
+
+  .modal-body {
+    padding: 2rem;
+  }
+
+  .modal-details {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+  }
+
+  .detail-row {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+  }
+
+  .detail-row .icon {
+    font-size: 1.5rem;
+    flex-shrink: 0;
+  }
+
+  .detail-row div {
+    flex: 1;
+  }
+
+  .detail-row strong {
+    display: block;
+    color: #1a1a1a;
+    margin-bottom: 0.25rem;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .detail-row p {
+    margin: 0;
+    color: #495057;
+    font-size: 1rem;
+  }
+
+  .description-section {
+    background: #f8f9fa;
+    padding: 1.5rem;
+    border-radius: 8px;
+    margin-top: 1.5rem;
+  }
+
+  .description-section strong {
+    display: block;
+    color: #1a1a1a;
+    margin-bottom: 0.75rem;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .description-section p {
+    margin: 0;
+    color: #495057;
+    line-height: 1.6;
+    font-size: 1rem;
+  }
+
+  .modal-actions {
+    padding: 1.5rem 2rem 2rem 2rem;
+    border-top: 1px solid #dee2e6;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .btn-large {
+    padding: 1rem;
+    font-size: 1.1rem;
+  }
+
   @media (max-width: 768px) {
     .filters {
       grid-template-columns: 1fr;
@@ -410,6 +640,28 @@
 
     .roles-grid {
       grid-template-columns: 1fr;
+    }
+
+    .modal-content {
+      max-height: 95vh;
+      margin: 0.5rem;
+    }
+
+    .modal-header {
+      padding: 1.5rem 1.5rem 1rem 1.5rem;
+      padding-right: 3.5rem;
+    }
+
+    .modal-header h2 {
+      font-size: 1.5rem;
+    }
+
+    .modal-body {
+      padding: 1.5rem;
+    }
+
+    .modal-actions {
+      padding: 1rem 1.5rem 1.5rem 1.5rem;
     }
   }
 </style>
