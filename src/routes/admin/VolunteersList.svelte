@@ -9,6 +9,9 @@
   let loading = true;
   let error = '';
   let searchQuery = '';
+  let viewMode = 'cards'; // 'cards' or 'table'
+  let sortColumn = 'last_name';
+  let sortDirection = 'asc';
 
   onMount(async () => {
     if (!$auth.isAdmin) {
@@ -25,13 +28,61 @@
     }
   });
 
-  $: filteredVolunteers = $volunteers.filter(volunteer => {
+  function sortVolunteers(volunteers) {
+    return [...volunteers].sort((a, b) => {
+      let aVal, bVal;
+      
+      switch (sortColumn) {
+        case 'first_name':
+          aVal = a.first_name || '';
+          bVal = b.first_name || '';
+          break;
+        case 'last_name':
+          aVal = a.last_name || '';
+          bVal = b.last_name || '';
+          break;
+        case 'email':
+          aVal = a.email;
+          bVal = b.email;
+          break;
+        case 'role':
+          aVal = a.role;
+          bVal = b.role;
+          break;
+        case 'signups':
+          aVal = a.totalSignups;
+          bVal = b.totalSignups;
+          break;
+        case 'hours':
+          aVal = a.totalHours;
+          bVal = b.totalHours;
+          break;
+        default:
+          aVal = a.last_name || '';
+          bVal = b.last_name || '';
+      }
+      
+      const comparison = aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+      return sortDirection === 'asc' ? comparison : -comparison;
+    });
+  }
+
+  function handleSort(column) {
+    if (sortColumn === column) {
+      sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+      sortColumn = column;
+      sortDirection = 'asc';
+    }
+  }
+
+  $: filteredVolunteers = sortVolunteers($volunteers.filter(volunteer => {
     if (!searchQuery) return true;
     const query = searchQuery.toLowerCase();
-    const name = `${volunteer.first_name} ${volunteer.last_name}`.toLowerCase();
+    const name = `${volunteer.first_name || ''} ${volunteer.last_name || ''}`.toLowerCase();
     const email = volunteer.email.toLowerCase();
     return name.includes(query) || email.includes(query);
-  });
+  }));
 
   function exportToCSV() {
     const headers = ['First Name', 'Last Name', 'Email', 'Phone', 'Total Signups', 'Total Hours', 'Waiver Signed'];
@@ -77,19 +128,31 @@
     }
 
     try {
-      const { error: updateError } = await supabase
+      const { data: updateData, error: updateError } = await supabase
         .from('profiles')
         .update({ role: newRole })
-        .eq('id', userId);
+        .eq('id', userId)
+        .select();
 
-      if (updateError) throw updateError;
+      if (updateError) {
+        console.error('Update error:', updateError);
+        throw updateError;
+      }
+
+      if (!updateData || updateData.length === 0) {
+        throw new Error('No rows updated - check permissions');
+      }
+
+      console.log('Role updated successfully:', updateData);
 
       // Refresh volunteer list
       await volunteers.fetchVolunteers();
       
       alert(`User role changed to ${roleNames[newRole]} successfully! Changes take effect on their next login.`);
     } catch (err) {
+      console.error('Change role error:', err);
       error = 'Failed to change role: ' + err.message;
+      alert(`Error: ${err.message}`);
     }
   }
 
@@ -155,15 +218,156 @@
       <p>Volunteers will appear here once they sign up</p>
     </div>
   {:else}
-    <div class="search-box">
-      <input
-        type="text"
-        placeholder="Search volunteers by name or email..."
-        bind:value={searchQuery}
-      />
+    <div class="controls">
+      <div class="search-box">
+        <input
+          type="text"
+          placeholder="Search volunteers by name or email..."
+          bind:value={searchQuery}
+        />
+      </div>
+      
+      <div class="view-toggle">
+        <button
+          class="view-btn {viewMode === 'cards' ? 'active' : ''}"
+          on:click={() => viewMode = 'cards'}
+          title="Card view"
+        >
+          <span class="icon">▦</span> Cards
+        </button>
+        <button
+          class="view-btn {viewMode === 'table' ? 'active' : ''}"
+          on:click={() => viewMode = 'table'}
+          title="Table view"
+        >
+          <span class="icon">☰</span> Table
+        </button>
+      </div>
     </div>
 
-    <div class="volunteers-grid">
+    {#if viewMode === 'table'}
+      <div class="table-view">
+        <table>
+          <thead>
+            <tr>
+              <th on:click={() => handleSort('first_name')} class="sortable">
+                First Name
+                {#if sortColumn === 'first_name'}
+                  <span class="sort-arrow">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                {/if}
+              </th>
+              <th on:click={() => handleSort('last_name')} class="sortable">
+                Last Name
+                {#if sortColumn === 'last_name'}
+                  <span class="sort-arrow">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                {/if}
+              </th>
+              <th on:click={() => handleSort('email')} class="sortable">
+                Email
+                {#if sortColumn === 'email'}
+                  <span class="sort-arrow">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                {/if}
+              </th>
+              <th on:click={() => handleSort('role')} class="sortable">
+                Role
+                {#if sortColumn === 'role'}
+                  <span class="sort-arrow">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                {/if}
+              </th>
+              <th on:click={() => handleSort('signups')} class="sortable">
+                Signups
+                {#if sortColumn === 'signups'}
+                  <span class="sort-arrow">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                {/if}
+              </th>
+              <th on:click={() => handleSort('hours')} class="sortable">
+                Hours
+                {#if sortColumn === 'hours'}
+                  <span class="sort-arrow">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                {/if}
+              </th>
+              <th>Waiver</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each filteredVolunteers as volunteer (volunteer.id)}
+              <tr>
+                <td>{volunteer.first_name || '-'}</td>
+                <td>{volunteer.last_name || '-'}</td>
+                <td>
+                  <a href="mailto:{volunteer.email}" class="email-link">{volunteer.email}</a>
+                </td>
+                <td>
+                  <span class="role-badge {volunteer.role}">
+                    {#if volunteer.role === 'admin'}
+                      👑 Admin
+                    {:else if volunteer.role === 'volunteer_leader'}
+                      ⭐ Leader
+                    {:else}
+                      👤 Volunteer
+                    {/if}
+                  </span>
+                </td>
+                <td class="text-center">{volunteer.totalSignups}</td>
+                <td class="text-center">{volunteer.totalHours}h</td>
+                <td class="text-center">
+                  {#if volunteer.hasSignedWaiver}
+                    <span class="waiver-badge signed">✓</span>
+                  {:else}
+                    <span class="waiver-badge unsigned">✗</span>
+                  {/if}
+                </td>
+                <td>
+                  <div class="table-actions">
+                    {#if volunteer.role === 'volunteer'}
+                      <button 
+                        class="btn btn-xs btn-secondary"
+                        on:click={() => changeRole(volunteer.id, 'volunteer_leader')}
+                        title="Make Leader"
+                      >
+                        Leader
+                      </button>
+                      <button 
+                        class="btn btn-xs btn-info"
+                        on:click={() => changeRole(volunteer.id, 'admin')}
+                        title="Make Admin"
+                      >
+                        Admin
+                      </button>
+                    {:else if volunteer.role === 'volunteer_leader'}
+                      <button 
+                        class="btn btn-xs btn-info"
+                        on:click={() => changeRole(volunteer.id, 'admin')}
+                        title="Promote to Admin"
+                      >
+                        → Admin
+                      </button>
+                      <button 
+                        class="btn btn-xs btn-secondary"
+                        on:click={() => changeRole(volunteer.id, 'volunteer')}
+                        title="Demote"
+                      >
+                        → Volunteer
+                      </button>
+                    {:else}
+                      <button 
+                        class="btn btn-xs btn-warning"
+                        on:click={() => changeRole(volunteer.id, 'volunteer')}
+                        title="Demote"
+                      >
+                        → Volunteer
+                      </button>
+                    {/if}
+                  </div>
+                </td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      </div>
+    {:else}
+      <div class="volunteers-grid">
       {#each filteredVolunteers as volunteer (volunteer.id)}
         <div class="volunteer-card">
           <div class="volunteer-header">
@@ -273,6 +477,7 @@
         </div>
       {/each}
     </div>
+    {/if}
 
     {#if filteredVolunteers.length === 0}
       <div class="empty">
@@ -333,8 +538,18 @@
     margin-bottom: 0.5rem;
   }
 
-  .search-box {
+  .controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
     margin-bottom: 2rem;
+    flex-wrap: wrap;
+  }
+
+  .search-box {
+    flex: 1;
+    min-width: 300px;
   }
 
   .search-box input {
@@ -349,6 +564,124 @@
     outline: none;
     border-color: #007bff;
     box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+  }
+
+  .view-toggle {
+    display: flex;
+    gap: 0.5rem;
+    background: white;
+    border-radius: 6px;
+    padding: 0.25rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  }
+
+  .view-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 500;
+    color: #6c757d;
+    transition: all 0.2s;
+  }
+
+  .view-btn:hover {
+    background: #f8f9fa;
+    color: #1a1a1a;
+  }
+
+  .view-btn.active {
+    background: #007bff;
+    color: white;
+  }
+
+  .view-btn .icon {
+    font-size: 1.1rem;
+  }
+
+  .table-view {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+  }
+
+  .table-view table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .table-view th {
+    background: #f8f9fa;
+    padding: 1rem 0.75rem;
+    text-align: left;
+    font-weight: 600;
+    color: #495057;
+    border-bottom: 2px solid #dee2e6;
+    white-space: nowrap;
+  }
+
+  .table-view th.sortable {
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.2s;
+  }
+
+  .table-view th.sortable:hover {
+    background: #e9ecef;
+  }
+
+  .sort-arrow {
+    margin-left: 0.5rem;
+    color: #007bff;
+  }
+
+  .table-view td {
+    padding: 1rem 0.75rem;
+    border-bottom: 1px solid #dee2e6;
+  }
+
+  .table-view tr:hover {
+    background: #f8f9fa;
+  }
+
+  .text-center {
+    text-align: center;
+  }
+
+  .table-actions {
+    display: flex;
+    gap: 0.25rem;
+    flex-wrap: wrap;
+  }
+
+  .btn-xs {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.8rem;
+  }
+
+  .waiver-badge {
+    display: inline-block;
+    width: 24px;
+    height: 24px;
+    line-height: 24px;
+    text-align: center;
+    border-radius: 50%;
+    font-weight: bold;
+  }
+
+  .waiver-badge.signed {
+    background: #d4edda;
+    color: #155724;
+  }
+
+  .waiver-badge.unsigned {
+    background: #f8d7da;
+    color: #721c24;
   }
 
   .volunteers-grid {
@@ -556,8 +889,34 @@
   }
 
   @media (max-width: 768px) {
+    .controls {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .search-box {
+      width: 100%;
+    }
+
+    .view-toggle {
+      width: 100%;
+    }
+
+    .view-btn {
+      flex: 1;
+      justify-content: center;
+    }
+
     .volunteers-grid {
       grid-template-columns: 1fr;
+    }
+
+    .table-view {
+      overflow-x: auto;
+    }
+
+    .table-view table {
+      min-width: 800px;
     }
   }
 </style>
