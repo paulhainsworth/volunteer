@@ -58,7 +58,8 @@
       .order('name', { ascending: true });
     
     if (data) {
-      allRoles = data;
+      // Force Svelte reactivity by creating a new array
+      allRoles = [...data];
     }
   }
 
@@ -134,8 +135,6 @@
     try {
       const newDomainId = currentDomainId === domainId ? null : domainId;
       
-      console.log('Updating role:', roleId, 'to domain:', newDomainId);
-      
       const { error: updateError } = await supabase
         .from('volunteer_roles')
         .update({ domain_id: newDomainId })
@@ -146,13 +145,9 @@
         throw updateError;
       }
 
-      // Refresh data
-      await Promise.all([
-        domains.fetchDomains(),
-        fetchAllRoles()
-      ]);
-      
-      console.log('Successfully updated role assignment');
+      // Refresh data - must await to ensure UI updates
+      await fetchAllRoles();
+      await domains.fetchDomains();
     } catch (err) {
       console.error('Toggle assignment error:', err);
       error = err.message;
