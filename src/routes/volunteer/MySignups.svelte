@@ -13,7 +13,8 @@
   let mySignups = [];
   let showCancelModal = false;
   let cancellingSignup = null;
-  let contactingLeader = false;
+  let showContactLeaderModal = false;
+  let contactLeaderSignup = null;
 
   onMount(async () => {
     if (!$auth.user) {
@@ -95,13 +96,15 @@
   }
 
   function handleContactLeaderFirst() {
-    // Close the modal and scroll to the contact leader section
+    // Close cancel modal and open contact leader modal
+    contactLeaderSignup = cancellingSignup;
     closeCancelModal();
-    // You could also open the contact leader form directly
-    const leaderSection = document.querySelector('.leader-contact');
-    if (leaderSection) {
-      leaderSection.scrollIntoView({ behavior: 'smooth' });
-    }
+    showContactLeaderModal = true;
+  }
+
+  function closeContactLeaderModal() {
+    showContactLeaderModal = false;
+    contactLeaderSignup = null;
   }
 
   async function confirmCancel() {
@@ -204,8 +207,13 @@
   }
 
   function handleKeydown(event) {
-    if (event.key === 'Escape' && showCancelModal) {
-      closeCancelModal();
+    if (event.key === 'Escape') {
+      if (showCancelModal) {
+        closeCancelModal();
+      }
+      if (showContactLeaderModal) {
+        closeContactLeaderModal();
+      }
     }
   }
 
@@ -464,6 +472,70 @@ END:VCALENDAR`;
           disabled={cancellingId}
         >
           {cancellingId ? 'Cancelling...' : 'Yes, Cancel Signup'}
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+{#if showContactLeaderModal && contactLeaderSignup}
+  {@const leader = getEffectiveLeader(contactLeaderSignup)}
+  
+  <div class="modal-overlay" on:click={closeContactLeaderModal}>
+    <div class="modal-content contact-leader-modal" on:click|stopPropagation>
+      <button class="modal-close" on:click={closeContactLeaderModal} aria-label="Close">
+        ✕
+      </button>
+      
+      <div class="modal-header">
+        <h2>Contact Your Volunteer Leader</h2>
+      </div>
+
+      <div class="modal-body">
+        <p class="info-text-primary">
+          Before canceling, you might want to discuss with your volunteer leader about:
+        </p>
+        <ul class="suggestions-list">
+          <li>Swapping shifts with another volunteer</li>
+          <li>Finding a replacement volunteer</li>
+          <li>Understanding the impact of your cancellation</li>
+          <li>Exploring alternative ways to help</li>
+        </ul>
+
+        <div class="role-context">
+          <h3>Your Signup:</h3>
+          <p><strong>{contactLeaderSignup.role.name}</strong></p>
+          <p>{format(new Date(contactLeaderSignup.role.event_date), 'EEEE, MMMM d, yyyy')} • {formatTime(contactLeaderSignup.role.start_time)} - {formatTime(contactLeaderSignup.role.end_time)}</p>
+        </div>
+
+        {#if leader}
+          <div class="leader-contact-section">
+            <ContactLeader {leader} roleName={contactLeaderSignup.role.name} />
+          </div>
+        {:else}
+          <div class="no-leader-notice">
+            <p>No volunteer leader has been assigned to this role yet.</p>
+            <p>You can contact the event organizers directly at <a href="mailto:volunteer@mailinator.com">volunteer@mailinator.com</a></p>
+          </div>
+        {/if}
+      </div>
+
+      <div class="modal-actions">
+        <button
+          class="btn btn-secondary"
+          on:click={closeContactLeaderModal}
+        >
+          Close
+        </button>
+        
+        <button
+          class="btn btn-danger-outline"
+          on:click={() => {
+            closeContactLeaderModal();
+            showCancelConfirmation(contactLeaderSignup);
+          }}
+        >
+          Still Want to Cancel
         </button>
       </div>
     </div>
@@ -837,6 +909,107 @@ END:VCALENDAR`;
   .btn-danger:disabled {
     background: #6c757d;
     cursor: not-allowed;
+  }
+
+  .btn-danger-outline {
+    background: white;
+    color: #dc3545;
+    border: 2px solid #dc3545;
+    padding: 1rem;
+    font-size: 1rem;
+    font-weight: 600;
+  }
+
+  .btn-danger-outline:hover {
+    background: #dc3545;
+    color: white;
+  }
+
+  /* Contact Leader Modal Specific Styles */
+  .contact-leader-modal {
+    max-width: 650px;
+  }
+
+  .info-text-primary {
+    font-size: 1rem;
+    color: #495057;
+    margin: 0 0 1rem 0;
+    line-height: 1.6;
+  }
+
+  .suggestions-list {
+    background: #f8f9fa;
+    border-left: 4px solid #17a2b8;
+    border-radius: 6px;
+    padding: 1.5rem 1.5rem 1.5rem 2.5rem;
+    margin: 0 0 1.5rem 0;
+  }
+
+  .suggestions-list li {
+    color: #495057;
+    margin-bottom: 0.75rem;
+    line-height: 1.5;
+  }
+
+  .suggestions-list li:last-child {
+    margin-bottom: 0;
+  }
+
+  .role-context {
+    background: #fff3cd;
+    border: 1px solid #ffc107;
+    border-radius: 8px;
+    padding: 1.25rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .role-context h3 {
+    margin: 0 0 0.5rem 0;
+    font-size: 0.9rem;
+    color: #856404;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .role-context p {
+    margin: 0.25rem 0;
+    color: #495057;
+  }
+
+  .role-context strong {
+    color: #1a1a1a;
+    font-size: 1.1rem;
+  }
+
+  .leader-contact-section {
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 0;
+    overflow: hidden;
+  }
+
+  .no-leader-notice {
+    background: #e7f3ff;
+    border: 1px solid #b3d9ff;
+    border-radius: 8px;
+    padding: 1.5rem;
+    text-align: center;
+  }
+
+  .no-leader-notice p {
+    margin: 0.5rem 0;
+    color: #495057;
+  }
+
+  .no-leader-notice a {
+    color: #007bff;
+    text-decoration: none;
+    font-weight: 600;
+  }
+
+  .no-leader-notice a:hover {
+    text-decoration: underline;
   }
 
   @media (max-width: 768px) {
