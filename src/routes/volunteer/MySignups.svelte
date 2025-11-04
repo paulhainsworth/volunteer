@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import { signups } from '../../lib/stores/signups';
+  import { signups as signupsStore } from '../../lib/stores/signups';
   import { auth } from '../../lib/stores/auth';
   import { supabase } from '../../lib/supabaseClient';
   import { push } from 'svelte-spa-router';
@@ -10,6 +10,7 @@
   let loading = true;
   let error = '';
   let cancellingId = null;
+  let mySignups = [];
 
   onMount(async () => {
     if (!$auth.user) {
@@ -57,7 +58,7 @@
 
       if (fetchError) throw fetchError;
 
-      signups.set(data);
+      mySignups = data || [];
     } catch (err) {
       error = err.message;
     } finally {
@@ -88,7 +89,9 @@
     cancellingId = signupId;
     
     try {
-      await signups.cancelSignup(signupId);
+      await signupsStore.cancelSignup(signupId);
+      // Remove from local array
+      mySignups = mySignups.filter(s => s.id !== signupId);
     } catch (err) {
       error = err.message;
     } finally {
@@ -139,9 +142,9 @@ END:VCALENDAR`;
     return null;
   }
 
-  $: upcomingSignups = $signups.filter(s => new Date(s.role.event_date) >= new Date());
-  $: pastSignups = $signups.filter(s => new Date(s.role.event_date) < new Date());
-  $: totalHours = $signups.reduce((sum, signup) => {
+  $: upcomingSignups = mySignups.filter(s => new Date(s.role.event_date) >= new Date());
+  $: pastSignups = mySignups.filter(s => new Date(s.role.event_date) < new Date());
+  $: totalHours = mySignups.reduce((sum, signup) => {
     return sum + calculateDuration(signup.role.start_time, signup.role.end_time);
   }, 0);
 </script>
@@ -153,10 +156,10 @@ END:VCALENDAR`;
       <p>Manage your volunteer commitments</p>
     </div>
     
-    {#if $signups.length > 0}
+    {#if mySignups.length > 0}
       <div class="stats">
         <div class="stat">
-          <div class="stat-value">{$signups.length}</div>
+          <div class="stat-value">{mySignups.length}</div>
           <div class="stat-label">Total Signups</div>
         </div>
         <div class="stat">
@@ -171,7 +174,7 @@ END:VCALENDAR`;
     <div class="loading">Loading your signups...</div>
   {:else if error}
     <div class="error">{error}</div>
-  {:else if $signups.length === 0}
+  {:else if mySignups.length === 0}
     <div class="empty">
       <h2>No signups yet</h2>
       <p>You haven't signed up for any volunteer opportunities yet.</p>
