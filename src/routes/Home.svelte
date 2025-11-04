@@ -22,7 +22,17 @@
     <p class="tagline">Organize, track, and communicate with race volunteers</p>
     
     <div class="cta-buttons">
-      <a href="#/auth/signup" class="btn btn-primary">Get Started</a>
+      {#if $auth.user}
+        {#if $auth.isAdmin}
+          <a href="#/admin" class="btn btn-primary">Go to Dashboard</a>
+        {:else if $auth.profile?.role === 'volunteer_leader'}
+          <a href="#/leader" class="btn btn-primary">View My Roles</a>
+        {:else}
+          <a href="#/my-signups" class="btn btn-primary">My Signups</a>
+        {/if}
+      {:else}
+        <a href="#/auth/signup" class="btn btn-primary">Get Started</a>
+      {/if}
       <a href="#/volunteer" class="btn btn-secondary">Browse Opportunities</a>
     </div>
   </div>
