@@ -5,6 +5,13 @@
 
   onMount(() => {
     if ($auth.user) {
+      // Check if needs onboarding (no emergency contact)
+      if (!$auth.profile?.emergency_contact_name) {
+        push('/onboarding');
+        return;
+      }
+
+      // Otherwise redirect to role-specific dashboard
       if ($auth.isAdmin) {
         push('/admin');
       } else if ($auth.profile?.role === 'volunteer_leader') {

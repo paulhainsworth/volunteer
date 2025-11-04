@@ -13,6 +13,12 @@
   let filterStatus = 'all';
 
   onMount(async () => {
+    // Redirect to onboarding if no emergency contact
+    if ($auth.user && !$auth.profile?.emergency_contact_name) {
+      push('/onboarding');
+      return;
+    }
+
     try {
       await roles.fetchRoles();
     } catch (err) {

@@ -15,6 +15,12 @@
       return;
     }
 
+    // Redirect to onboarding if no emergency contact
+    if (!$auth.profile?.emergency_contact_name) {
+      push('/onboarding');
+      return;
+    }
+
     try {
       await signups.fetchMySignups($auth.user.id);
     } catch (err) {

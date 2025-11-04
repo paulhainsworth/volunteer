@@ -14,9 +14,17 @@
     try {
       await auth.signIn(email, password);
       
+      // Check if needs onboarding (no emergency contact)
+      if (!$auth.profile?.emergency_contact_name) {
+        push('/onboarding');
+        return;
+      }
+
       // Redirect based on role
       if ($auth.isAdmin) {
         push('/admin');
+      } else if ($auth.profile?.role === 'volunteer_leader') {
+        push('/leader');
       } else {
         push('/volunteer');
       }

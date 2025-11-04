@@ -14,6 +14,9 @@
       return;
     }
 
+    // Admins can skip onboarding if they want, but encourage it
+    // Don't force redirect for admins to allow initial setup
+
     try {
       await roles.fetchRoles();
     } catch (err) {

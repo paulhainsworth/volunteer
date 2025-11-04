@@ -28,6 +28,7 @@
   
   // Profile
   import Profile from './routes/Profile.svelte';
+  import Onboarding from './routes/Onboarding.svelte';
 
   const routes = {
     '/': Home,
@@ -38,6 +39,7 @@
     '/signup/:id': VolunteerSignup,
     '/my-signups': MySignups,
     '/profile': Profile,
+    '/onboarding': Onboarding,
     '/leader': LeaderDashboard,
     '/admin': AdminDashboard,
     '/admin/roles': RolesList,

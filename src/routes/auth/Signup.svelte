@@ -32,9 +32,9 @@
       await auth.signUp(email, password, firstName, lastName, 'volunteer');
       success = true;
       
-      // Redirect to volunteer dashboard
+      // Redirect to onboarding to collect emergency contact
       setTimeout(() => {
-        push('/volunteer');
+        push('/onboarding');
       }, 2000);
     } catch (err) {
       console.error('Signup error:', err);
