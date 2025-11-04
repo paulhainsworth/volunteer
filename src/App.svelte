@@ -25,6 +25,9 @@
   
   // Volunteer Leader routes
   import LeaderDashboard from './routes/leader/Dashboard.svelte';
+  
+  // Profile
+  import Profile from './routes/Profile.svelte';
 
   const routes = {
     '/': Home,
@@ -34,6 +37,7 @@
     '/volunteer': BrowseRoles,
     '/signup/:id': VolunteerSignup,
     '/my-signups': MySignups,
+    '/profile': Profile,
     '/leader': LeaderDashboard,
     '/admin': AdminDashboard,
     '/admin/roles': RolesList,

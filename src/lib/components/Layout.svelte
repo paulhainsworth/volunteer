@@ -48,7 +48,9 @@
           {/if}
           
           <div class="nav-user">
-            <span class="user-email">{$auth.profile?.email}</span>
+            <a href="#/profile" class="user-email" title="Edit Profile">
+              {$auth.profile?.email}
+            </a>
             <button on:click={handleSignOut} class="btn-link">Sign Out</button>
           </div>
         {:else}
@@ -153,6 +155,14 @@
   .user-email {
     font-size: 0.9rem;
     opacity: 0.8;
+    color: white;
+    text-decoration: none;
+    transition: opacity 0.2s;
+  }
+
+  .user-email:hover {
+    opacity: 1;
+    text-decoration: underline;
   }
 
   .btn-link {

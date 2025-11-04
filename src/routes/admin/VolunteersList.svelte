@@ -293,10 +293,18 @@
           <tbody>
             {#each filteredVolunteers as volunteer (volunteer.id)}
               <tr>
-                <td>{volunteer.first_name || '-'}</td>
+                <td>
+                  {volunteer.first_name || '-'}
+                  {#if volunteer.emergency_contact_name}
+                    <span class="emergency-indicator" title="Has emergency contact">🆘</span>
+                  {/if}
+                </td>
                 <td>{volunteer.last_name || '-'}</td>
                 <td>
                   <a href="mailto:{volunteer.email}" class="email-link">{volunteer.email}</a>
+                  {#if volunteer.phone}
+                    <div class="phone-display">📱 {volunteer.phone}</div>
+                  {/if}
                 </td>
                 <td>
                   <span class="role-badge {volunteer.role}">
@@ -372,10 +380,26 @@
         <div class="volunteer-card">
           <div class="volunteer-header">
             <div class="volunteer-info">
-              <h3>{volunteer.first_name} {volunteer.last_name}</h3>
+              <h3>
+                {volunteer.first_name || 'No'} {volunteer.last_name || 'Name'}
+                {#if volunteer.emergency_contact_name}
+                  <span class="emergency-indicator" title="Has emergency contact info">🆘</span>
+                {/if}
+              </h3>
               <a href="mailto:{volunteer.email}" class="email-link">{volunteer.email}</a>
               {#if volunteer.phone}
-                <a href="tel:{volunteer.phone}" class="phone-link">{volunteer.phone}</a>
+                <a href="tel:{volunteer.phone}" class="phone-link">📱 {volunteer.phone}</a>
+              {/if}
+              {#if volunteer.emergency_contact_name}
+                <div class="emergency-contact">
+                  <strong>Emergency:</strong> {volunteer.emergency_contact_name}
+                  {#if volunteer.emergency_contact_phone}
+                    - <a href="tel:{volunteer.emergency_contact_phone}">{volunteer.emergency_contact_phone}</a>
+                  {/if}
+                  {#if volunteer.emergency_contact_relationship}
+                    ({volunteer.emergency_contact_relationship})
+                  {/if}
+                </div>
               {/if}
             </div>
             
@@ -727,6 +751,37 @@
   .email-link:hover,
   .phone-link:hover {
     text-decoration: underline;
+  }
+
+  .emergency-indicator {
+    margin-left: 0.5rem;
+    font-size: 0.9rem;
+    cursor: help;
+  }
+
+  .emergency-contact {
+    margin-top: 0.5rem;
+    padding: 0.5rem;
+    background: #fff3cd;
+    border-left: 3px solid #ffc107;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    color: #856404;
+  }
+
+  .emergency-contact a {
+    color: #007bff;
+    text-decoration: none;
+  }
+
+  .emergency-contact a:hover {
+    text-decoration: underline;
+  }
+
+  .phone-display {
+    font-size: 0.85rem;
+    color: #6c757d;
+    margin-top: 0.25rem;
   }
 
   .volunteer-stats {
