@@ -22,6 +22,7 @@
   import RolesList from './routes/admin/RolesList.svelte';
   import VolunteersList from './routes/admin/VolunteersList.svelte';
   import Communications from './routes/admin/Communications.svelte';
+  import Domains from './routes/admin/Domains.svelte';
   
   // Volunteer Leader routes
   import LeaderDashboard from './routes/leader/Dashboard.svelte';
@@ -45,6 +46,7 @@
     '/admin/roles': RolesList,
     '/admin/roles/:id': RolesList,
     '/admin/volunteers': VolunteersList,
+    '/admin/domains': Domains,
     '/admin/communications': Communications
   };
 

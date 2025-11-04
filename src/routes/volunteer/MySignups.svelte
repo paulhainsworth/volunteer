@@ -2,8 +2,10 @@
   import { onMount } from 'svelte';
   import { signups } from '../../lib/stores/signups';
   import { auth } from '../../lib/stores/auth';
+  import { supabase } from '../../lib/supabaseClient';
   import { push } from 'svelte-spa-router';
   import { format } from 'date-fns';
+  import ContactLeader from '../../lib/components/ContactLeader.svelte';
 
   let loading = true;
   let error = '';
@@ -22,7 +24,40 @@
     }
 
     try {
-      await signups.fetchMySignups($auth.user.id);
+      // Fetch signups with domain and leader info
+      const { data, error: fetchError } = await supabase
+        .from('signups')
+        .select(`
+          *,
+          role:volunteer_roles!role_id(
+            *,
+            domain:volunteer_leader_domains!domain_id(
+              id,
+              name,
+              leader:profiles!leader_id(
+                id,
+                first_name,
+                last_name,
+                email,
+                phone
+              )
+            ),
+            direct_leader:profiles!leader_id(
+              id,
+              first_name,
+              last_name,
+              email,
+              phone
+            )
+          )
+        `)
+        .eq('volunteer_id', $auth.user.id)
+        .eq('status', 'confirmed')
+        .order('role(event_date)', { ascending: true });
+
+      if (fetchError) throw fetchError;
+
+      signups.set(data);
     } catch (err) {
       error = err.message;
     } finally {
@@ -93,6 +128,17 @@ END:VCALENDAR`;
     return date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
   }
 
+  function getEffectiveLeader(role) {
+    // Domain leader takes precedence over direct leader
+    if (role.domain?.leader) {
+      return role.domain.leader;
+    }
+    if (role.direct_leader) {
+      return role.direct_leader;
+    }
+    return null;
+  }
+
   $: upcomingSignups = $signups.filter(s => new Date(s.role.event_date) >= new Date());
   $: pastSignups = $signups.filter(s => new Date(s.role.event_date) < new Date());
   $: totalHours = $signups.reduce((sum, signup) => {
@@ -140,6 +186,7 @@ END:VCALENDAR`;
           {#each upcomingSignups as signup (signup.id)}
             {@const role = signup.role}
             {@const duration = calculateDuration(role.start_time, role.end_time)}
+            {@const leader = getEffectiveLeader(role)}
             
             <div class="signup-card">
               <div class="signup-header">
@@ -175,6 +222,16 @@ END:VCALENDAR`;
 
               {#if role.description}
                 <p class="description">{role.description}</p>
+              {/if}
+
+              {#if role.domain}
+                <div class="domain-info">
+                  <span class="domain-badge">📁 {role.domain.name}</span>
+                </div>
+              {/if}
+
+              {#if leader}
+                <ContactLeader {leader} roleName={role.name} />
               {/if}
 
               <div class="signup-actions">
@@ -437,6 +494,21 @@ END:VCALENDAR`;
   .btn-danger:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+  }
+
+  .domain-info {
+    margin: 1rem 0;
+  }
+
+  .domain-badge {
+    display: inline-block;
+    padding: 0.5rem 1rem;
+    background: #e7f3ff;
+    border: 1px solid #b3d9ff;
+    border-radius: 20px;
+    font-size: 0.9rem;
+    color: #004085;
+    font-weight: 500;
   }
 
   @media (max-width: 768px) {

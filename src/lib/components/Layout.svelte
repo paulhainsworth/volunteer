@@ -36,6 +36,7 @@
           {#if $auth.isAdmin}
             <a href="#/admin" class="nav-link">Dashboard</a>
             <a href="#/admin/roles" class="nav-link">Roles</a>
+            <a href="#/admin/domains" class="nav-link">Domains</a>
             <a href="#/admin/volunteers" class="nav-link">Users</a>
             <a href="#/admin/communications" class="nav-link">Communications</a>
           {:else if $auth.profile?.role === 'volunteer_leader'}

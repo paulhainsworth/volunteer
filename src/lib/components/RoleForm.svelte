@@ -8,11 +8,22 @@
   export let loading = false;
 
   let volunteerLeaders = [];
+  let domains = [];
 
   const dispatch = createEventDispatcher();
 
   onMount(async () => {
-    // Fetch volunteer leaders for assignment dropdown
+    // Fetch domains for assignment dropdown
+    const { data: domainsData } = await supabase
+      .from('volunteer_leader_domains')
+      .select('id, name, leader:profiles!leader_id(first_name, last_name)')
+      .order('name', { ascending: true});
+    
+    if (domainsData) {
+      domains = domainsData;
+    }
+
+    // Fetch volunteer leaders for legacy direct assignment
     const { data } = await supabase
       .from('profiles')
       .select('id, first_name, last_name, email')
@@ -31,7 +42,9 @@
     start_time: '',
     end_time: '',
     location: '',
-    positions_total: 1
+    positions_total: 1,
+    domain_id: null,
+    leader_id: null
   };
 
   if (role) {
@@ -42,9 +55,8 @@
     formData.end_time = role.end_time || '';
     formData.location = role.location || '';
     formData.positions_total = role.positions_total || 1;
+    formData.domain_id = role.domain_id || null;
     formData.leader_id = role.leader_id || null;
-  } else {
-    formData.leader_id = null;
   }
 
   function handleSubmit() {
@@ -141,20 +153,40 @@
   </div>
 
   <div class="form-group">
-    <label for="leader_id">Volunteer Leader (optional)</label>
+    <label for="domain_id">Domain (Recommended)</label>
+    <select
+      id="domain_id"
+      bind:value={formData.domain_id}
+      disabled={loading}
+    >
+      <option value={null}>No domain</option>
+      {#each domains as domain}
+        <option value={domain.id}>
+          {domain.name}
+          {#if domain.leader}
+            - Led by {domain.leader.first_name} {domain.leader.last_name}
+          {/if}
+        </option>
+      {/each}
+    </select>
+    <small>Assign to a domain (inherits domain's leader)</small>
+  </div>
+
+  <div class="form-group">
+    <label for="leader_id">Or Direct Leader Assignment (Legacy)</label>
     <select
       id="leader_id"
       bind:value={formData.leader_id}
       disabled={loading}
     >
-      <option value={null}>No leader assigned</option>
+      <option value={null}>No direct leader</option>
       {#each volunteerLeaders as leader}
         <option value={leader.id}>
           {leader.first_name} {leader.last_name} ({leader.email})
         </option>
       {/each}
     </select>
-    <small>Assign a volunteer leader to oversee this role</small>
+    <small>Only use if not assigning to a domain</small>
   </div>
 
   <div class="form-actions">
