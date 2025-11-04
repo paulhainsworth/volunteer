@@ -12,6 +12,7 @@
   let showForm = false;
   let editingDomain = null;
   let assigningRoles = null;
+  let refreshKey = 0; // Force UI updates
   
   let formData = {
     name: '',
@@ -145,9 +146,12 @@
         throw updateError;
       }
 
-      // Refresh data - must await to ensure UI updates
+      // Refresh data and force UI update
       await fetchAllRoles();
       await domains.fetchDomains();
+      
+      // Force Svelte to re-render by incrementing the refresh key
+      refreshKey++;
     } catch (err) {
       console.error('Toggle assignment error:', err);
       error = err.message;
@@ -190,13 +194,14 @@
       </div>
 
       <div class="roles-assignment">
+        {#key refreshKey}
         <div class="assigned-section">
           <h4>Assigned Roles ({getRolesForDomain(assigningRoles.id).length})</h4>
           {#if getRolesForDomain(assigningRoles.id).length === 0}
             <p class="empty-text">No roles assigned yet. Select from unassigned roles below.</p>
           {:else}
             <div class="role-list">
-              {#each getRolesForDomain(assigningRoles.id) as role}
+              {#each getRolesForDomain(assigningRoles.id) as role (role.id)}
                 <div class="role-item assigned">
                   <div class="role-info">
                     <strong>{role.name}</strong>
@@ -221,7 +226,7 @@
             <p class="empty-text">All roles are assigned to domains.</p>
           {:else}
             <div class="role-list">
-              {#each getUnassignedRoles() as role}
+              {#each getUnassignedRoles() as role (role.id)}
                 <div class="role-item unassigned">
                   <div class="role-info">
                     <strong>{role.name}</strong>
@@ -239,6 +244,7 @@
             </div>
           {/if}
         </div>
+        {/key}
       </div>
     </div>
   {:else if showForm}
