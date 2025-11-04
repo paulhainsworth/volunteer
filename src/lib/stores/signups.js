@@ -25,15 +25,15 @@ function createSignupsStore() {
     },
 
     createSignup: async (volunteerId, roleId, phone = null) => {
-      // Check if already signed up
+      // Check if already signed up with confirmed status
       const { data: existing } = await supabase
         .from('signups')
         .select('*')
         .eq('volunteer_id', volunteerId)
         .eq('role_id', roleId)
-        .single();
+        .maybeSingle();
 
-      if (existing) {
+      if (existing && existing.status === 'confirmed') {
         throw new Error('You are already signed up for this role');
       }
 
@@ -54,21 +54,48 @@ function createSignupsStore() {
         throw new Error('This role is already full');
       }
 
-      // Create signup
-      const { data, error } = await supabase
-        .from('signups')
-        .insert({
-          volunteer_id: volunteerId,
-          role_id: roleId,
-          phone: phone,
-          status: 'confirmed',
-          waiver_signed: true
-        })
-        .select(`
-          *,
-          role:volunteer_roles!role_id(*)
-        `)
-        .single();
+      let data;
+      let error;
+
+      // If there's a cancelled signup, reactivate it
+      if (existing && existing.status === 'cancelled') {
+        const result = await supabase
+          .from('signups')
+          .update({
+            status: 'confirmed',
+            phone: phone,
+            waiver_signed: true,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existing.id)
+          .select(`
+            *,
+            role:volunteer_roles!role_id(*)
+          `)
+          .single();
+        
+        data = result.data;
+        error = result.error;
+      } else {
+        // Create new signup
+        const result = await supabase
+          .from('signups')
+          .insert({
+            volunteer_id: volunteerId,
+            role_id: roleId,
+            phone: phone,
+            status: 'confirmed',
+            waiver_signed: true
+          })
+          .select(`
+            *,
+            role:volunteer_roles!role_id(*)
+          `)
+          .single();
+        
+        data = result.data;
+        error = result.error;
+      }
 
       if (error) throw error;
 
