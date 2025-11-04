@@ -479,7 +479,7 @@ END:VCALENDAR`;
 {/if}
 
 {#if showContactLeaderModal && contactLeaderSignup}
-  {@const leader = getEffectiveLeader(contactLeaderSignup)}
+  {@const leader = getEffectiveLeader(contactLeaderSignup.role)}
   
   <div class="modal-overlay" on:click={closeContactLeaderModal}>
     <div class="modal-content contact-leader-modal" on:click|stopPropagation>
