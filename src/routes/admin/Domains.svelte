@@ -8,8 +8,10 @@
   let loading = true;
   let error = '';
   let volunteerLeaders = [];
+  let allRoles = [];
   let showForm = false;
   let editingDomain = null;
+  let assigningRoles = null;
   
   let formData = {
     name: '',
@@ -26,7 +28,8 @@
     try {
       await Promise.all([
         domains.fetchDomains(),
-        fetchVolunteerLeaders()
+        fetchVolunteerLeaders(),
+        fetchAllRoles()
       ]);
     } catch (err) {
       error = err.message;
@@ -44,6 +47,18 @@
     
     if (data) {
       volunteerLeaders = data;
+    }
+  }
+
+  async function fetchAllRoles() {
+    const { data } = await supabase
+      .from('volunteer_roles')
+      .select('id, name, event_date, domain_id')
+      .order('event_date', { ascending: true })
+      .order('name', { ascending: true });
+    
+    if (data) {
+      allRoles = data;
     }
   }
 
@@ -105,6 +120,44 @@
       error = err.message;
     }
   }
+
+  function showRoleAssignment(domain) {
+    assigningRoles = domain;
+    showForm = false;
+  }
+
+  function cancelRoleAssignment() {
+    assigningRoles = null;
+  }
+
+  async function toggleRoleAssignment(roleId, domainId, currentDomainId) {
+    try {
+      const newDomainId = currentDomainId === domainId ? null : domainId;
+      
+      const { error: updateError } = await supabase
+        .from('volunteer_roles')
+        .update({ domain_id: newDomainId })
+        .eq('id', roleId);
+
+      if (updateError) throw updateError;
+
+      // Refresh data
+      await Promise.all([
+        domains.fetchDomains(),
+        fetchAllRoles()
+      ]);
+    } catch (err) {
+      error = err.message;
+    }
+  }
+
+  function getRolesForDomain(domainId) {
+    return allRoles.filter(r => r.domain_id === domainId);
+  }
+
+  function getUnassignedRoles() {
+    return allRoles.filter(r => !r.domain_id);
+  }
 </script>
 
 <div class="domains-page">
@@ -123,7 +176,68 @@
     <div class="alert alert-error">{error}</div>
   {/if}
 
-  {#if showForm}
+  {#if assigningRoles}
+    <div class="assign-roles-card">
+      <div class="assign-header">
+        <h3>Assign Roles to {assigningRoles.name}</h3>
+        <button class="btn btn-secondary btn-sm" on:click={cancelRoleAssignment}>
+          Done
+        </button>
+      </div>
+
+      <div class="roles-assignment">
+        <div class="assigned-section">
+          <h4>Assigned Roles ({getRolesForDomain(assigningRoles.id).length})</h4>
+          {#if getRolesForDomain(assigningRoles.id).length === 0}
+            <p class="empty-text">No roles assigned yet. Select from unassigned roles below.</p>
+          {:else}
+            <div class="role-list">
+              {#each getRolesForDomain(assigningRoles.id) as role}
+                <div class="role-item assigned">
+                  <div class="role-info">
+                    <strong>{role.name}</strong>
+                    <span class="role-date">{role.event_date}</span>
+                  </div>
+                  <button
+                    class="btn-remove"
+                    on:click={() => toggleRoleAssignment(role.id, assigningRoles.id, role.domain_id)}
+                    title="Remove from domain"
+                  >
+                    ✕
+                  </button>
+                </div>
+              {/each}
+            </div>
+          {/if}
+        </div>
+
+        <div class="unassigned-section">
+          <h4>Unassigned Roles ({getUnassignedRoles().length})</h4>
+          {#if getUnassignedRoles().length === 0}
+            <p class="empty-text">All roles are assigned to domains.</p>
+          {:else}
+            <div class="role-list">
+              {#each getUnassignedRoles() as role}
+                <div class="role-item unassigned">
+                  <div class="role-info">
+                    <strong>{role.name}</strong>
+                    <span class="role-date">{role.event_date}</span>
+                  </div>
+                  <button
+                    class="btn-add"
+                    on:click={() => toggleRoleAssignment(role.id, assigningRoles.id, role.domain_id)}
+                    title="Add to domain"
+                  >
+                    + Add
+                  </button>
+                </div>
+              {/each}
+            </div>
+          {/if}
+        </div>
+      </div>
+    </div>
+  {:else if showForm}
     <div class="form-card">
       <h3>{editingDomain ? 'Edit Domain' : 'Create New Domain'}</h3>
       
@@ -187,6 +301,9 @@
           <div class="domain-header">
             <h3>{domain.name}</h3>
             <div class="domain-actions">
+              <button class="btn btn-sm btn-info" on:click={() => showRoleAssignment(domain)}>
+                📋 Manage Roles
+              </button>
               <button class="btn btn-sm btn-secondary" on:click={() => showEditForm(domain)}>
                 Edit
               </button>
@@ -480,6 +597,148 @@
     color: white;
   }
 
+  .btn-info {
+    background: white;
+    color: #17a2b8;
+    border: 1px solid #17a2b8;
+  }
+
+  .btn-info:hover {
+    background: #17a2b8;
+    color: white;
+  }
+
+  .assign-roles-card {
+    background: white;
+    padding: 2rem;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    margin-bottom: 2rem;
+  }
+
+  .assign-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+    padding-bottom: 1rem;
+    border-bottom: 2px solid #dee2e6;
+  }
+
+  .assign-header h3 {
+    margin: 0;
+    color: #1a1a1a;
+  }
+
+  .roles-assignment {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+  }
+
+  .assigned-section,
+  .unassigned-section {
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 1.5rem;
+  }
+
+  .assigned-section {
+    background: #f8fff9;
+    border-color: #c3e6cb;
+  }
+
+  .unassigned-section {
+    background: #fff8f8;
+    border-color: #f5c6cb;
+  }
+
+  .assigned-section h4,
+  .unassigned-section h4 {
+    margin: 0 0 1rem 0;
+    color: #1a1a1a;
+    font-size: 1.1rem;
+  }
+
+  .empty-text {
+    color: #6c757d;
+    font-style: italic;
+    text-align: center;
+    padding: 2rem 1rem;
+  }
+
+  .role-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .role-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem;
+    border-radius: 6px;
+    gap: 1rem;
+  }
+
+  .role-item.assigned {
+    background: white;
+    border: 1px solid #c3e6cb;
+  }
+
+  .role-item.unassigned {
+    background: white;
+    border: 1px solid #f5c6cb;
+  }
+
+  .role-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .role-info strong {
+    color: #1a1a1a;
+    font-size: 0.95rem;
+  }
+
+  .role-date {
+    font-size: 0.85rem;
+    color: #6c757d;
+  }
+
+  .btn-add,
+  .btn-remove {
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+
+  .btn-add {
+    background: #28a745;
+    color: white;
+  }
+
+  .btn-add:hover {
+    background: #218838;
+  }
+
+  .btn-remove {
+    background: #dc3545;
+    color: white;
+  }
+
+  .btn-remove:hover {
+    background: #c82333;
+  }
+
   @media (max-width: 768px) {
     .domains-grid {
       grid-template-columns: 1fr;
@@ -488,6 +747,14 @@
     .header {
       flex-direction: column;
       gap: 1rem;
+    }
+
+    .roles-assignment {
+      grid-template-columns: 1fr;
+    }
+
+    .domain-actions {
+      flex-wrap: wrap;
     }
   }
 </style>
