@@ -11,6 +11,9 @@
   let error = '';
   let cancellingId = null;
   let mySignups = [];
+  let showCancelModal = false;
+  let cancellingSignup = null;
+  let contactingLeader = false;
 
   onMount(async () => {
     if (!$auth.user) {
@@ -81,21 +84,128 @@
     return hours;
   }
 
-  async function handleCancel(signupId) {
-    if (!confirm('Are you sure you want to cancel this signup? This action cannot be undone.')) {
-      return;
-    }
+  function showCancelConfirmation(signup) {
+    cancellingSignup = signup;
+    showCancelModal = true;
+  }
 
-    cancellingId = signupId;
+  function closeCancelModal() {
+    showCancelModal = false;
+    cancellingSignup = null;
+  }
+
+  function handleContactLeaderFirst() {
+    // Close the modal and scroll to the contact leader section
+    closeCancelModal();
+    // You could also open the contact leader form directly
+    const leaderSection = document.querySelector('.leader-contact');
+    if (leaderSection) {
+      leaderSection.scrollIntoView({ behavior: 'smooth' });
+    }
+  }
+
+  async function confirmCancel() {
+    if (!cancellingSignup) return;
+
+    cancellingId = cancellingSignup.id;
     
     try {
-      await signupsStore.cancelSignup(signupId);
+      await signupsStore.cancelSignup(cancellingSignup.id);
+      
+      // Send email notifications to leader and admins
+      await sendCancellationNotifications(cancellingSignup);
+      
       // Remove from local array
-      mySignups = mySignups.filter(s => s.id !== signupId);
+      mySignups = mySignups.filter(s => s.id !== cancellingSignup.id);
+      
+      closeCancelModal();
     } catch (err) {
       error = err.message;
     } finally {
       cancellingId = null;
+    }
+  }
+
+  async function sendCancellationNotifications(signup) {
+    try {
+      const role = signup.role;
+      const volunteer = $auth.profile;
+      
+      // Get the effective leader
+      const leader = getEffectiveLeader(signup);
+      
+      // Get all admins
+      const { data: admins } = await supabase
+        .from('profiles')
+        .select('email, first_name, last_name')
+        .eq('role', 'admin');
+
+      // Prepare email data
+      const emailData = {
+        volunteer_name: `${volunteer.first_name} ${volunteer.last_name}`,
+        volunteer_email: volunteer.email,
+        role_name: role.name,
+        role_date: format(new Date(role.event_date), 'EEEE, MMMM d, yyyy'),
+        role_time: `${formatTime(role.start_time)} - ${formatTime(role.end_time)}`,
+        role_location: role.location || 'N/A'
+      };
+
+      // Send to leader if available
+      if (leader) {
+        await supabase.functions.invoke('send-email', {
+          body: {
+            to: leader.email,
+            subject: `Volunteer Cancellation: ${role.name}`,
+            html: `
+              <h2>Volunteer Cancellation Notice</h2>
+              <p>Hello ${leader.first_name},</p>
+              <p><strong>${emailData.volunteer_name}</strong> has cancelled their signup for:</p>
+              <ul>
+                <li><strong>Role:</strong> ${emailData.role_name}</li>
+                <li><strong>Date:</strong> ${emailData.role_date}</li>
+                <li><strong>Time:</strong> ${emailData.role_time}</li>
+                <li><strong>Location:</strong> ${emailData.role_location}</li>
+              </ul>
+              <p>You may want to reach out to find a replacement volunteer.</p>
+              <p>Contact: ${emailData.volunteer_email}</p>
+            `
+          }
+        });
+      }
+
+      // Send to all admins
+      if (admins && admins.length > 0) {
+        for (const admin of admins) {
+          await supabase.functions.invoke('send-email', {
+            body: {
+              to: admin.email,
+              subject: `Volunteer Cancellation: ${role.name}`,
+              html: `
+                <h2>Volunteer Cancellation Notice</h2>
+                <p>Hello ${admin.first_name},</p>
+                <p><strong>${emailData.volunteer_name}</strong> has cancelled their signup for:</p>
+                <ul>
+                  <li><strong>Role:</strong> ${emailData.role_name}</li>
+                  <li><strong>Date:</strong> ${emailData.role_date}</li>
+                  <li><strong>Time:</strong> ${emailData.role_time}</li>
+                  <li><strong>Location:</strong> ${emailData.role_location}</li>
+                </ul>
+                ${leader ? `<p><strong>Leader notified:</strong> ${leader.first_name} ${leader.last_name} (${leader.email})</p>` : ''}
+                <p>Volunteer contact: ${emailData.volunteer_email}</p>
+              `
+            }
+          });
+        }
+      }
+    } catch (err) {
+      console.error('Failed to send cancellation notifications:', err);
+      // Don't throw error - cancellation should still succeed even if emails fail
+    }
+  }
+
+  function handleKeydown(event) {
+    if (event.key === 'Escape' && showCancelModal) {
+      closeCancelModal();
     }
   }
 
@@ -148,6 +258,8 @@ END:VCALENDAR`;
     return sum + calculateDuration(signup.role.start_time, signup.role.end_time);
   }, 0);
 </script>
+
+<svelte:window on:keydown={handleKeydown} />
 
 <div class="my-signups">
   <div class="header">
@@ -247,7 +359,7 @@ END:VCALENDAR`;
                 
                 <button
                   class="btn btn-sm btn-danger"
-                  on:click={() => handleCancel(signup.id)}
+                  on:click={() => showCancelConfirmation(signup)}
                   disabled={cancellingId === signup.id}
                 >
                   {cancellingId === signup.id ? 'Cancelling...' : 'Cancel Signup'}
@@ -292,6 +404,71 @@ END:VCALENDAR`;
     {/if}
   {/if}
 </div>
+
+{#if showCancelModal && cancellingSignup}
+  <div class="modal-overlay" on:click={closeCancelModal}>
+    <div class="modal-content" on:click|stopPropagation>
+      <button class="modal-close" on:click={closeCancelModal} aria-label="Close">
+        ✕
+      </button>
+      
+      <div class="modal-header">
+        <h2>Cancel Signup Confirmation</h2>
+      </div>
+
+      <div class="modal-body">
+        <p class="warning-text">
+          Are you sure you want to cancel your signup for <strong>{cancellingSignup.role.name}</strong>?
+        </p>
+        
+        <div class="role-info-box">
+          <div class="detail">
+            <span class="icon">📅</span>
+            <span>{format(new Date(cancellingSignup.role.event_date), 'EEEE, MMMM d, yyyy')}</span>
+          </div>
+          <div class="detail">
+            <span class="icon">🕐</span>
+            <span>{formatTime(cancellingSignup.role.start_time)} - {formatTime(cancellingSignup.role.end_time)}</span>
+          </div>
+          {#if cancellingSignup.role.location}
+            <div class="detail">
+              <span class="icon">📍</span>
+              <span>{cancellingSignup.role.location}</span>
+            </div>
+          {/if}
+        </div>
+
+        <p class="info-text">
+          If you cancel, your volunteer leader and event coordinators will be notified automatically.
+        </p>
+      </div>
+
+      <div class="modal-actions">
+        <button
+          class="btn btn-contact"
+          on:click={handleContactLeaderFirst}
+        >
+          📧 Contact My Leader First
+        </button>
+        
+        <button
+          class="btn btn-secondary"
+          on:click={closeCancelModal}
+        >
+          No, Keep Signup
+        </button>
+        
+        <button
+          class="btn btn-danger"
+          on:click={confirmCancel}
+          disabled={cancellingId}
+        >
+          {cancellingId ? 'Cancelling...' : 'Yes, Cancel Signup'}
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
 
 <style>
   .my-signups {
@@ -514,6 +691,154 @@ END:VCALENDAR`;
     font-weight: 500;
   }
 
+  /* Modal Styles */
+  .modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 1rem;
+  }
+
+  .modal-content {
+    background: white;
+    border-radius: 16px;
+    max-width: 550px;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+    position: relative;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  }
+
+  .modal-close {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    background: #f8f9fa;
+    border: none;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    font-size: 1.5rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #6c757d;
+    transition: background 0.2s, color 0.2s;
+    z-index: 1;
+  }
+
+  .modal-close:hover {
+    background: #e2e3e5;
+    color: #1a1a1a;
+  }
+
+  .modal-header {
+    padding: 2rem 2rem 1rem 2rem;
+    border-bottom: 1px solid #dee2e6;
+    padding-right: 4rem;
+  }
+
+  .modal-header h2 {
+    margin: 0;
+    color: #1a1a1a;
+    font-size: 1.5rem;
+  }
+
+  .modal-body {
+    padding: 2rem;
+  }
+
+  .warning-text {
+    font-size: 1.1rem;
+    color: #495057;
+    margin: 0 0 1.5rem 0;
+    line-height: 1.5;
+  }
+
+  .warning-text strong {
+    color: #1a1a1a;
+  }
+
+  .role-info-box {
+    background: #fff3cd;
+    border: 1px solid #ffc107;
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .role-info-box .detail {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    margin-bottom: 0.75rem;
+    color: #495057;
+  }
+
+  .role-info-box .detail:last-child {
+    margin-bottom: 0;
+  }
+
+  .role-info-box .icon {
+    font-size: 1.25rem;
+  }
+
+  .info-text {
+    font-size: 0.95rem;
+    color: #6c757d;
+    margin: 0;
+    padding: 1rem;
+    background: #e7f3ff;
+    border-radius: 6px;
+    border-left: 4px solid #007bff;
+  }
+
+  .modal-actions {
+    padding: 1.5rem 2rem 2rem 2rem;
+    border-top: 1px solid #dee2e6;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .btn-contact {
+    background: #17a2b8;
+    color: white;
+    padding: 1rem;
+    font-size: 1rem;
+    font-weight: 600;
+  }
+
+  .btn-contact:hover {
+    background: #138496;
+  }
+
+  .btn-danger {
+    background: #dc3545;
+    color: white;
+    padding: 1rem;
+    font-size: 1rem;
+    font-weight: 600;
+  }
+
+  .btn-danger:hover:not(:disabled) {
+    background: #c82333;
+  }
+
+  .btn-danger:disabled {
+    background: #6c757d;
+    cursor: not-allowed;
+  }
+
   @media (max-width: 768px) {
     .header {
       flex-direction: column;
@@ -522,6 +847,28 @@ END:VCALENDAR`;
     .stats {
       width: 100%;
       justify-content: space-around;
+    }
+
+    .modal-content {
+      max-height: 95vh;
+      margin: 0.5rem;
+    }
+
+    .modal-header {
+      padding: 1.5rem 1.5rem 1rem 1.5rem;
+      padding-right: 3.5rem;
+    }
+
+    .modal-header h2 {
+      font-size: 1.25rem;
+    }
+
+    .modal-body {
+      padding: 1.5rem;
+    }
+
+    .modal-actions {
+      padding: 1rem 1.5rem 1.5rem 1.5rem;
     }
   }
 </style>
