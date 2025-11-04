@@ -20,6 +20,12 @@
       return;
     }
 
+    if (!leader || !leader.first_name || !leader.last_name) {
+      alert('Leader information is not available. Please try again or contact an administrator.');
+      sending = false;
+      return;
+    }
+
     sending = true;
 
     // This would integrate with an email service

@@ -98,6 +98,9 @@
   function handleContactLeaderFirst() {
     // Close cancel modal and open contact leader modal
     contactLeaderSignup = cancellingSignup;
+    console.log('Contact leader signup:', contactLeaderSignup);
+    console.log('Role:', contactLeaderSignup.role);
+    console.log('Leader:', getEffectiveLeader(contactLeaderSignup.role));
     closeCancelModal();
     showContactLeaderModal = true;
   }
