@@ -93,9 +93,26 @@
 
       for (const roleData of rolesToImport) {
         try {
-          // Look up leader_id from email if provided
+          // Look up domain_id from domain_name if provided
+          let domainId = null;
+          if (roleData.domain_name) {
+            const { data: domainData } = await supabase
+              .from('volunteer_leader_domains')
+              .select('id')
+              .eq('name', roleData.domain_name)
+              .single();
+            
+            if (domainData) {
+              domainId = domainData.id;
+            } else {
+              // Domain not found - warn but continue
+              errors.push(`${roleData.name}: Domain "${roleData.domain_name}" not found - role created without domain`);
+            }
+          }
+
+          // Look up leader_id from email if provided (only if no domain)
           let leaderId = null;
-          if (roleData.leader_email) {
+          if (roleData.leader_email && !domainId) {
             const { data: leaderData } = await supabase
               .from('profiles')
               .select('id')
@@ -105,14 +122,18 @@
             
             if (leaderData) {
               leaderId = leaderData.id;
+            } else {
+              // Leader not found - warn but continue
+              errors.push(`${roleData.name}: Leader "${roleData.leader_email}" not found - role created without leader`);
             }
           }
 
-          // Remove leader_email from data (not a column)
-          const { leader_email, ...roleDataWithoutEmail } = roleData;
+          // Remove non-column fields from data
+          const { leader_email, domain_name, ...roleDataClean } = roleData;
 
           await roles.createRole({
-            ...roleDataWithoutEmail,
+            ...roleDataClean,
+            domain_id: domainId,
             leader_id: leaderId,
             created_by: $auth.user.id
           });

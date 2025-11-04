@@ -128,16 +128,17 @@ function validateRole(role, rowNumber) {
   role.description = role.description || '';
   role.location = role.location || '';
   role.leader_email = role.leader_email || '';
+  role.domain_name = role.domain_name || '';
 
   return role;
 }
 
 export function generateTemplateCSV() {
-  const headers = ['name', 'description', 'event_date', 'start_time', 'end_time', 'location', 'positions_total', 'leader_email'];
+  const headers = ['name', 'description', 'event_date', 'start_time', 'end_time', 'location', 'positions_total', 'domain_name', 'leader_email'];
   const exampleRows = [
-    ['Registration Table', 'Check in riders and hand out race numbers', '2026-06-15', '07:00', '09:00', 'Main tent near start/finish', '4', ''],
-    ['Course Marshal - Corner 1', 'Direct riders at first turn', '2026-06-15', '08:00', '12:00', 'Corner of Main St and Oak Ave', '2', ''],
-    ['Water Station 1', 'Hand out water bottles to riders', '2026-06-15', '08:30', '11:30', 'Mile marker 10', '3', '']
+    ['Registration Table', 'Check in riders and hand out race numbers', '2026-06-15', '07:00', '09:00', 'Main tent near start/finish', '4', 'Registration & Check-in', ''],
+    ['Course Marshal - Corner 1', 'Direct riders at first turn', '2026-06-15', '08:00', '12:00', 'Corner of Main St and Oak Ave', '2', 'Course Marshals', ''],
+    ['Water Station 1', 'Hand out water bottles to riders', '2026-06-15', '08:30', '11:30', 'Mile marker 10', '3', 'Water Stations & Aid', '']
   ];
 
   const csvContent = [

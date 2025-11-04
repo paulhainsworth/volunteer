@@ -96,7 +96,13 @@
       <ul>
         <li><code>description</code> - Role description</li>
         <li><code>location</code> - Meeting point or location</li>
+        <li><code>domain_name</code> - Domain name (e.g., "Course Marshals", "Registration & Check-in")</li>
+        <li><code>leader_email</code> - Direct leader assignment (email address of volunteer leader)</li>
       </ul>
+      <p class="info-note">
+        <strong>Note:</strong> If both <code>domain_name</code> and <code>leader_email</code> are provided, 
+        the domain assignment takes precedence (recommended approach).
+      </p>
     </div>
   </div>
 
@@ -293,6 +299,20 @@
     border-radius: 3px;
     font-family: monospace;
     color: #007bff;
+  }
+
+  .info-note {
+    margin-top: 1rem;
+    padding: 1rem;
+    background: #e7f3ff;
+    border-left: 4px solid #007bff;
+    border-radius: 4px;
+    color: #004085;
+    font-size: 0.9rem;
+  }
+
+  .info-note strong {
+    font-weight: 600;
   }
 
   .file-input-wrapper {

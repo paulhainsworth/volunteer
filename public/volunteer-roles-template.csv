@@ -1,9 +1,9 @@
-name,description,event_date,start_time,end_time,location,positions_total,leader_email
-Registration Table,Check in riders and hand out race numbers,2026-06-15,07:00,09:00,Main tent near start/finish,4,
-Course Marshal - Corner 1,Direct riders at first turn,2026-06-15,08:00,12:00,Corner of Main St and Oak Ave,2,
-Course Marshal - Corner 5,Direct riders at sharp turn near park,2026-06-15,08:00,12:00,Park entrance on Elm St,2,
-Water Station 1,Hand out water bottles to riders,2026-06-15,08:30,11:30,Mile marker 10,3,
-Finish Line Support,Assist with timing and results,2026-06-15,09:00,13:00,Finish line area,3,
-Post-Race Cleanup,Help clean up event area,2026-06-15,13:00,15:00,Event grounds,5,
-Parking Attendant,Direct cars to parking areas,2026-06-15,06:30,09:00,Main parking lot entrance,2,
+name,description,event_date,start_time,end_time,location,positions_total,domain_name,leader_email
+Registration Table,Check in riders and hand out race numbers,2026-06-15,07:00,09:00,Main tent near start/finish,4,Registration & Check-in,
+Course Marshal - Corner 1,Direct riders at first turn,2026-06-15,08:00,12:00,Corner of Main St and Oak Ave,2,Course Marshals,
+Course Marshal - Corner 5,Direct riders at sharp turn near park,2026-06-15,08:00,12:00,Park entrance on Elm St,2,Course Marshals,
+Water Station 1,Hand out water bottles to riders,2026-06-15,08:30,11:30,Mile marker 10,3,Water Stations & Aid,
+Finish Line Support,Assist with timing and results,2026-06-15,09:00,13:00,Finish line area,3,Finish Line & Timing,
+Post-Race Cleanup,Help clean up event area,2026-06-15,13:00,15:00,Event grounds,5,Loading & Logistics,
+Parking Attendant,Direct cars to parking areas,2026-06-15,06:30,09:00,Main parking lot entrance,2,Parking & Traffic,
 
