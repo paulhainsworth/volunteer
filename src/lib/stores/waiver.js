@@ -8,30 +8,32 @@ function createWaiverStore() {
     loading: false
   });
 
+  const fetchCurrentWaiver = async () => {
+    update(state => ({ ...state, loading: true }));
+    
+    const { data, error } = await supabase
+      .from('waiver_settings')
+      .select('*')
+      .single();
+
+    if (error) throw error;
+
+    set({
+      text: data.waiver_text,
+      version: data.version,
+      loading: false
+    });
+
+    return data;
+  };
+
   return {
     subscribe,
     
-    fetchCurrentWaiver: async () => {
-      update(state => ({ ...state, loading: true }));
-      
-      const { data, error } = await supabase
-        .from('waiver_settings')
-        .select('*')
-        .single();
-
-      if (error) throw error;
-
-      set({
-        text: data.waiver_text,
-        version: data.version,
-        loading: false
-      });
-
-      return data;
-    },
+    fetchCurrentWaiver,
 
     checkWaiverStatus: async (volunteerId) => {
-      const currentWaiver = await this.fetchCurrentWaiver();
+      const currentWaiver = await fetchCurrentWaiver();
       
       const { data, error } = await supabase
         .from('waivers')
@@ -51,7 +53,7 @@ function createWaiverStore() {
     },
 
     signWaiver: async (volunteerId, signatureName, ipAddress = null) => {
-      const currentWaiver = await this.fetchCurrentWaiver();
+      const currentWaiver = await fetchCurrentWaiver();
 
       const { data, error } = await supabase
         .from('waivers')
@@ -60,7 +62,7 @@ function createWaiverStore() {
           signature_name: signatureName,
           ip_address: ipAddress,
           waiver_version: currentWaiver.version,
-          waiver_text: currentWaiver.text
+          waiver_text: currentWaiver.waiver_text
         })
         .select()
         .single();

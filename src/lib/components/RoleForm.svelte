@@ -1,11 +1,28 @@
 <script>
   // @ts-nocheck
   import { createEventDispatcher } from 'svelte';
+  import { onMount } from 'svelte';
+  import { supabase } from '../supabaseClient';
 
   export let role = null;
   export let loading = false;
 
+  let volunteerLeaders = [];
+
   const dispatch = createEventDispatcher();
+
+  onMount(async () => {
+    // Fetch volunteer leaders for assignment dropdown
+    const { data } = await supabase
+      .from('profiles')
+      .select('id, first_name, last_name, email')
+      .eq('role', 'volunteer_leader')
+      .order('last_name', { ascending: true });
+    
+    if (data) {
+      volunteerLeaders = data;
+    }
+  });
 
   let formData = {
     name: '',
@@ -25,6 +42,9 @@
     formData.end_time = role.end_time || '';
     formData.location = role.location || '';
     formData.positions_total = role.positions_total || 1;
+    formData.leader_id = role.leader_id || null;
+  } else {
+    formData.leader_id = null;
   }
 
   function handleSubmit() {
@@ -120,6 +140,23 @@
     />
   </div>
 
+  <div class="form-group">
+    <label for="leader_id">Volunteer Leader (optional)</label>
+    <select
+      id="leader_id"
+      bind:value={formData.leader_id}
+      disabled={loading}
+    >
+      <option value={null}>No leader assigned</option>
+      {#each volunteerLeaders as leader}
+        <option value={leader.id}>
+          {leader.first_name} {leader.last_name} ({leader.email})
+        </option>
+      {/each}
+    </select>
+    <small>Assign a volunteer leader to oversee this role</small>
+  </div>
+
   <div class="form-actions">
     <button
       type="button"
@@ -166,7 +203,8 @@
   }
 
   input,
-  textarea {
+  textarea,
+  select {
     width: 100%;
     padding: 0.75rem;
     border: 1px solid #ced4da;
@@ -176,16 +214,25 @@
   }
 
   input:focus,
-  textarea:focus {
+  textarea:focus,
+  select:focus {
     outline: none;
     border-color: #007bff;
     box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
   }
 
   input:disabled,
-  textarea:disabled {
+  textarea:disabled,
+  select:disabled {
     background: #f8f9fa;
     cursor: not-allowed;
+  }
+
+  small {
+    display: block;
+    margin-top: 0.25rem;
+    color: #6c757d;
+    font-size: 0.875rem;
   }
 
   .form-actions {

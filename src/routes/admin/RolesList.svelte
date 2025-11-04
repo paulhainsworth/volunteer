@@ -2,8 +2,10 @@
   import { onMount } from 'svelte';
   import { roles } from '../../lib/stores/roles';
   import { auth } from '../../lib/stores/auth';
+  import { supabase } from '../../lib/supabaseClient';
   import { push } from 'svelte-spa-router';
   import RoleForm from '../../lib/components/RoleForm.svelte';
+  import BulkUpload from '../../lib/components/BulkUpload.svelte';
   import { format } from 'date-fns';
 
   export let params = {};
@@ -11,6 +13,7 @@
   let loading = true;
   let error = '';
   let showForm = false;
+  let showBulkUpload = false;
   let editingRole = null;
   let submitting = false;
 
@@ -73,6 +76,76 @@
     push('/admin/roles');
   }
 
+  function showBulkUploadDialog() {
+    showBulkUpload = true;
+    showForm = false;
+  }
+
+  async function handleBulkImport(event) {
+    const rolesToImport = event.detail.roles;
+    submitting = true;
+    error = '';
+
+    try {
+      let successCount = 0;
+      let failCount = 0;
+      const errors = [];
+
+      for (const roleData of rolesToImport) {
+        try {
+          // Look up leader_id from email if provided
+          let leaderId = null;
+          if (roleData.leader_email) {
+            const { data: leaderData } = await supabase
+              .from('profiles')
+              .select('id')
+              .eq('email', roleData.leader_email)
+              .eq('role', 'volunteer_leader')
+              .single();
+            
+            if (leaderData) {
+              leaderId = leaderData.id;
+            }
+          }
+
+          // Remove leader_email from data (not a column)
+          const { leader_email, ...roleDataWithoutEmail } = roleData;
+
+          await roles.createRole({
+            ...roleDataWithoutEmail,
+            leader_id: leaderId,
+            created_by: $auth.user.id
+          });
+          successCount++;
+        } catch (err) {
+          failCount++;
+          errors.push(`${roleData.name}: ${err.message}`);
+        }
+      }
+
+      if (successCount > 0) {
+        alert(`Successfully imported ${successCount} roles!${failCount > 0 ? `\n\n${failCount} roles failed.` : ''}`);
+      }
+
+      if (errors.length > 0) {
+        error = `Import errors:\n${errors.join('\n')}`;
+      }
+
+      showBulkUpload = false;
+      
+      // Refresh roles list
+      await roles.fetchRoles();
+    } catch (err) {
+      error = err.message;
+    } finally {
+      submitting = false;
+    }
+  }
+
+  function handleBulkCancel() {
+    showBulkUpload = false;
+  }
+
   async function handleDelete(roleId) {
     if (!confirm('Are you sure you want to delete this role? This action cannot be undone.')) {
       return;
@@ -122,7 +195,14 @@
 </script>
 
 <div class="roles-page">
-  {#if showForm}
+  {#if showBulkUpload}
+    <div class="form-container">
+      <BulkUpload
+        on:import={handleBulkImport}
+        on:cancel={handleBulkCancel}
+      />
+    </div>
+  {:else if showForm}
     <div class="form-container">
       <h1>{editingRole ? 'Edit Role' : 'Create New Role'}</h1>
       
@@ -147,6 +227,9 @@
       <div class="header-actions">
         <button class="btn btn-secondary" on:click={exportToCSV}>
           Export CSV
+        </button>
+        <button class="btn btn-info" on:click={showBulkUploadDialog}>
+          📤 Bulk Upload
         </button>
         <a href="#/admin/roles/new" class="btn btn-primary">+ Create Role</a>
       </div>
@@ -378,6 +461,15 @@
 
   .btn-secondary:hover {
     background: #f8f9fa;
+  }
+
+  .btn-info {
+    background: #17a2b8;
+    color: white;
+  }
+
+  .btn-info:hover {
+    background: #138496;
   }
 
   .btn-danger {

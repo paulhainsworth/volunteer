@@ -22,6 +22,9 @@
   import RolesList from './routes/admin/RolesList.svelte';
   import VolunteersList from './routes/admin/VolunteersList.svelte';
   import Communications from './routes/admin/Communications.svelte';
+  
+  // Volunteer Leader routes
+  import LeaderDashboard from './routes/leader/Dashboard.svelte';
 
   const routes = {
     '/': Home,
@@ -31,6 +34,7 @@
     '/volunteer': BrowseRoles,
     '/signup/:id': VolunteerSignup,
     '/my-signups': MySignups,
+    '/leader': LeaderDashboard,
     '/admin': AdminDashboard,
     '/admin/roles': RolesList,
     '/admin/roles/:id': RolesList,

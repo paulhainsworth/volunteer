@@ -59,47 +59,37 @@
     URL.revokeObjectURL(url);
   }
 
-  async function promoteToAdmin(volunteerId) {
-    if (!confirm('Are you sure you want to promote this volunteer to admin? They will have full administrative access.')) {
+  async function changeRole(userId, newRole) {
+    const roleNames = {
+      'admin': 'Admin',
+      'volunteer_leader': 'Volunteer Leader',
+      'volunteer': 'Volunteer'
+    };
+
+    const confirmMessages = {
+      'admin': 'promote this user to Admin? They will have full administrative access.',
+      'volunteer_leader': 'make this user a Volunteer Leader? They can manage assigned roles.',
+      'volunteer': 'change this user to a regular Volunteer?'
+    };
+
+    if (!confirm(`Are you sure you want to ${confirmMessages[newRole]}`)) {
       return;
     }
 
     try {
       const { error: updateError } = await supabase
         .from('profiles')
-        .update({ role: 'admin' })
-        .eq('id', volunteerId);
+        .update({ role: newRole })
+        .eq('id', userId);
 
       if (updateError) throw updateError;
 
       // Refresh volunteer list
       await volunteers.fetchVolunteers();
       
-      alert('Volunteer promoted to admin successfully! They will see admin features on their next login.');
+      alert(`User role changed to ${roleNames[newRole]} successfully! Changes take effect on their next login.`);
     } catch (err) {
-      error = 'Failed to promote volunteer: ' + err.message;
-    }
-  }
-
-  async function demoteToVolunteer(adminId) {
-    if (!confirm('Are you sure you want to remove admin privileges from this user?')) {
-      return;
-    }
-
-    try {
-      const { error: updateError } = await supabase
-        .from('profiles')
-        .update({ role: 'volunteer' })
-        .eq('id', adminId);
-
-      if (updateError) throw updateError;
-
-      // Refresh volunteer list
-      await volunteers.fetchVolunteers();
-      
-      alert('User demoted to volunteer successfully!');
-    } catch (err) {
-      error = 'Failed to demote user: ' + err.message;
+      error = 'Failed to change role: ' + err.message;
     }
   }
 
@@ -200,8 +190,14 @@
           <div class="volunteer-details">
             <div class="detail">
               <span class="label">Role:</span>
-              <span class="value">
-                {volunteer.role === 'admin' ? '👑 Admin' : '👤 Volunteer'}
+              <span class="value role-badge {volunteer.role}">
+                {#if volunteer.role === 'admin'}
+                  👑 Admin
+                {:else if volunteer.role === 'volunteer_leader'}
+                  ⭐ Volunteer Leader
+                {:else}
+                  👤 Volunteer
+                {/if}
               </span>
             </div>
             
@@ -226,14 +222,33 @@
             {#if volunteer.role === 'volunteer'}
               <button 
                 class="btn btn-sm btn-secondary"
-                on:click={() => promoteToAdmin(volunteer.id)}
+                on:click={() => changeRole(volunteer.id, 'volunteer_leader')}
+              >
+                Make Leader
+              </button>
+              <button 
+                class="btn btn-sm btn-info"
+                on:click={() => changeRole(volunteer.id, 'admin')}
+              >
+                Make Admin
+              </button>
+            {:else if volunteer.role === 'volunteer_leader'}
+              <button 
+                class="btn btn-sm btn-info"
+                on:click={() => changeRole(volunteer.id, 'admin')}
               >
                 Promote to Admin
+              </button>
+              <button 
+                class="btn btn-sm btn-secondary"
+                on:click={() => changeRole(volunteer.id, 'volunteer')}
+              >
+                Demote to Volunteer
               </button>
             {:else}
               <button 
                 class="btn btn-sm btn-warning"
-                on:click={() => demoteToVolunteer(volunteer.id)}
+                on:click={() => changeRole(volunteer.id, 'volunteer')}
               >
                 Demote to Volunteer
               </button>
@@ -439,6 +454,29 @@
     color: #ffc107;
   }
 
+  .role-badge {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-weight: 600;
+    font-size: 0.85rem;
+  }
+
+  .role-badge.admin {
+    background: #e7f3ff;
+    color: #004085;
+  }
+
+  .role-badge.volunteer_leader {
+    background: #fff3cd;
+    color: #856404;
+  }
+
+  .role-badge.volunteer {
+    background: #f8f9fa;
+    color: #495057;
+  }
+
   .signups-section h4 {
     margin: 0 0 0.75rem 0;
     font-size: 1rem;
@@ -503,6 +541,17 @@
 
   .btn-warning:hover {
     background: #ffc107;
+    color: white;
+  }
+
+  .btn-info {
+    background: white;
+    color: #17a2b8;
+    border: 1px solid #17a2b8;
+  }
+
+  .btn-info:hover {
+    background: #17a2b8;
     color: white;
   }
 

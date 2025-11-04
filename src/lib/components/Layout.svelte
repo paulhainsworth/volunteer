@@ -38,6 +38,10 @@
             <a href="#/admin/roles" class="nav-link">Roles</a>
             <a href="#/admin/volunteers" class="nav-link">Users</a>
             <a href="#/admin/communications" class="nav-link">Communications</a>
+          {:else if $auth.profile?.role === 'volunteer_leader'}
+            <a href="#/leader" class="nav-link">My Roles</a>
+            <a href="#/volunteer" class="nav-link">Browse Roles</a>
+            <a href="#/my-signups" class="nav-link">My Signups</a>
           {:else}
             <a href="#/volunteer" class="nav-link">Browse Roles</a>
             <a href="#/my-signups" class="nav-link">My Signups</a>

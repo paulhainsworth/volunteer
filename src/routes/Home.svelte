@@ -7,6 +7,8 @@
     if ($auth.user) {
       if ($auth.isAdmin) {
         push('/admin');
+      } else if ($auth.profile?.role === 'volunteer_leader') {
+        push('/leader');
       } else {
         push('/volunteer');
       }
