@@ -66,22 +66,34 @@ npm run dev
 
 Open your browser to [http://localhost:5173](http://localhost:5173)
 
-## 3. Create Your First Admin User
+## 3. Create Default Admin Account
 
-Since this is a new system, you'll need to manually create an admin user in Supabase:
+For easy initial setup, create a default admin with hardcoded credentials:
 
-1. Go to your Supabase project dashboard
-2. Click on "Authentication" in the left sidebar
-3. Click "Add user" → "Create new user"
-4. Enter an email and password
-5. Click "Create user"
-6. Now go to "Table Editor" → "profiles" table
-7. Find the user you just created (by email)
-8. Click on the row to edit it
-9. Change the `role` field from `volunteer` to `admin`
-10. Click "Save"
+1. Go to **Supabase** → **Authentication** → **Users**
+2. Click **"Add user"** → **"Create new user"**
+3. Enter:
+   - **Email:** `admin@admin.com`
+   - **Password:** `admin`
+   - ✅ Check **"Auto Confirm User"**
+4. Click **"Create user"**
+5. Go to **SQL Editor** and run:
 
-Now you can log in with this email/password and access the admin dashboard!
+```sql
+UPDATE profiles 
+SET role = 'admin', first_name = 'Default', last_name = 'Admin'
+WHERE email = 'admin@admin.com';
+```
+
+**Default Login Credentials:**
+- Email: `admin@admin.com`
+- Password: `admin`
+
+⚠️ **IMPORTANT:** Change this password after first login!
+
+See [DEFAULT_ADMIN_SETUP.md](./DEFAULT_ADMIN_SETUP.md) for detailed security instructions.
+
+Now you can log in with admin@admin.com and access the admin dashboard!
 
 ## 4. Deploy to Vercel
 

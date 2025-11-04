@@ -66,10 +66,12 @@ A modern, full-featured web application for managing race volunteers at bicycle 
    npm run dev
    ```
 
-6. **Create your first admin user**
-   - Sign up through the app
-   - Go to Supabase → Table Editor → profiles
-   - Change the user's `role` to `admin`
+6. **Create default admin account**
+   - In Supabase: Authentication → Add user
+   - Email: `admin@admin.com`, Password: `admin`, Auto Confirm: ✅
+   - Run SQL: `UPDATE profiles SET role = 'admin' WHERE email = 'admin@admin.com';`
+   - Login with admin@admin.com / admin
+   - ⚠️ Change password immediately!
 
 📖 **Full setup instructions**: See [SETUP.md](./SETUP.md)
 

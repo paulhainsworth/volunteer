@@ -231,6 +231,70 @@ INSERT INTO waiver_settings (waiver_text, version)
 VALUES ('I hereby agree to waive and release any and all claims against the event organizers, volunteers, sponsors, and affiliated organizations. I understand that participating in bicycle racing events involves inherent risks including but not limited to: collisions, falls, equipment failure, and environmental hazards. I assume all risks associated with participation and agree to hold harmless all parties involved in organizing and conducting the event.', 1)
 ON CONFLICT (id) DO NOTHING;
 
+-- Create default admin user
+-- Default credentials: admin@admin.com / admin
+-- IMPORTANT: Change this password after first login!
+DO $$
+DECLARE
+  admin_user_id UUID;
+BEGIN
+  -- Check if default admin already exists
+  SELECT id INTO admin_user_id
+  FROM auth.users
+  WHERE email = 'admin@admin.com';
+  
+  -- Only create if doesn't exist
+  IF admin_user_id IS NULL THEN
+    -- Insert into auth.users (Supabase auth table)
+    -- Password is 'admin' hashed with bcrypt
+    INSERT INTO auth.users (
+      instance_id,
+      id,
+      aud,
+      role,
+      email,
+      encrypted_password,
+      email_confirmed_at,
+      created_at,
+      updated_at,
+      raw_app_meta_data,
+      raw_user_meta_data,
+      is_super_admin,
+      confirmation_token,
+      email_change,
+      email_change_token_new,
+      recovery_token
+    )
+    VALUES (
+      '00000000-0000-0000-0000-000000000000',
+      gen_random_uuid(),
+      'authenticated',
+      'authenticated',
+      'admin@admin.com',
+      crypt('admin', gen_salt('bf')),
+      NOW(),
+      NOW(),
+      NOW(),
+      '{"provider":"email","providers":["email"]}',
+      '{"first_name":"Default","last_name":"Admin"}',
+      FALSE,
+      '',
+      '',
+      '',
+      ''
+    )
+    RETURNING id INTO admin_user_id;
+    
+    -- Insert into profiles table
+    INSERT INTO profiles (id, email, role, first_name, last_name, created_at)
+    VALUES (admin_user_id, 'admin@admin.com', 'admin', 'Default', 'Admin', NOW());
+    
+    RAISE NOTICE 'Default admin created: admin@admin.com / admin';
+  ELSE
+    RAISE NOTICE 'Default admin already exists';
+  END IF;
+END $$;
+
 -- Function to get dashboard statistics (for admins)
 CREATE OR REPLACE FUNCTION get_dashboard_stats()
 RETURNS JSON AS $$

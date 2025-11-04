@@ -34,16 +34,30 @@ npm run dev
 
 Open [http://localhost:5173](http://localhost:5173) in your browser!
 
-## Step 5: Create Your Admin Account (2 minutes)
+## Step 5: Create Default Admin Account (30 seconds)
 
-1. In your browser, click "Sign Up"
-2. Create an account with your email
-3. Go to Supabase → Authentication → Users
-4. Find your user → Table Editor → profiles table
-5. Change `role` from `volunteer` to `admin`
-6. Log out and log back in
+1. Go to Supabase Dashboard → **Authentication** → **Users**
+2. Click **"Add user"** → **"Create new user"**
+3. Fill in:
+   - **Email:** `admin@admin.com`
+   - **Password:** `admin`
+   - **Auto Confirm User:** ✅ (check this box)
+4. Click **"Create user"**
+5. Run this SQL in **SQL Editor**:
 
-🎉 **You're done!** You now have full admin access.
+```sql
+UPDATE profiles 
+SET role = 'admin', first_name = 'Default', last_name = 'Admin'
+WHERE email = 'admin@admin.com';
+```
+
+🎉 **You're done!** 
+
+**Login credentials:**
+- Email: `admin@admin.com`
+- Password: `admin`
+
+⚠️ **IMPORTANT:** Change this password after first login!
 
 ## Next Steps
 
