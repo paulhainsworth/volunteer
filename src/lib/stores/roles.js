@@ -4,6 +4,40 @@ import { supabase } from '../supabaseClient';
 function createRolesStore() {
   const { subscribe, set, update } = writable([]);
 
+  const fetchRole = async (id) => {
+    const { data, error } = await supabase
+      .from('volunteer_roles')
+      .select(`
+        *,
+        signups:signups!role_id(
+          id,
+          volunteer:profiles!volunteer_id(
+            id,
+            first_name,
+            last_name,
+            email,
+            phone
+          ),
+          signed_up_at,
+          phone,
+          status
+        )
+      `)
+      .eq('id', id)
+      .single();
+
+    if (error) throw error;
+
+    // Filter out cancelled signups
+    const confirmedSignups = data.signups?.filter(s => s.status === 'confirmed') || [];
+    
+    return {
+      ...data,
+      signups: confirmedSignups,
+      positions_filled: confirmedSignups.length
+    };
+  };
+
   return {
     subscribe,
     
@@ -40,39 +74,7 @@ function createRolesStore() {
       return rolesWithCounts;
     },
 
-    fetchRole: async (id) => {
-      const { data, error } = await supabase
-        .from('volunteer_roles')
-        .select(`
-          *,
-          signups:signups!role_id(
-            id,
-            volunteer:profiles!volunteer_id(
-              id,
-              first_name,
-              last_name,
-              email,
-              phone
-            ),
-            signed_up_at,
-            phone,
-            status
-          )
-        `)
-        .eq('id', id)
-        .single();
-
-      if (error) throw error;
-
-      // Filter out cancelled signups
-      const confirmedSignups = data.signups?.filter(s => s.status === 'confirmed') || [];
-      
-      return {
-        ...data,
-        signups: confirmedSignups,
-        positions_filled: confirmedSignups.length
-      };
-    },
+    fetchRole,
 
     createRole: async (roleData) => {
       const { data, error } = await supabase
@@ -124,10 +126,20 @@ function createRolesStore() {
     },
 
     duplicateRole: async (id) => {
-      const role = await this.fetchRole(id);
-      const { id: _, created_at, updated_at, signups, created_by, ...roleData } = role;
+      const role = await fetchRole(id);
+      const { id: _, created_at, updated_at, signups, positions_filled, created_by, ...roleData } = role;
 
-      return await this.createRole(roleData);
+      // Create role using the createRole method from the returned object
+      const { data, error } = await supabase
+        .from('volunteer_roles')
+        .insert(roleData)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      update(rolesArray => [...rolesArray, { ...data, positions_filled: 0 }]);
+      return data;
     }
   };
 }
