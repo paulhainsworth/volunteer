@@ -64,8 +64,7 @@ function createSignupsStore() {
           .update({
             status: 'confirmed',
             phone: phone,
-            waiver_signed: true,
-            updated_at: new Date().toISOString()
+            waiver_signed: true
           })
           .eq('id', existing.id)
           .select(`
