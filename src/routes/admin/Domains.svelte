@@ -134,20 +134,29 @@
     try {
       const newDomainId = currentDomainId === domainId ? null : domainId;
       
+      console.log('Updating role:', roleId, 'to domain:', newDomainId);
+      
       const { error: updateError } = await supabase
         .from('volunteer_roles')
         .update({ domain_id: newDomainId })
         .eq('id', roleId);
 
-      if (updateError) throw updateError;
+      if (updateError) {
+        console.error('Update error:', updateError);
+        throw updateError;
+      }
 
       // Refresh data
       await Promise.all([
         domains.fetchDomains(),
         fetchAllRoles()
       ]);
+      
+      console.log('Successfully updated role assignment');
     } catch (err) {
+      console.error('Toggle assignment error:', err);
       error = err.message;
+      alert(`Error: ${err.message}`);
     }
   }
 
