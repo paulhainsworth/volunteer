@@ -46,6 +46,14 @@
     }
   });
 
+  function formatTime(time) {
+    const [hours, minutes] = time.split(':');
+    const hour = parseInt(hours);
+    const ampm = hour >= 12 ? 'pm' : 'am';
+    const displayHour = hour % 12 || 12;
+    return `${displayHour}:${minutes}${ampm}`;
+  }
+
   async function handleSubmit(event) {
     const formData = event.detail;
     submitting = true;
@@ -293,7 +301,7 @@
                   {/if}
                 </td>
                 <td>{format(new Date(role.event_date), 'MMM d, yyyy')}</td>
-                <td>{role.start_time} - {role.end_time}</td>
+                <td>{formatTime(role.start_time)} - {formatTime(role.end_time)}</td>
                 <td>{role.location || '-'}</td>
                 <td>
                   <div class="fill-indicator">
