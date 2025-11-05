@@ -16,6 +16,8 @@
   let showBulkUpload = false;
   let editingRole = null;
   let submitting = false;
+  let expandedRoles = new Set(); // Track which roles are expanded
+  let roleVolunteers = {}; // Store volunteers for each role
 
   onMount(async () => {
     if (!$auth.isAdmin) {
@@ -52,6 +54,52 @@
     const ampm = hour >= 12 ? 'pm' : 'am';
     const displayHour = hour % 12 || 12;
     return `${displayHour}:${minutes}${ampm}`;
+  }
+
+  async function toggleRoleExpansion(roleId) {
+    if (expandedRoles.has(roleId)) {
+      // Collapse - remove from set
+      expandedRoles.delete(roleId);
+      expandedRoles = new Set(expandedRoles); // Trigger reactivity
+    } else {
+      // Expand - add to set and fetch volunteers if not already loaded
+      expandedRoles.add(roleId);
+      expandedRoles = new Set(expandedRoles); // Trigger reactivity
+      
+      if (!roleVolunteers[roleId]) {
+        await fetchRoleVolunteers(roleId);
+      }
+    }
+  }
+
+  async function fetchRoleVolunteers(roleId) {
+    try {
+      const { data, error: fetchError } = await supabase
+        .from('signups')
+        .select(`
+          id,
+          signed_up_at,
+          phone,
+          volunteer:profiles!volunteer_id(
+            id,
+            first_name,
+            last_name,
+            email,
+            phone
+          )
+        `)
+        .eq('role_id', roleId)
+        .eq('status', 'confirmed')
+        .order('signed_up_at', { ascending: true });
+
+      if (fetchError) throw fetchError;
+
+      roleVolunteers[roleId] = data || [];
+      roleVolunteers = { ...roleVolunteers }; // Trigger reactivity
+    } catch (err) {
+      console.error('Error fetching volunteers:', err);
+      error = 'Failed to load volunteers: ' + err.message;
+    }
   }
 
   async function handleSubmit(event) {
@@ -292,13 +340,20 @@
           <tbody>
             {#each $roles as role (role.id)}
               {@const fillPercent = Math.round((role.positions_filled / role.positions_total) * 100)}
+              {@const isExpanded = expandedRoles.has(role.id)}
+              {@const volunteers = roleVolunteers[role.id] || []}
               
               <tr>
                 <td>
-                  <strong>{role.name}</strong>
-                  {#if role.description}
-                    <div class="role-desc">{role.description.substring(0, 100)}{role.description.length > 100 ? '...' : ''}</div>
-                  {/if}
+                  <div class="role-name-cell" on:click={() => toggleRoleExpansion(role.id)}>
+                    <span class="expand-arrow {isExpanded ? 'expanded' : ''}">{isExpanded ? '▼' : '▶'}</span>
+                    <div class="role-name-content">
+                      <strong>{role.name}</strong>
+                      {#if role.description}
+                        <div class="role-desc">{role.description.substring(0, 100)}{role.description.length > 100 ? '...' : ''}</div>
+                      {/if}
+                    </div>
+                  </div>
                 </td>
                 <td>{format(new Date(role.event_date), 'MMM d, yyyy')}</td>
                 <td>{formatTime(role.start_time)} - {formatTime(role.end_time)}</td>
@@ -319,6 +374,36 @@
                   </div>
                 </td>
               </tr>
+              
+              {#if isExpanded}
+                <tr class="volunteers-row">
+                  <td colspan="6">
+                    <div class="volunteers-container">
+                      {#if volunteers.length > 0}
+                        <h4>Volunteers ({volunteers.length})</h4>
+                        <div class="volunteers-list">
+                          {#each volunteers as signup (signup.id)}
+                            <div class="volunteer-item">
+                              <div class="volunteer-info">
+                                <strong>{signup.volunteer.first_name} {signup.volunteer.last_name}</strong>
+                                <a href="mailto:{signup.volunteer.email}" class="volunteer-email">{signup.volunteer.email}</a>
+                                {#if signup.phone || signup.volunteer.phone}
+                                  <span class="volunteer-phone">📱 {signup.phone || signup.volunteer.phone}</span>
+                                {/if}
+                              </div>
+                              <div class="signup-date">
+                                Signed up: {format(new Date(signup.signed_up_at), 'MMM d, h:mm a')}
+                              </div>
+                            </div>
+                          {/each}
+                        </div>
+                      {:else}
+                        <p class="no-volunteers">No volunteers signed up yet</p>
+                      {/if}
+                    </div>
+                  </td>
+                </tr>
+              {/if}
             {/each}
           </tbody>
         </table>
@@ -425,6 +510,116 @@
     font-size: 0.85rem;
     color: #6c757d;
     margin-top: 0.25rem;
+  }
+
+  .role-name-cell {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    cursor: pointer;
+    padding: 0.25rem 0;
+    user-select: none;
+  }
+
+  .role-name-cell:hover {
+    opacity: 0.8;
+  }
+
+  .expand-arrow {
+    flex-shrink: 0;
+    font-size: 0.85rem;
+    color: #007bff;
+    transition: transform 0.2s;
+    margin-top: 0.2rem;
+  }
+
+  .expand-arrow.expanded {
+    color: #28a745;
+  }
+
+  .role-name-content {
+    flex: 1;
+  }
+
+  .volunteers-row {
+    background: #f8f9fa;
+  }
+
+  .volunteers-container {
+    padding: 1.5rem 2rem;
+    animation: slideDown 0.2s ease-out;
+  }
+
+  @keyframes slideDown {
+    from {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .volunteers-container h4 {
+    margin: 0 0 1rem 0;
+    color: #495057;
+    font-size: 1rem;
+  }
+
+  .volunteers-list {
+    display: grid;
+    gap: 0.75rem;
+  }
+
+  .volunteer-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    gap: 1rem;
+  }
+
+  .volunteer-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .volunteer-info strong {
+    color: #1a1a1a;
+    font-size: 0.95rem;
+  }
+
+  .volunteer-email {
+    color: #007bff;
+    text-decoration: none;
+    font-size: 0.85rem;
+  }
+
+  .volunteer-email:hover {
+    text-decoration: underline;
+  }
+
+  .volunteer-phone {
+    font-size: 0.85rem;
+    color: #6c757d;
+  }
+
+  .signup-date {
+    font-size: 0.85rem;
+    color: #6c757d;
+    white-space: nowrap;
+  }
+
+  .no-volunteers {
+    text-align: center;
+    padding: 2rem;
+    color: #6c757d;
+    font-style: italic;
   }
 
   .fill-indicator {
