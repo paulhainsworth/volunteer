@@ -76,13 +76,20 @@
     }
   }
 
-  $: filteredVolunteers = sortVolunteers($volunteers.filter(volunteer => {
-    if (!searchQuery) return true;
-    const query = searchQuery.toLowerCase();
-    const name = `${volunteer.first_name || ''} ${volunteer.last_name || ''}`.toLowerCase();
-    const email = volunteer.email.toLowerCase();
-    return name.includes(query) || email.includes(query);
-  }));
+  // Make sorting reactive to sort column and direction changes  
+  $: filteredVolunteers = (() => {
+    // This function depends on: $volunteers, searchQuery, sortColumn, sortDirection
+    const filtered = $volunteers.filter(volunteer => {
+      if (!searchQuery) return true;
+      const query = searchQuery.toLowerCase();
+      const name = `${volunteer.first_name || ''} ${volunteer.last_name || ''}`.toLowerCase();
+      const email = volunteer.email.toLowerCase();
+      return name.includes(query) || email.includes(query);
+    });
+    
+    // Sort the filtered results - includes sortColumn and sortDirection in scope
+    return sortVolunteers(filtered);
+  })();
 
   function exportToCSV() {
     const headers = ['First Name', 'Last Name', 'Email', 'Phone', 'Total Signups', 'Total Hours', 'Waiver Signed'];
