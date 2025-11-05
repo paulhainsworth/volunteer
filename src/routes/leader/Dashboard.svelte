@@ -8,6 +8,11 @@
   let loading = true;
   let error = '';
   let myRoles = [];
+  let showEmailForm = false;
+  let emailSubject = '';
+  let emailBody = '';
+  let sendingEmail = false;
+  let emailSuccess = '';
 
   onMount(async () => {
     if (!$auth.user || $auth.profile?.role !== 'volunteer_leader') {
@@ -70,6 +75,84 @@
     return 'low';
   }
 
+  function toggleEmailForm() {
+    showEmailForm = !showEmailForm;
+    if (!showEmailForm) {
+      emailSubject = '';
+      emailBody = '';
+      emailSuccess = '';
+      error = '';
+    }
+  }
+
+  async function sendEmailToVolunteers() {
+    if (!emailSubject.trim() || !emailBody.trim()) {
+      error = 'Please enter both subject and message';
+      return;
+    }
+
+    sendingEmail = true;
+    error = '';
+    emailSuccess = '';
+
+    try {
+      // Get all unique volunteers across all roles
+      const uniqueVolunteers = new Map();
+      myRoles.forEach(role => {
+        role.confirmedSignups.forEach(signup => {
+          if (!uniqueVolunteers.has(signup.volunteer.id)) {
+            uniqueVolunteers.set(signup.volunteer.id, signup.volunteer);
+          }
+        });
+      });
+
+      const volunteers = Array.from(uniqueVolunteers.values());
+
+      if (volunteers.length === 0) {
+        error = 'No volunteers to email';
+        return;
+      }
+
+      // Send email to each volunteer
+      const emailPromises = volunteers.map(volunteer => 
+        supabase.functions.invoke('send-email', {
+          body: {
+            to: volunteer.email,
+            subject: emailSubject,
+            html: `
+              <h2>${emailSubject}</h2>
+              <p>Hello ${volunteer.first_name},</p>
+              ${emailBody.split('\n').map(line => `<p>${line}</p>`).join('')}
+              <hr style="margin: 2rem 0; border: none; border-top: 1px solid #dee2e6;">
+              <p style="color: #6c757d; font-size: 0.9rem;">
+                This message was sent by your volunteer leader: ${$auth.profile.first_name} ${$auth.profile.last_name}
+                ${$auth.profile.email ? ` (${$auth.profile.email})` : ''}
+              </p>
+            `
+          }
+        })
+      );
+
+      await Promise.all(emailPromises);
+
+      emailSuccess = `✅ Email sent successfully to ${volunteers.length} volunteer${volunteers.length > 1 ? 's' : ''}!`;
+      
+      // Clear form after successful send
+      setTimeout(() => {
+        emailSubject = '';
+        emailBody = '';
+        showEmailForm = false;
+        emailSuccess = '';
+      }, 3000);
+
+    } catch (err) {
+      console.error('Email error:', err);
+      error = `Failed to send email: ${err.message}`;
+    } finally {
+      sendingEmail = false;
+    }
+  }
+
   $: totalPositions = myRoles.reduce((sum, r) => sum + r.positions_total, 0);
   $: filledPositions = myRoles.reduce((sum, r) => sum + r.positions_filled, 0);
   $: fillPercentage = totalPositions > 0 ? Math.round((filledPositions / totalPositions) * 100) : 0;
@@ -80,13 +163,83 @@
 
 <div class="leader-dashboard">
   <div class="header">
-    <h1>Volunteer Leader Dashboard</h1>
-    <p>Manage the roles assigned to you</p>
+    <div>
+      <h1>Volunteer Leader Dashboard</h1>
+      <p>Manage the roles assigned to you</p>
+    </div>
+    {#if !loading && myRoles.length > 0 && totalVolunteers > 0}
+      <button class="btn btn-primary" on:click={toggleEmailForm}>
+        📧 Email My Volunteers
+      </button>
+    {/if}
   </div>
+
+  {#if showEmailForm}
+    <div class="email-form-card">
+      <h3>Send Email to All Your Volunteers</h3>
+      <p class="email-info">This will send an email to {totalVolunteers} volunteer{totalVolunteers > 1 ? 's' : ''} across all your assigned roles.</p>
+      
+      {#if error}
+        <div class="alert alert-error">{error}</div>
+      {/if}
+      
+      {#if emailSuccess}
+        <div class="alert alert-success">{emailSuccess}</div>
+      {/if}
+
+      <div class="form-group">
+        <label for="email-subject">Subject *</label>
+        <input
+          type="text"
+          id="email-subject"
+          bind:value={emailSubject}
+          placeholder="e.g., Important Update About Your Volunteer Shift"
+          disabled={sendingEmail}
+        />
+      </div>
+
+      <div class="form-group">
+        <label for="email-body">Message *</label>
+        <textarea
+          id="email-body"
+          bind:value={emailBody}
+          rows="8"
+          placeholder="Enter your message here...
+
+Examples:
+- Event time changes
+- Important reminders
+- Thank you messages
+- Updates about the event"
+          disabled={sendingEmail}
+        ></textarea>
+      </div>
+
+      <div class="form-actions">
+        <button
+          type="button"
+          class="btn btn-secondary"
+          on:click={toggleEmailForm}
+          disabled={sendingEmail}
+        >
+          Cancel
+        </button>
+        
+        <button
+          type="button"
+          class="btn btn-primary"
+          on:click={sendEmailToVolunteers}
+          disabled={sendingEmail || !emailSubject.trim() || !emailBody.trim()}
+        >
+          {sendingEmail ? 'Sending...' : `Send Email to ${totalVolunteers} Volunteer${totalVolunteers > 1 ? 's' : ''}`}
+        </button>
+      </div>
+    </div>
+  {/if}
 
   {#if loading}
     <div class="loading">Loading your assignments...</div>
-  {:else if error}
+  {:else if error && !showEmailForm}
     <div class="error">{error}</div>
   {:else if myRoles.length === 0}
     <div class="empty">
@@ -211,7 +364,12 @@
   }
 
   .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
     margin-bottom: 2rem;
+    gap: 2rem;
+    flex-wrap: wrap;
   }
 
   .header h1 {
@@ -222,6 +380,126 @@
   .header p {
     color: #6c757d;
     margin: 0;
+  }
+
+  .email-form-card {
+    background: white;
+    padding: 2rem;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    margin-bottom: 2rem;
+    border: 2px solid #007bff;
+  }
+
+  .email-form-card h3 {
+    margin: 0 0 0.5rem 0;
+    color: #1a1a1a;
+  }
+
+  .email-info {
+    color: #6c757d;
+    margin: 0 0 1.5rem 0;
+    font-size: 0.95rem;
+  }
+
+  .form-group {
+    margin-bottom: 1.5rem;
+  }
+
+  .form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+    color: #1a1a1a;
+  }
+
+  .form-group input,
+  .form-group textarea {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid #ced4da;
+    border-radius: 6px;
+    font-size: 1rem;
+    font-family: inherit;
+  }
+
+  .form-group input:focus,
+  .form-group textarea:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+  }
+
+  .form-group input:disabled,
+  .form-group textarea:disabled {
+    background: #f8f9fa;
+    cursor: not-allowed;
+  }
+
+  .form-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: flex-end;
+    padding-top: 1rem;
+    border-top: 1px solid #dee2e6;
+  }
+
+  .btn {
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+    font-size: 1rem;
+  }
+
+  .btn-primary {
+    background: #007bff;
+    color: white;
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    background: #0056b3;
+  }
+
+  .btn-primary:disabled {
+    background: #6c757d;
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+
+  .btn-secondary {
+    background: white;
+    color: #6c757d;
+    border: 1px solid #6c757d;
+  }
+
+  .btn-secondary:hover:not(:disabled) {
+    background: #f8f9fa;
+  }
+
+  .btn-secondary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .alert {
+    padding: 1rem;
+    border-radius: 6px;
+    margin-bottom: 1rem;
+  }
+
+  .alert-error {
+    background: #f8d7da;
+    border: 1px solid #f5c6cb;
+    color: #721c24;
+  }
+
+  .alert-success {
+    background: #d4edda;
+    border: 1px solid #c3e6cb;
+    color: #155724;
   }
 
   .loading,
@@ -447,6 +725,15 @@
   }
 
   @media (max-width: 768px) {
+    .header {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .header .btn {
+      width: 100%;
+    }
+
     .stats-grid {
       grid-template-columns: 1fr 1fr;
     }
@@ -454,6 +741,14 @@
     .volunteer-item {
       flex-direction: column;
       align-items: flex-start;
+    }
+
+    .form-actions {
+      flex-direction: column-reverse;
+    }
+
+    .form-actions .btn {
+      width: 100%;
     }
   }
 </style>
