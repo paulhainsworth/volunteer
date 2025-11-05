@@ -18,6 +18,7 @@
   let submitting = false;
   let expandedRoles = new Set(); // Track which roles are expanded
   let roleVolunteers = {}; // Store volunteers for each role
+  let showAllVolunteers = false; // Track if all volunteers are shown
 
   onMount(async () => {
     if (!$auth.isAdmin) {
@@ -99,6 +100,26 @@
     } catch (err) {
       console.error('Error fetching volunteers:', err);
       error = 'Failed to load volunteers: ' + err.message;
+    }
+  }
+
+  async function toggleAllVolunteers() {
+    showAllVolunteers = !showAllVolunteers;
+    
+    if (showAllVolunteers) {
+      // Expand all roles
+      const allRoleIds = $roles.map(r => r.id);
+      expandedRoles = new Set(allRoleIds);
+      
+      // Fetch volunteers for all roles that haven't been loaded yet
+      const fetchPromises = allRoleIds
+        .filter(id => !roleVolunteers[id])
+        .map(id => fetchRoleVolunteers(id));
+      
+      await Promise.all(fetchPromises);
+    } else {
+      // Collapse all roles
+      expandedRoles = new Set();
     }
   }
 
@@ -302,6 +323,9 @@
       </div>
       
       <div class="header-actions">
+        <button class="btn btn-secondary" on:click={toggleAllVolunteers}>
+          {showAllVolunteers ? '📋 Hide All Volunteers' : '📋 Show All Volunteers'}
+        </button>
         <button class="btn btn-secondary" on:click={exportToCSV}>
           Export CSV
         </button>
@@ -330,9 +354,7 @@
           <thead>
             <tr>
               <th>Role Name</th>
-              <th>Event Date</th>
-              <th>Time</th>
-              <th>Location</th>
+              <th>Volunteer Leader</th>
               <th>Fill Status</th>
               <th>Actions</th>
             </tr>
@@ -355,9 +377,15 @@
                     </div>
                   </div>
                 </td>
-                <td>{format(new Date(role.event_date), 'MMM d, yyyy')}</td>
-                <td>{formatTime(role.start_time)} - {formatTime(role.end_time)}</td>
-                <td>{role.location || '-'}</td>
+                <td>
+                  {#if role.direct_leader}
+                    {role.direct_leader.first_name} {role.direct_leader.last_name}
+                  {:else if role.domain?.leader}
+                    {role.domain.leader.first_name} {role.domain.leader.last_name}
+                  {:else}
+                    <span class="no-leader">-</span>
+                  {/if}
+                </td>
                 <td>
                   <div class="fill-indicator">
                     <div class="fill-bar">
@@ -377,7 +405,7 @@
               
               {#if isExpanded}
                 <tr class="volunteers-row">
-                  <td colspan="6">
+                  <td colspan="4">
                     <div class="volunteers-container">
                       {#if volunteers.length > 0}
                         <h4>Volunteers ({volunteers.length})</h4>
@@ -619,6 +647,11 @@
     text-align: center;
     padding: 2rem;
     color: #6c757d;
+    font-style: italic;
+  }
+
+  .no-leader {
+    color: #adb5bd;
     font-style: italic;
   }
 

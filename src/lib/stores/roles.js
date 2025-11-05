@@ -47,7 +47,13 @@ function createRolesStore() {
         .select(`
           *,
           signups:signups(count),
-          created_by:profiles!created_by(first_name, last_name, email)
+          created_by:profiles!created_by(first_name, last_name, email),
+          direct_leader:profiles!leader_id(id, first_name, last_name),
+          domain:volunteer_leader_domains!domain_id(
+            id,
+            name,
+            leader:profiles!leader_id(id, first_name, last_name)
+          )
         `)
         .order('event_date', { ascending: true })
         .order('start_time', { ascending: true });
