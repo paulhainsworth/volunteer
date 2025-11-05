@@ -1,8 +1,14 @@
 <script>
+  import { onMount } from 'svelte';
   import { auth } from '../stores/auth';
+  import { theme } from '../stores/theme';
   import { push } from 'svelte-spa-router';
 
   let showMobileMenu = false;
+
+  onMount(() => {
+    theme.initialize();
+  });
 
   async function handleSignOut() {
     try {
@@ -48,16 +54,25 @@
             <a href="#/my-signups" class="nav-link">My Signups</a>
           {/if}
           
-          <div class="nav-user">
-            <a href="#/profile" class="user-email" title="Edit Profile">
-              {$auth.profile?.email}
-            </a>
-            <button on:click={handleSignOut} class="btn-link">Sign Out</button>
-          </div>
-        {:else}
-          <a href="#/auth/login" class="nav-link">Login</a>
-          <a href="#/auth/signup" class="nav-link btn-primary">Sign Up</a>
-        {/if}
+          <button class="theme-toggle" on:click={() => theme.toggle()} title="Toggle {$theme === 'light' ? 'dark' : 'light'} mode">
+            {#if $theme === 'light'}
+              🌙
+            {:else}
+              ☀️
+            {/if}
+          </button>
+          
+          {#if $auth.user}
+            <div class="nav-user">
+              <a href="#/profile" class="user-email" title="Edit Profile">
+                {$auth.profile?.email}
+              </a>
+              <button on:click={handleSignOut} class="btn-link">Sign Out</button>
+            </div>
+          {:else}
+            <a href="#/auth/login" class="nav-link">Login</a>
+            <a href="#/auth/signup" class="nav-link btn-primary">Sign Up</a>
+          {/if}
       </div>
     </div>
   </nav>
@@ -79,10 +94,11 @@
   }
 
   .navbar {
-    background: #1a1a1a;
-    color: white;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
     padding: 1rem 0;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    box-shadow: var(--shadow-md);
+    border-bottom: 1px solid var(--border-color);
   }
 
   .nav-container {
@@ -97,7 +113,7 @@
   .nav-brand a {
     font-size: 1.5rem;
     font-weight: bold;
-    color: white;
+    color: var(--text-primary);
     text-decoration: none;
   }
 
@@ -114,7 +130,7 @@
   .mobile-menu-btn span {
     width: 25px;
     height: 3px;
-    background: white;
+    background: var(--text-primary);
     border-radius: 3px;
   }
 
@@ -125,7 +141,7 @@
   }
 
   .nav-link {
-    color: white;
+    color: var(--text-primary);
     text-decoration: none;
     padding: 0.5rem 1rem;
     border-radius: 4px;
@@ -133,16 +149,16 @@
   }
 
   .nav-link:hover {
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--bg-tertiary);
   }
 
   .nav-link.btn-primary {
-    background: #007bff;
+    background: var(--primary-color);
     color: white;
   }
 
   .nav-link.btn-primary:hover {
-    background: #0056b3;
+    background: var(--primary-hover);
   }
 
   .nav-user {
@@ -150,13 +166,13 @@
     align-items: center;
     gap: 1rem;
     padding-left: 1rem;
-    border-left: 1px solid rgba(255, 255, 255, 0.2);
+    border-left: 1px solid var(--border-color);
   }
 
   .user-email {
     font-size: 0.9rem;
     opacity: 0.8;
-    color: white;
+    color: var(--text-primary);
     text-decoration: none;
     transition: opacity 0.2s;
   }
@@ -169,10 +185,35 @@
   .btn-link {
     background: none;
     border: none;
-    color: white;
+    color: var(--text-primary);
     cursor: pointer;
     text-decoration: underline;
     font-size: 0.9rem;
+  }
+
+  .theme-toggle {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    cursor: pointer;
+    padding: 0.5rem 0.75rem;
+    border-radius: 6px;
+    font-size: 1.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    width: 44px;
+    height: 44px;
+  }
+
+  .theme-toggle:hover {
+    background: var(--bg-primary);
+    transform: scale(1.05);
+  }
+
+  .theme-toggle:active {
+    transform: scale(0.95);
   }
 
   .main-content {
@@ -184,11 +225,12 @@
   }
 
   .footer {
-    background: #f8f9fa;
+    background: var(--bg-secondary);
     padding: 1.5rem;
     text-align: center;
-    color: #6c757d;
+    color: var(--text-secondary);
     font-size: 0.9rem;
+    border-top: 1px solid var(--border-color);
   }
 
   @media (max-width: 768px) {
@@ -201,12 +243,15 @@
       top: 100%;
       left: 0;
       right: 0;
-      background: #1a1a1a;
+      background: var(--bg-secondary);
+      border-top: 1px solid var(--border-color);
+      border-bottom: 1px solid var(--border-color);
       flex-direction: column;
       align-items: stretch;
       gap: 0;
       padding: 1rem;
       display: none;
+      box-shadow: var(--shadow-lg);
     }
 
     .nav-menu.active {
@@ -221,7 +266,7 @@
       flex-direction: column;
       align-items: stretch;
       border-left: none;
-      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      border-top: 1px solid var(--border-color);
       padding-left: 0;
       padding-top: 1rem;
       margin-top: 0.5rem;
