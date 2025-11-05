@@ -28,6 +28,15 @@
   let userSignups = [];
   let loadingRoles = false;
   let selectedRoleId = '';
+  let showAddVolunteerModal = false;
+  let addVolunteerForm = {
+    email: '',
+    first_name: '',
+    last_name: '',
+    phone: '',
+    role_id: ''
+  };
+  let addingVolunteer = false;
 
   onMount(async () => {
     if (!$auth.isAdmin) {
@@ -316,8 +325,116 @@
   }
 
   function handleKeydown(event) {
-    if (event.key === 'Escape' && showEditModal) {
-      closeEditModal();
+    if (event.key === 'Escape') {
+      if (showEditModal) {
+        closeEditModal();
+      }
+      if (showAddVolunteerModal) {
+        closeAddVolunteerModal();
+      }
+    }
+  }
+
+  async function openAddVolunteerModal() {
+    showAddVolunteerModal = true;
+    error = '';
+    
+    // Load available roles
+    const { data: rolesData, error: rolesError } = await supabase
+      .from('volunteer_roles')
+      .select('*')
+      .gte('event_date', new Date().toISOString().split('T')[0])
+      .order('event_date', { ascending: true })
+      .order('start_time', { ascending: true });
+
+    if (!rolesError) {
+      availableRoles = rolesData || [];
+    }
+  }
+
+  function closeAddVolunteerModal() {
+    showAddVolunteerModal = false;
+    addVolunteerForm = {
+      email: '',
+      first_name: '',
+      last_name: '',
+      phone: '',
+      role_id: ''
+    };
+    error = '';
+    availableRoles = [];
+  }
+
+  async function createVolunteer() {
+    if (!addVolunteerForm.email || !addVolunteerForm.first_name || !addVolunteerForm.last_name) {
+      error = 'Email, first name, and last name are required';
+      return;
+    }
+
+    addingVolunteer = true;
+    error = '';
+
+    try {
+      // Generate a temporary password (user will reset via email)
+      const tempPassword = Math.random().toString(36).slice(-12) + Math.random().toString(36).slice(-12);
+      
+      // Create user in Supabase Auth
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: addVolunteerForm.email,
+        password: tempPassword,
+        options: {
+          data: {
+            first_name: addVolunteerForm.first_name,
+            last_name: addVolunteerForm.last_name
+          },
+          emailRedirectTo: `${window.location.origin}/auth/reset-password`
+        }
+      });
+
+      if (authError) throw authError;
+
+      if (!authData.user) {
+        throw new Error('User creation failed');
+      }
+
+      // Create/update profile (trigger should handle this, but be explicit)
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .upsert({
+          id: authData.user.id,
+          email: addVolunteerForm.email,
+          first_name: addVolunteerForm.first_name,
+          last_name: addVolunteerForm.last_name,
+          phone: addVolunteerForm.phone || null,
+          role: 'volunteer'
+        });
+
+      if (profileError) throw profileError;
+
+      // If a role was selected, sign them up
+      if (addVolunteerForm.role_id) {
+        const { error: signupError } = await supabase
+          .from('signups')
+          .insert({
+            role_id: addVolunteerForm.role_id,
+            volunteer_id: authData.user.id,
+            status: 'confirmed',
+            phone: addVolunteerForm.phone || null
+          });
+
+        if (signupError) throw signupError;
+      }
+
+      // Refresh volunteers list
+      await volunteers.fetchVolunteers();
+      
+      closeAddVolunteerModal();
+      alert(`✅ Volunteer created successfully! A confirmation email has been sent to ${addVolunteerForm.email} to set up their password.`);
+    } catch (err) {
+      console.error('Create volunteer error:', err);
+      error = 'Failed to create volunteer: ' + err.message;
+    } finally {
+      addingVolunteer = false;
     }
   }
 
@@ -415,6 +532,9 @@
       </button>
       <button class="btn btn-secondary" on:click={exportVolunteerRoster}>
         Export Roster
+      </button>
+      <button class="btn btn-primary" on:click={openAddVolunteerModal}>
+        + Add Volunteer
       </button>
     </div>
   </div>
@@ -917,6 +1037,116 @@
           disabled={saving}
         >
           {saving ? 'Saving...' : 'Save Changes'}
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+{#if showAddVolunteerModal}
+  <div class="modal-overlay" on:click={closeAddVolunteerModal}>
+    <div class="modal-content" on:click|stopPropagation>
+      <button class="modal-close" on:click={closeAddVolunteerModal} aria-label="Close">
+        ✕
+      </button>
+      
+      <div class="modal-header">
+        <h2>Add New Volunteer</h2>
+        <p class="modal-subtitle">Create a new volunteer user and optionally assign them to a role</p>
+      </div>
+
+      <div class="modal-body">
+        {#if error}
+          <div class="alert alert-error">{error}</div>
+        {/if}
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="add-first-name">First Name *</label>
+            <input
+              type="text"
+              id="add-first-name"
+              bind:value={addVolunteerForm.first_name}
+              placeholder="First name"
+              disabled={addingVolunteer}
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="add-last-name">Last Name *</label>
+            <input
+              type="text"
+              id="add-last-name"
+              bind:value={addVolunteerForm.last_name}
+              placeholder="Last name"
+              disabled={addingVolunteer}
+            />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="add-email">Email Address *</label>
+          <input
+            type="email"
+            id="add-email"
+            bind:value={addVolunteerForm.email}
+            placeholder="email@example.com"
+            disabled={addingVolunteer}
+          />
+          <small>An invitation email will be sent to this address</small>
+        </div>
+
+        <div class="form-group">
+          <label for="add-phone">Phone Number (Optional)</label>
+          <input
+            type="tel"
+            id="add-phone"
+            bind:value={addVolunteerForm.phone}
+            placeholder="(555) 123-4567"
+            disabled={addingVolunteer}
+          />
+        </div>
+
+        <div class="section-header">
+          <h3>Assign to Role (Optional)</h3>
+        </div>
+
+        <div class="form-group">
+          <label for="add-role-select">Select a role</label>
+          <select
+            id="add-role-select"
+            bind:value={addVolunteerForm.role_id}
+            disabled={addingVolunteer}
+          >
+            <option value="">-- No role (assign later) --</option>
+            {#each availableRoles as role (role.id)}
+              {@const isFull = (role.positions_filled || 0) >= role.positions_total}
+              <option value={role.id} disabled={isFull}>
+                {role.name} ({role.positions_filled || 0}/{role.positions_total} filled) - {format(new Date(role.event_date), 'MMM d')}
+              </option>
+            {/each}
+          </select>
+          <small>You can also assign them to a role later from their profile</small>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button
+          type="button"
+          class="btn btn-secondary"
+          on:click={closeAddVolunteerModal}
+          disabled={addingVolunteer}
+        >
+          Cancel
+        </button>
+        
+        <button
+          type="button"
+          class="btn btn-primary"
+          on:click={createVolunteer}
+          disabled={addingVolunteer}
+        >
+          {addingVolunteer ? 'Creating...' : 'Create Volunteer'}
         </button>
       </div>
     </div>
@@ -1482,6 +1712,13 @@
   .form-group select:disabled {
     background: #f8f9fa;
     cursor: not-allowed;
+  }
+
+  .form-group small {
+    display: block;
+    margin-top: 0.25rem;
+    color: #6c757d;
+    font-size: 0.875rem;
   }
 
   .modal-actions {
