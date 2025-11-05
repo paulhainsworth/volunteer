@@ -27,6 +27,7 @@
   let availableRoles = [];
   let userSignups = [];
   let loadingRoles = false;
+  let selectedRoleId = '';
 
   onMount(async () => {
     if (!$auth.isAdmin) {
@@ -192,6 +193,14 @@
     error = '';
     availableRoles = [];
     userSignups = [];
+    selectedRoleId = '';
+  }
+
+  async function assignSelectedRole() {
+    if (!editingUser || !selectedRoleId) return;
+    
+    await signUpUserForRole(selectedRoleId);
+    selectedRoleId = ''; // Reset selection after assignment
   }
 
   async function signUpUserForRole(roleId) {
@@ -859,35 +868,30 @@
           <div class="assign-section">
             <h4>Assign to New Role</h4>
             {#if availableRoles.filter(r => !userSignups.some(s => s.role_id === r.id)).length > 0}
-              <div class="available-roles">
-                {#each availableRoles.filter(r => !userSignups.some(s => s.role_id === r.id)) as role (role.id)}
-                  {@const fillPercent = Math.round((role.positions_filled || 0) / role.positions_total * 100)}
-                  {@const isFull = (role.positions_filled || 0) >= role.positions_total}
-                  
-                  <div class="role-option">
-                    <div class="role-option-info">
-                      <strong>{role.name}</strong>
-                      <span class="role-option-meta">
-                        {format(new Date(role.event_date), 'MMM d, yyyy')} • 
-                        {role.start_time} - {role.end_time}
-                      </span>
-                      {#if role.location}
-                        <span class="role-option-location">📍 {role.location}</span>
-                      {/if}
-                      <span class="role-option-fill {isFull ? 'full' : ''}">
-                        {role.positions_filled || 0}/{role.positions_total} filled
-                      </span>
-                    </div>
-                    <button 
-                      class="btn btn-xs btn-primary"
-                      on:click={() => signUpUserForRole(role.id)}
-                      disabled={isFull}
-                      title={isFull ? 'Role is full' : 'Sign up user for this role'}
-                    >
-                      {isFull ? 'Full' : '+ Assign'}
-                    </button>
-                  </div>
-                {/each}
+              <div class="role-selector">
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label for="role-select">Select a role to assign</label>
+                  <select
+                    id="role-select"
+                    bind:value={selectedRoleId}
+                    disabled={saving}
+                  >
+                    <option value="">-- Select a role --</option>
+                    {#each availableRoles.filter(r => !userSignups.some(s => s.role_id === r.id)) as role (role.id)}
+                      {@const isFull = (role.positions_filled || 0) >= role.positions_total}
+                      <option value={role.id} disabled={isFull}>
+                        {role.name} ({role.positions_filled || 0}/{role.positions_total} filled) - {format(new Date(role.event_date), 'MMM d')}
+                      </option>
+                    {/each}
+                  </select>
+                </div>
+                <button 
+                  class="btn btn-primary btn-add-role"
+                  on:click={assignSelectedRole}
+                  disabled={!selectedRoleId || saving}
+                >
+                  + Add to Role
+                </button>
               </div>
             {:else}
               <p class="no-roles">No available roles to assign (user is signed up for all upcoming roles or no roles exist)</p>
@@ -1611,58 +1615,40 @@
     margin-top: 1rem;
   }
 
-  .available-roles {
+  .role-selector {
     display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-    max-height: 300px;
-    overflow-y: auto;
-    padding-right: 0.5rem;
-  }
-
-  .role-option {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    padding: 1rem;
-    background: #ffffff;
-    border: 1px solid #dee2e6;
-    border-radius: 8px;
     gap: 1rem;
-    transition: box-shadow 0.2s;
+    align-items: flex-end;
   }
 
-  .role-option:hover {
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  }
-
-  .role-option-info {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
+  .role-selector .form-group {
     flex: 1;
   }
 
-  .role-option-info strong {
-    color: #1a1a1a;
+  .btn-add-role {
+    white-space: nowrap;
+    padding: 0.75rem 1.5rem;
+    height: fit-content;
+  }
+
+  .role-selector select {
     font-size: 0.95rem;
   }
 
-  .role-option-meta,
-  .role-option-location {
-    font-size: 0.85rem;
-    color: #6c757d;
-  }
-
-  .role-option-fill {
-    font-size: 0.85rem;
-    color: #28a745;
-    font-weight: 600;
-    margin-top: 0.25rem;
-  }
-
-  .role-option-fill.full {
+  .role-selector select option:disabled {
     color: #dc3545;
+    font-style: italic;
+  }
+
+  @media (max-width: 768px) {
+    .role-selector {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .btn-add-role {
+      width: 100%;
+    }
   }
 </style>
 
