@@ -12,6 +12,18 @@
   let viewMode = 'cards'; // 'cards' or 'table'
   let sortColumn = 'last_name';
   let sortDirection = 'asc';
+  let showEditModal = false;
+  let editingUser = null;
+  let editForm = {
+    first_name: '',
+    last_name: '',
+    phone: '',
+    role: 'volunteer',
+    emergency_contact_name: '',
+    emergency_contact_phone: '',
+    emergency_contact_relationship: ''
+  };
+  let saving = false;
 
   onMount(async () => {
     if (!$auth.isAdmin) {
@@ -117,6 +129,83 @@
     URL.revokeObjectURL(url);
   }
 
+  function openEditModal(user) {
+    editingUser = user;
+    editForm = {
+      first_name: user.first_name || '',
+      last_name: user.last_name || '',
+      phone: user.phone || '',
+      role: user.role,
+      emergency_contact_name: user.emergency_contact_name || '',
+      emergency_contact_phone: user.emergency_contact_phone || '',
+      emergency_contact_relationship: user.emergency_contact_relationship || ''
+    };
+    showEditModal = true;
+    error = '';
+  }
+
+  function closeEditModal() {
+    showEditModal = false;
+    editingUser = null;
+    error = '';
+  }
+
+  async function saveUserChanges() {
+    if (!editingUser) return;
+
+    if (!editForm.first_name.trim() || !editForm.last_name.trim()) {
+      error = 'First name and last name are required';
+      return;
+    }
+
+    saving = true;
+    error = '';
+
+    try {
+      const { data: updateData, error: updateError } = await supabase
+        .from('profiles')
+        .update({
+          first_name: editForm.first_name.trim(),
+          last_name: editForm.last_name.trim(),
+          phone: editForm.phone.trim() || null,
+          role: editForm.role,
+          emergency_contact_name: editForm.emergency_contact_name.trim() || null,
+          emergency_contact_phone: editForm.emergency_contact_phone.trim() || null,
+          emergency_contact_relationship: editForm.emergency_contact_relationship.trim() || null
+        })
+        .eq('id', editingUser.id)
+        .select();
+
+      if (updateError) {
+        console.error('Update error:', updateError);
+        throw updateError;
+      }
+
+      if (!updateData || updateData.length === 0) {
+        throw new Error('No rows updated - check permissions');
+      }
+
+      console.log('User updated successfully:', updateData);
+
+      // Refresh volunteer list
+      await volunteers.fetchVolunteers();
+      
+      closeEditModal();
+      alert('User information updated successfully!');
+    } catch (err) {
+      console.error('Save user error:', err);
+      error = 'Failed to update user: ' + err.message;
+    } finally {
+      saving = false;
+    }
+  }
+
+  function handleKeydown(event) {
+    if (event.key === 'Escape' && showEditModal) {
+      closeEditModal();
+    }
+  }
+
   async function changeRole(userId, newRole) {
     const roleNames = {
       'admin': 'Admin',
@@ -195,6 +284,8 @@
     URL.revokeObjectURL(url);
   }
 </script>
+
+<svelte:window on:keydown={handleKeydown} />
 
 <div class="volunteers-page">
   <div class="header">
@@ -299,7 +390,7 @@
           </thead>
           <tbody>
             {#each filteredVolunteers as volunteer (volunteer.id)}
-              <tr>
+              <tr class="clickable-row" on:click={() => openEditModal(volunteer)}>
                 <td>
                   {volunteer.first_name || '-'}
                   {#if volunteer.emergency_contact_name}
@@ -308,7 +399,7 @@
                 </td>
                 <td>{volunteer.last_name || '-'}</td>
                 <td>
-                  <a href="mailto:{volunteer.email}" class="email-link">{volunteer.email}</a>
+                  <a href="mailto:{volunteer.email}" class="email-link" on:click|stopPropagation>{volunteer.email}</a>
                   {#if volunteer.phone}
                     <div class="phone-display">📱 {volunteer.phone}</div>
                   {/if}
@@ -333,7 +424,7 @@
                     <span class="waiver-badge unsigned">✗</span>
                   {/if}
                 </td>
-                <td>
+                <td on:click|stopPropagation>
                   <div class="table-actions">
                     {#if volunteer.role === 'volunteer'}
                       <button 
@@ -518,6 +609,134 @@
   {/if}
 </div>
 
+{#if showEditModal && editingUser}
+  <div class="modal-overlay" on:click={closeEditModal}>
+    <div class="modal-content" on:click|stopPropagation>
+      <button class="modal-close" on:click={closeEditModal} aria-label="Close">
+        ✕
+      </button>
+      
+      <div class="modal-header">
+        <h2>Edit User Information</h2>
+        <p class="modal-subtitle">{editingUser.email}</p>
+      </div>
+
+      <div class="modal-body">
+        {#if error}
+          <div class="alert alert-error">{error}</div>
+        {/if}
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="edit-first-name">First Name *</label>
+            <input
+              type="text"
+              id="edit-first-name"
+              bind:value={editForm.first_name}
+              placeholder="First name"
+              disabled={saving}
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="edit-last-name">Last Name *</label>
+            <input
+              type="text"
+              id="edit-last-name"
+              bind:value={editForm.last_name}
+              placeholder="Last name"
+              disabled={saving}
+            />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="edit-phone">Phone Number</label>
+          <input
+            type="tel"
+            id="edit-phone"
+            bind:value={editForm.phone}
+            placeholder="(555) 123-4567"
+            disabled={saving}
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="edit-role">Role *</label>
+          <select
+            id="edit-role"
+            bind:value={editForm.role}
+            disabled={saving}
+          >
+            <option value="volunteer">👤 Volunteer</option>
+            <option value="volunteer_leader">⭐ Volunteer Leader</option>
+            <option value="admin">👑 Admin</option>
+          </select>
+        </div>
+
+        <div class="section-header">
+          <h3>Emergency Contact (Optional)</h3>
+        </div>
+
+        <div class="form-group">
+          <label for="edit-emergency-name">Emergency Contact Name</label>
+          <input
+            type="text"
+            id="edit-emergency-name"
+            bind:value={editForm.emergency_contact_name}
+            placeholder="Contact name"
+            disabled={saving}
+          />
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="edit-emergency-phone">Emergency Contact Phone</label>
+            <input
+              type="tel"
+              id="edit-emergency-phone"
+              bind:value={editForm.emergency_contact_phone}
+              placeholder="(555) 123-4567"
+              disabled={saving}
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="edit-emergency-relationship">Relationship</label>
+            <input
+              type="text"
+              id="edit-emergency-relationship"
+              bind:value={editForm.emergency_contact_relationship}
+              placeholder="e.g., Spouse, Parent"
+              disabled={saving}
+            />
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button
+          type="button"
+          class="btn btn-secondary"
+          on:click={closeEditModal}
+          disabled={saving}
+        >
+          Cancel
+        </button>
+        
+        <button
+          type="button"
+          class="btn btn-primary"
+          on:click={saveUserChanges}
+          disabled={saving}
+        >
+          {saving ? 'Saving...' : 'Save Changes'}
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
+
 <style>
   .volunteers-page {
     max-width: 1400px;
@@ -676,8 +895,13 @@
     border-bottom: 1px solid #dee2e6;
   }
 
-  .table-view tr:hover {
-    background: #f8f9fa;
+  .table-view tr.clickable-row {
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  .table-view tr.clickable-row:hover {
+    background: #e9ecef;
   }
 
   .text-center {
@@ -950,6 +1174,158 @@
     color: white;
   }
 
+  /* Modal Styles */
+  .modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 1rem;
+  }
+
+  .modal-content {
+    background: white;
+    border-radius: 16px;
+    max-width: 600px;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+    position: relative;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  }
+
+  .modal-close {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    background: #f8f9fa;
+    border: none;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    font-size: 1.5rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #6c757d;
+    transition: background 0.2s, color 0.2s;
+    z-index: 1;
+  }
+
+  .modal-close:hover {
+    background: #e2e3e5;
+    color: #1a1a1a;
+  }
+
+  .modal-header {
+    padding: 2rem 2rem 1rem 2rem;
+    border-bottom: 1px solid #dee2e6;
+    padding-right: 4rem;
+  }
+
+  .modal-header h2 {
+    margin: 0 0 0.5rem 0;
+    color: #1a1a1a;
+    font-size: 1.5rem;
+  }
+
+  .modal-subtitle {
+    margin: 0;
+    color: #6c757d;
+    font-size: 0.9rem;
+  }
+
+  .modal-body {
+    padding: 2rem;
+  }
+
+  .section-header {
+    margin: 1.5rem 0 1rem 0;
+    padding-top: 1.5rem;
+    border-top: 1px solid #dee2e6;
+  }
+
+  .section-header h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    color: #495057;
+  }
+
+  .form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+
+  .form-group {
+    margin-bottom: 1.5rem;
+  }
+
+  .form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+    color: #1a1a1a;
+  }
+
+  .form-group input,
+  .form-group select {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid #ced4da;
+    border-radius: 6px;
+    font-size: 1rem;
+    font-family: inherit;
+  }
+
+  .form-group input:focus,
+  .form-group select:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+  }
+
+  .form-group input:disabled,
+  .form-group select:disabled {
+    background: #f8f9fa;
+    cursor: not-allowed;
+  }
+
+  .modal-actions {
+    padding: 1.5rem 2rem 2rem 2rem;
+    border-top: 1px solid #dee2e6;
+    display: flex;
+    gap: 1rem;
+    justify-content: flex-end;
+  }
+
+  .btn-primary {
+    background: #007bff;
+    color: white;
+    padding: 0.75rem 1.5rem;
+    border-radius: 6px;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    background: #0056b3;
+  }
+
+  .btn-primary:disabled {
+    background: #6c757d;
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+
   @media (max-width: 768px) {
     .controls {
       flex-direction: column;
@@ -979,6 +1355,23 @@
 
     .table-view table {
       min-width: 800px;
+    }
+
+    .form-row {
+      grid-template-columns: 1fr;
+    }
+
+    .modal-content {
+      max-height: 95vh;
+      margin: 0.5rem;
+    }
+
+    .modal-actions {
+      flex-direction: column-reverse;
+    }
+
+    .modal-actions .btn {
+      width: 100%;
     }
   }
 </style>
