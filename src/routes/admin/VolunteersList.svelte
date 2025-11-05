@@ -24,6 +24,9 @@
     emergency_contact_relationship: ''
   };
   let saving = false;
+  let availableRoles = [];
+  let userSignups = [];
+  let loadingRoles = false;
 
   onMount(async () => {
     if (!$auth.isAdmin) {
@@ -129,7 +132,7 @@
     URL.revokeObjectURL(url);
   }
 
-  function openEditModal(user) {
+  async function openEditModal(user) {
     editingUser = user;
     editForm = {
       first_name: user.first_name || '',
@@ -142,12 +145,115 @@
     };
     showEditModal = true;
     error = '';
+    
+    // Load available roles and user's current signups
+    await loadRolesAndSignups(user.id);
+  }
+
+  async function loadRolesAndSignups(userId) {
+    loadingRoles = true;
+    
+    try {
+      // Fetch all upcoming roles
+      const { data: rolesData, error: rolesError } = await supabase
+        .from('volunteer_roles')
+        .select('*')
+        .gte('event_date', new Date().toISOString().split('T')[0])
+        .order('event_date', { ascending: true })
+        .order('start_time', { ascending: true });
+
+      if (rolesError) throw rolesError;
+
+      // Fetch user's current signups
+      const { data: signupsData, error: signupsError } = await supabase
+        .from('signups')
+        .select(`
+          *,
+          role:volunteer_roles!role_id(*)
+        `)
+        .eq('volunteer_id', userId)
+        .eq('status', 'confirmed');
+
+      if (signupsError) throw signupsError;
+
+      availableRoles = rolesData || [];
+      userSignups = signupsData || [];
+    } catch (err) {
+      console.error('Error loading roles:', err);
+      error = 'Failed to load roles: ' + err.message;
+    } finally {
+      loadingRoles = false;
+    }
   }
 
   function closeEditModal() {
     showEditModal = false;
     editingUser = null;
     error = '';
+    availableRoles = [];
+    userSignups = [];
+  }
+
+  async function signUpUserForRole(roleId) {
+    if (!editingUser) return;
+
+    try {
+      const { data, error: signupError } = await supabase
+        .from('signups')
+        .insert({
+          role_id: roleId,
+          volunteer_id: editingUser.id,
+          status: 'confirmed',
+          phone: editingUser.phone || null
+        })
+        .select();
+
+      if (signupError) throw signupError;
+
+      // Refresh signups
+      await loadRolesAndSignups(editingUser.id);
+      
+      // Show success message briefly
+      const successMsg = error;
+      error = '✅ User signed up successfully!';
+      setTimeout(() => {
+        if (error === '✅ User signed up successfully!') {
+          error = successMsg || '';
+        }
+      }, 3000);
+    } catch (err) {
+      console.error('Signup error:', err);
+      error = 'Failed to sign up user: ' + err.message;
+    }
+  }
+
+  async function removeUserSignup(signupId) {
+    if (!confirm('Remove this signup?')) return;
+
+    try {
+      const { error: deleteError } = await supabase
+        .from('signups')
+        .update({ status: 'cancelled' })
+        .eq('id', signupId);
+
+      if (deleteError) throw deleteError;
+
+      // Refresh signups and volunteer list
+      await loadRolesAndSignups(editingUser.id);
+      await volunteers.fetchVolunteers();
+      
+      // Show success message briefly
+      const successMsg = error;
+      error = '✅ Signup removed successfully!';
+      setTimeout(() => {
+        if (error === '✅ Signup removed successfully!') {
+          error = successMsg || '';
+        }
+      }, 3000);
+    } catch (err) {
+      console.error('Remove signup error:', err);
+      error = 'Failed to remove signup: ' + err.message;
+    }
   }
 
   async function saveUserChanges() {
@@ -712,6 +818,82 @@
             />
           </div>
         </div>
+
+        <div class="section-header">
+          <h3>Volunteer Signups</h3>
+        </div>
+
+        {#if loadingRoles}
+          <div class="loading-signups">Loading roles...</div>
+        {:else}
+          <!-- Current Signups -->
+          {#if userSignups.length > 0}
+            <div class="signups-section">
+              <h4>Current Signups ({userSignups.length})</h4>
+              <div class="signups-list-modal">
+                {#each userSignups as signup (signup.id)}
+                  <div class="signup-item-modal">
+                    <div class="signup-info">
+                      <strong>{signup.role.name}</strong>
+                      <span class="signup-meta">
+                        {format(new Date(signup.role.event_date), 'MMM d, yyyy')} • 
+                        {signup.role.start_time} - {signup.role.end_time}
+                      </span>
+                    </div>
+                    <button 
+                      class="btn btn-xs btn-danger"
+                      on:click={() => removeUserSignup(signup.id)}
+                      title="Remove signup"
+                    >
+                      ✕ Remove
+                    </button>
+                  </div>
+                {/each}
+              </div>
+            </div>
+          {:else}
+            <p class="no-signups">No current signups</p>
+          {/if}
+
+          <!-- Assign to Role -->
+          <div class="assign-section">
+            <h4>Assign to New Role</h4>
+            {#if availableRoles.filter(r => !userSignups.some(s => s.role_id === r.id)).length > 0}
+              <div class="available-roles">
+                {#each availableRoles.filter(r => !userSignups.some(s => s.role_id === r.id)) as role (role.id)}
+                  {@const fillPercent = Math.round((role.positions_filled || 0) / role.positions_total * 100)}
+                  {@const isFull = (role.positions_filled || 0) >= role.positions_total}
+                  
+                  <div class="role-option">
+                    <div class="role-option-info">
+                      <strong>{role.name}</strong>
+                      <span class="role-option-meta">
+                        {format(new Date(role.event_date), 'MMM d, yyyy')} • 
+                        {role.start_time} - {role.end_time}
+                      </span>
+                      {#if role.location}
+                        <span class="role-option-location">📍 {role.location}</span>
+                      {/if}
+                      <span class="role-option-fill {isFull ? 'full' : ''}">
+                        {role.positions_filled || 0}/{role.positions_total} filled
+                      </span>
+                    </div>
+                    <button 
+                      class="btn btn-xs btn-primary"
+                      on:click={() => signUpUserForRole(role.id)}
+                      disabled={isFull}
+                      title={isFull ? 'Role is full' : 'Sign up user for this role'}
+                    >
+                      {isFull ? 'Full' : '+ Assign'}
+                    </button>
+                  </div>
+                {/each}
+              </div>
+            {:else}
+              <p class="no-roles">No available roles to assign (user is signed up for all upcoming roles or no roles exist)</p>
+            {/if}
+          </div>
+        {/if}
       </div>
 
       <div class="modal-actions">
@@ -1373,6 +1555,114 @@
     .modal-actions .btn {
       width: 100%;
     }
+  }
+
+  .loading-signups,
+  .no-signups,
+  .no-roles {
+    padding: 1rem;
+    text-align: center;
+    color: #6c757d;
+    font-size: 0.9rem;
+  }
+
+  .signups-section h4,
+  .assign-section h4 {
+    margin: 0 0 1rem 0;
+    font-size: 0.95rem;
+    color: #495057;
+    font-weight: 600;
+  }
+
+  .signups-list-modal {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .signup-item-modal {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem;
+    background: #f8f9fa;
+    border-radius: 8px;
+    gap: 1rem;
+  }
+
+  .signup-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .signup-info strong {
+    color: #1a1a1a;
+    font-size: 0.95rem;
+  }
+
+  .signup-meta {
+    font-size: 0.85rem;
+    color: #6c757d;
+  }
+
+  .assign-section {
+    margin-top: 1rem;
+  }
+
+  .available-roles {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    max-height: 300px;
+    overflow-y: auto;
+    padding-right: 0.5rem;
+  }
+
+  .role-option {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 1rem;
+    background: #ffffff;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    gap: 1rem;
+    transition: box-shadow 0.2s;
+  }
+
+  .role-option:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  .role-option-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    flex: 1;
+  }
+
+  .role-option-info strong {
+    color: #1a1a1a;
+    font-size: 0.95rem;
+  }
+
+  .role-option-meta,
+  .role-option-location {
+    font-size: 0.85rem;
+    color: #6c757d;
+  }
+
+  .role-option-fill {
+    font-size: 0.85rem;
+    color: #28a745;
+    font-weight: 600;
+    margin-top: 0.25rem;
+  }
+
+  .role-option-fill.full {
+    color: #dc3545;
   }
 </style>
 
