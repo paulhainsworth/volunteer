@@ -62,17 +62,24 @@
             {/if}
           </button>
           
-          {#if $auth.user}
-            <div class="nav-user">
-              <a href="#/profile" class="user-email" title="Edit Profile">
-                {$auth.profile?.email}
-              </a>
-              <button on:click={handleSignOut} class="btn-link">Sign Out</button>
-            </div>
-          {:else}
-            <a href="#/auth/login" class="nav-link">Login</a>
-            <a href="#/auth/signup" class="nav-link btn-primary">Sign Up</a>
-          {/if}
+          <div class="nav-user">
+            <a href="#/profile" class="user-email" title="Edit Profile">
+              {$auth.profile?.email}
+            </a>
+            <button on:click={handleSignOut} class="btn-link">Sign Out</button>
+          </div>
+        {:else}
+          <a href="#/auth/login" class="nav-link">Login</a>
+          <a href="#/auth/signup" class="nav-link btn-primary">Sign Up</a>
+          
+          <button class="theme-toggle" on:click={() => theme.toggle()} title="Toggle {$theme === 'light' ? 'dark' : 'light'} mode">
+            {#if $theme === 'light'}
+              🌙
+            {:else}
+              ☀️
+            {/if}
+          </button>
+        {/if}
       </div>
     </div>
   </nav>
