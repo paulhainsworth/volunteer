@@ -164,15 +164,24 @@
     loadingRoles = true;
     
     try {
-      // Fetch all upcoming roles
+      // Fetch all upcoming roles with signup counts
       const { data: rolesData, error: rolesError } = await supabase
         .from('volunteer_roles')
-        .select('*')
+        .select(`
+          *,
+          signups:signups(count)
+        `)
         .gte('event_date', new Date().toISOString().split('T')[0])
         .order('event_date', { ascending: true })
         .order('start_time', { ascending: true });
 
       if (rolesError) throw rolesError;
+
+      // Transform roles data
+      const rolesWithCounts = rolesData?.map(role => ({
+        ...role,
+        positions_filled: role.signups?.[0]?.count || 0
+      })) || [];
 
       // Fetch user's current signups
       const { data: signupsData, error: signupsError } = await supabase
@@ -186,7 +195,7 @@
 
       if (signupsError) throw signupsError;
 
-      availableRoles = rolesData || [];
+      availableRoles = rolesWithCounts;
       userSignups = signupsData || [];
     } catch (err) {
       console.error('Error loading roles:', err);
@@ -339,16 +348,25 @@
     showAddVolunteerModal = true;
     error = '';
     
-    // Load available roles
+    // Load available roles with signup counts
     const { data: rolesData, error: rolesError } = await supabase
       .from('volunteer_roles')
-      .select('*')
+      .select(`
+        *,
+        signups:signups(count)
+      `)
       .gte('event_date', new Date().toISOString().split('T')[0])
       .order('event_date', { ascending: true })
       .order('start_time', { ascending: true });
 
-    if (!rolesError) {
-      availableRoles = rolesData || [];
+    if (!rolesError && rolesData) {
+      // Transform data to include filled count
+      availableRoles = rolesData.map(role => ({
+        ...role,
+        positions_filled: role.signups?.[0]?.count || 0
+      }));
+    } else {
+      availableRoles = [];
     }
   }
 
