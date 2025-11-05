@@ -594,13 +594,20 @@ END:VCALENDAR`;
   .error,
   .empty {
     text-align: center;
-    padding: 3rem;
+    padding: 4rem 2rem;
     color: #6c757d;
   }
 
   .empty h2 {
     color: #1a1a1a;
-    margin-bottom: 0.5rem;
+    margin: 0 0 1rem 0;
+    font-size: 1.75rem;
+  }
+
+  .empty p {
+    margin: 0 0 2rem 0;
+    font-size: 1.05rem;
+    line-height: 1.6;
   }
 
   .error {
