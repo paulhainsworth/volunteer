@@ -1,12 +1,12 @@
 <script>
-  import { onMount } from 'svelte';
-  import { roles } from '../../lib/stores/roles';
-  import { auth } from '../../lib/stores/auth';
-  import { supabase } from '../../lib/supabaseClient';
-  import { push } from 'svelte-spa-router';
-  import RoleForm from '../../lib/components/RoleForm.svelte';
-  import BulkUpload from '../../lib/components/BulkUpload.svelte';
-  import { format } from 'date-fns';
+import { onMount } from 'svelte';
+import { roles } from '../../lib/stores/roles';
+import { auth } from '../../lib/stores/auth';
+import { supabase } from '../../lib/supabaseClient';
+import { push } from 'svelte-spa-router';
+import RoleForm from '../../lib/components/RoleForm.svelte';
+import BulkUpload from '../../lib/components/BulkUpload.svelte';
+import { format } from 'date-fns';
 
   export let params = {};
 
@@ -19,6 +19,14 @@
   let expandedRoles = new Set(); // Track which roles are expanded
   let roleVolunteers = {}; // Store volunteers for each role
   let showAllVolunteers = false; // Track if all volunteers are shown
+  let showDomainLeaderModal = false;
+  let selectedDomain = null;
+  let availableLeaders = [];
+  let selectedLeaderId = '';
+  let loadingLeaders = false;
+  let assigningLeader = false;
+  let domainModalError = '';
+  let groupedRoles = [];
 
   onMount(async () => {
     if (!$auth.isAdmin) {
@@ -290,6 +298,106 @@
     a.click();
     URL.revokeObjectURL(url);
   }
+
+  async function loadLeaderOptions() {
+    loadingLeaders = true;
+    try {
+      const { data, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, first_name, last_name, email')
+        .order('first_name', { ascending: true })
+        .order('last_name', { ascending: true });
+
+      if (profilesError) throw profilesError;
+
+      availableLeaders = data || [];
+    } catch (err) {
+      console.error('Error loading users:', err);
+      domainModalError = 'Failed to load users: ' + err.message;
+    } finally {
+      loadingLeaders = false;
+    }
+  }
+
+  async function openDomainLeaderModal(domain) {
+    if (!domain) return;
+
+    selectedDomain = domain;
+    selectedLeaderId = domain.leader?.id || '';
+    domainModalError = '';
+    showDomainLeaderModal = true;
+
+    if (availableLeaders.length === 0) {
+      await loadLeaderOptions();
+    }
+  }
+
+  function closeDomainLeaderModal() {
+    showDomainLeaderModal = false;
+    selectedDomain = null;
+    selectedLeaderId = '';
+    assigningLeader = false;
+    domainModalError = '';
+  }
+
+  async function assignDomainLeader() {
+    if (!selectedDomain || !selectedLeaderId) {
+      domainModalError = 'Please select a leader.';
+      return;
+    }
+
+    assigningLeader = true;
+    domainModalError = '';
+
+    try {
+      const { error: updateError } = await supabase
+        .from('volunteer_leader_domains')
+        .update({ leader_id: selectedLeaderId })
+        .eq('id', selectedDomain.id);
+
+      if (updateError) throw updateError;
+
+      await roles.fetchRoles();
+      closeDomainLeaderModal();
+    } catch (err) {
+      console.error('Error assigning leader:', err);
+      domainModalError = 'Failed to assign leader: ' + err.message;
+    } finally {
+      assigningLeader = false;
+    }
+  }
+
+  function getUserDisplay(user) {
+    if (!user) return 'Unnamed user';
+    const parts = [user.first_name, user.last_name].filter(Boolean).join(' ').trim();
+    if (parts) {
+      return user.email ? `${parts} (${user.email})` : parts;
+    }
+    return user.email || 'Unnamed user';
+  }
+
+  function groupRolesList(rolesList) {
+    const domainMap = new Map();
+
+    rolesList.forEach(role => {
+      const domainId = role.domain?.id || 'no-domain';
+      if (!domainMap.has(domainId)) {
+        domainMap.set(domainId, {
+          id: domainId,
+          name: role.domain?.name || 'No Domain',
+          leader: role.domain?.leader || null,
+          domain: role.domain || null,
+          roles: []
+        });
+      }
+
+      domainMap.get(domainId).roles.push(role);
+    });
+
+    return Array.from(domainMap.values());
+  }
+
+  $: groupedRoles = groupRolesList($roles);
 </script>
 
 <div class="roles-page">
@@ -350,95 +458,171 @@
       </div>
     {:else}
       <div class="roles-table">
-        <table>
-          <thead>
-            <tr>
-              <th>Role Name</th>
-              <th>Volunteer Leader</th>
-              <th>Fill Status</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {#each $roles as role (role.id)}
-              {@const fillPercent = Math.round((role.positions_filled / role.positions_total) * 100)}
-              {@const isExpanded = expandedRoles.has(role.id)}
-              {@const volunteers = roleVolunteers[role.id] || []}
-              
-              <tr>
-                <td>
-                  <div class="role-name-cell" on:click={() => toggleRoleExpansion(role.id)}>
-                    <span class="expand-arrow {isExpanded ? 'expanded' : ''}">{isExpanded ? '▼' : '▶'}</span>
-                    <div class="role-name-content">
-                      <strong>{role.name}</strong>
-                      {#if role.description}
-                        <div class="role-desc">{role.description.substring(0, 100)}{role.description.length > 100 ? '...' : ''}</div>
-                      {/if}
-                    </div>
-                  </div>
-                </td>
-                <td>
-                  {#if role.direct_leader}
-                    {role.direct_leader.first_name} {role.direct_leader.last_name}
-                  {:else if role.domain?.leader}
-                    {role.domain.leader.first_name} {role.domain.leader.last_name}
+        {#each groupedRoles as group (group.id)}
+          <div class="domain-group">
+            <div class="domain-header">
+              <div class="domain-header-info">
+                <h3>{group.name}</h3>
+                {#if group.domain}
+                  {#if group.leader}
+                    <div class="domain-leader-text">Leader: {group.leader.first_name} {group.leader.last_name}</div>
                   {:else}
-                    <span class="no-leader">-</span>
+                    <div class="domain-leader-text no-leader">
+                      Leader: —
+                      <button
+                        class="btn btn-sm btn-secondary add-leader-btn"
+                        type="button"
+                        on:click={() => openDomainLeaderModal(group.domain)}
+                      >
+                        Add leader
+                      </button>
+                    </div>
                   {/if}
-                </td>
-                <td>
-                  <div class="fill-indicator">
-                    <div class="fill-bar">
-                      <div class="fill-progress" style="width: {fillPercent}%"></div>
-                    </div>
-                    <span class="fill-text">{role.positions_filled}/{role.positions_total} ({fillPercent}%)</span>
-                  </div>
-                </td>
-                <td>
-                  <div class="action-buttons">
-                    <a href="#/admin/roles/{role.id}" class="btn btn-sm btn-secondary">Edit</a>
-                    <button class="btn btn-sm btn-link" on:click={() => handleDuplicate(role.id)}>Duplicate</button>
-                    <button class="btn btn-sm btn-danger" on:click={() => handleDelete(role.id)}>Delete</button>
-                  </div>
-                </td>
-              </tr>
-              
-              {#if isExpanded}
-                <tr class="volunteers-row">
-                  <td colspan="4">
-                    <div class="volunteers-container">
-                      {#if volunteers.length > 0}
-                        <h4>Volunteers ({volunteers.length})</h4>
-                        <div class="volunteers-list">
-                          {#each volunteers as signup (signup.id)}
-                            <div class="volunteer-item">
-                              <div class="volunteer-info">
-                                <strong>{signup.volunteer.first_name} {signup.volunteer.last_name}</strong>
-                                <a href="mailto:{signup.volunteer.email}" class="volunteer-email">{signup.volunteer.email}</a>
-                                {#if signup.phone || signup.volunteer.phone}
-                                  <span class="volunteer-phone">📱 {signup.phone || signup.volunteer.phone}</span>
-                                {/if}
-                              </div>
-                              <div class="signup-date">
-                                Signed up: {format(new Date(signup.signed_up_at), 'MMM d, h:mm a')}
-                              </div>
-                            </div>
-                          {/each}
+                {:else}
+                  <div class="domain-leader-text no-leader">No domain leader</div>
+                {/if}
+              </div>
+            </div>
+
+            <div class="roles-group-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Role Name</th>
+                    <th>Volunteer Leader</th>
+                    <th>Fill Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {#each group.roles as role (role.id)}
+                    {@const fillPercent = Math.round((role.positions_filled / role.positions_total) * 100)}
+                    {@const isExpanded = expandedRoles.has(role.id)}
+                    {@const volunteers = roleVolunteers[role.id] || []}
+
+                    <tr>
+                      <td>
+                        <div class="role-name-cell" on:click={() => toggleRoleExpansion(role.id)}>
+                          <span class="expand-arrow {isExpanded ? 'expanded' : ''}">{isExpanded ? '▼' : '▶'}</span>
+                          <div class="role-name-content">
+                            <strong>{role.name}</strong>
+                            {#if role.description}
+                              <div class="role-desc">{role.description.substring(0, 100)}{role.description.length > 100 ? '...' : ''}</div>
+                            {/if}
+                          </div>
                         </div>
-                      {:else}
-                        <p class="no-volunteers">No volunteers signed up yet</p>
-                      {/if}
-                    </div>
-                  </td>
-                </tr>
-              {/if}
-            {/each}
-          </tbody>
-        </table>
+                      </td>
+                      <td>
+                        {#if role.direct_leader}
+                          {role.direct_leader.first_name} {role.direct_leader.last_name}
+                        {:else if role.domain?.leader}
+                          {role.domain.leader.first_name} {role.domain.leader.last_name}
+                        {:else}
+                          <span class="no-leader">-</span>
+                        {/if}
+                      </td>
+                      <td>
+                        <div class="fill-indicator">
+                          <div class="fill-bar">
+                            <div class="fill-progress" style="width: {fillPercent}%"></div>
+                          </div>
+                          <span class="fill-text">{role.positions_filled}/{role.positions_total} ({fillPercent}%)</span>
+                        </div>
+                      </td>
+                      <td>
+                        <div class="action-buttons">
+                          <a href="#/admin/roles/{role.id}" class="btn btn-sm btn-secondary">Edit</a>
+                          <button class="btn btn-sm btn-link" on:click={() => handleDuplicate(role.id)}>Duplicate</button>
+                          <button class="btn btn-sm btn-danger" on:click={() => handleDelete(role.id)}>Delete</button>
+                        </div>
+                      </td>
+                    </tr>
+
+                    {#if isExpanded}
+                      <tr class="volunteers-row">
+                        <td colspan="4">
+                          <div class="volunteers-container">
+                            {#if volunteers.length > 0}
+                              <h4>Volunteers ({volunteers.length})</h4>
+                              <div class="volunteers-list">
+                                {#each volunteers as signup (signup.id)}
+                                  <div class="volunteer-item">
+                                    <div class="volunteer-info">
+                                      <strong>{signup.volunteer.first_name} {signup.volunteer.last_name}</strong>
+                                      <a href="mailto:{signup.volunteer.email}" class="volunteer-email">{signup.volunteer.email}</a>
+                                      {#if signup.phone || signup.volunteer.phone}
+                                        <span class="volunteer-phone">📱 {signup.phone || signup.volunteer.phone}</span>
+                                      {/if}
+                                    </div>
+                                    <div class="signup-date">
+                                      Signed up: {format(new Date(signup.signed_up_at), 'MMM d, h:mm a')}
+                                    </div>
+                                  </div>
+                                {/each}
+                              </div>
+                            {:else}
+                              <p class="no-volunteers">No volunteers signed up yet</p>
+                            {/if}
+                          </div>
+                        </td>
+                      </tr>
+                    {/if}
+                  {/each}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        {/each}
       </div>
     {/if}
   {/if}
 </div>
+
+{#if showDomainLeaderModal && selectedDomain}
+  <div class="modal-overlay" role="dialog" aria-modal="true">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Assign Domain Leader</h2>
+        <button class="modal-close" on:click={closeDomainLeaderModal} aria-label="Close">
+          ×
+        </button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-domain-name">{selectedDomain.name}</p>
+
+        {#if domainModalError}
+          <div class="alert alert-error">{domainModalError}</div>
+        {/if}
+
+        {#if loadingLeaders}
+          <div class="loading">Loading users...</div>
+        {:else if availableLeaders.length === 0}
+          <p>No users available to assign.</p>
+        {:else}
+          <div class="form-group">
+            <label for="domain-leader-select">Select a leader</label>
+            <select
+              id="domain-leader-select"
+              bind:value={selectedLeaderId}
+              disabled={assigningLeader}
+            >
+              <option value="">-- Choose a leader --</option>
+              {#each availableLeaders as user (user.id)}
+                <option value={user.id}>{getUserDisplay(user)}</option>
+              {/each}
+            </select>
+          </div>
+        {/if}
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" on:click={closeDomainLeaderModal} disabled={assigningLeader}>Cancel</button>
+        <button class="btn btn-primary" on:click={assignDomainLeader} disabled={assigningLeader || !selectedLeaderId}>
+          {assigningLeader ? 'Saving...' : 'Save'}
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
 
 <style>
   .roles-page {
@@ -505,10 +689,56 @@
   }
 
   .roles-table {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .domain-group {
     background: white;
     border-radius: 12px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     overflow: hidden;
+  }
+
+  .domain-header {
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid #dee2e6;
+    background: #f8f9fa;
+  }
+
+  .domain-header-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .domain-header-info h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    color: #1a1a1a;
+  }
+
+  .domain-leader-text {
+    font-size: 0.9rem;
+    color: #495057;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  .domain-leader-text.no-leader {
+    color: #adb5bd;
+  }
+
+  .roles-group-table {
+    overflow-x: auto;
+  }
+
+  .roles-group-table table {
+    width: 100%;
+    border-collapse: collapse;
   }
 
   table {
@@ -655,6 +885,10 @@
     font-style: italic;
   }
 
+  .add-leader-btn {
+    margin-left: 0;
+  }
+
   .fill-indicator {
     display: flex;
     flex-direction: column;
@@ -746,6 +980,102 @@
     border: none;
     text-decoration: underline;
     padding: 0.5rem;
+  }
+
+  .modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 1.5rem;
+  }
+
+  .modal-content {
+    background: #fff;
+    border-radius: 12px;
+    max-width: 480px;
+    width: 100%;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+    display: flex;
+    flex-direction: column;
+    max-height: 90vh;
+  }
+
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid #dee2e6;
+  }
+
+  .modal-header h2 {
+    margin: 0;
+    font-size: 1.25rem;
+    color: #1a1a1a;
+  }
+
+  .modal-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    line-height: 1;
+    cursor: pointer;
+    color: #6c757d;
+    padding: 0;
+  }
+
+  .modal-close:hover {
+    color: #1a1a1a;
+  }
+
+  .modal-body {
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .modal-domain-name {
+    font-weight: 600;
+    margin: 0;
+    color: #495057;
+  }
+
+  .modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    padding: 1rem 1.5rem 1.5rem;
+    border-top: 1px solid #dee2e6;
+  }
+
+  .form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+    color: #495057;
+  }
+
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .form-group select {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid #ced4da;
+    border-radius: 6px;
+    font-size: 1rem;
+    color: #495057;
   }
 
   @media (max-width: 768px) {
