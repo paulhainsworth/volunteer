@@ -51,6 +51,26 @@
   };
 
   onMount(() => {
+    if (typeof window !== 'undefined') {
+      const currentHash = window.location.hash || '';
+      const doubleHashIndex = currentHash.indexOf('#', 1);
+
+      if (currentHash.startsWith('#/auth/reset-password') && doubleHashIndex !== -1) {
+        const recoveryFragment = currentHash.slice(doubleHashIndex + 1);
+        if (recoveryFragment) {
+          try {
+            sessionStorage.setItem('pending-recovery-params', recoveryFragment);
+          } catch (storageErr) {
+            console.warn('Unable to store recovery params:', storageErr);
+          }
+        }
+
+        const cleanHash = currentHash.slice(0, doubleHashIndex);
+        window.history.replaceState({}, document.title, `${window.location.origin}/${cleanHash}`);
+        window.dispatchEvent(new HashChangeEvent('hashchange'));
+      }
+    }
+
     auth.initialize();
   });
 </script>
