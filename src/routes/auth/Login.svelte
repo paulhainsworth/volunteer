@@ -13,17 +13,18 @@
 
     try {
       await auth.signIn(email, password);
+      const { profile } = await auth.refreshSession();
       
       // Check if needs onboarding (no emergency contact)
-      if (!$auth.profile?.emergency_contact_name) {
+      if (!profile?.emergency_contact_name) {
         push('/onboarding');
         return;
       }
 
       // Redirect based on role
-      if ($auth.isAdmin) {
+      if (profile?.role === 'admin') {
         push('/admin');
-      } else if ($auth.profile?.role === 'volunteer_leader') {
+      } else if (profile?.role === 'volunteer_leader') {
         push('/leader');
       } else {
         push('/volunteer');

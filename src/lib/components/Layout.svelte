@@ -5,17 +5,25 @@
   import { push } from 'svelte-spa-router';
 
   let showMobileMenu = false;
+  let signingOut = false;
 
   onMount(() => {
     theme.initialize();
   });
 
-  async function handleSignOut() {
+  async function handleSignOut(event) {
+    event?.preventDefault();
+    if (signingOut) return;
+
+    signingOut = true;
     try {
       await auth.signOut();
+      showMobileMenu = false;
       push('/auth/login');
     } catch (error) {
       console.error('Sign out error:', error);
+    } finally {
+      signingOut = false;
     }
   }
 
@@ -28,7 +36,7 @@
   <nav class="navbar">
     <div class="nav-container">
       <div class="nav-brand">
-        <a href="/">🚴 Volunteer Manager</a>
+        <a href="#/">🚴 Volunteer Manager</a>
       </div>
       
       <button class="mobile-menu-btn" on:click={toggleMobileMenu} aria-label="Toggle menu">
@@ -66,7 +74,9 @@
             <a href="#/profile" class="user-email" title="Edit Profile">
               {$auth.profile?.email}
             </a>
-            <button on:click={handleSignOut} class="btn-link">Sign Out</button>
+            <button type="button" class="btn-link" on:click={handleSignOut} disabled={signingOut}>
+              {signingOut ? 'Signing out…' : 'Sign Out'}
+            </button>
           </div>
         {:else}
           <a href="#/auth/login" class="nav-link">Login</a>
@@ -196,6 +206,12 @@
     cursor: pointer;
     text-decoration: underline;
     font-size: 0.9rem;
+  }
+
+  .btn-link[disabled] {
+    opacity: 0.6;
+    cursor: not-allowed;
+    text-decoration: none;
   }
 
   .theme-toggle {

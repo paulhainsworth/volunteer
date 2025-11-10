@@ -49,6 +49,8 @@ function createDomainsStore() {
           roles:volunteer_roles!domain_id(
             id,
             name,
+            description,
+            location,
             event_date,
             start_time,
             end_time,

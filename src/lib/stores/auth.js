@@ -2,83 +2,65 @@ import { writable } from 'svelte/store';
 import { supabase } from '../supabaseClient';
 
 function createAuthStore() {
-  const { subscribe, set, update } = writable({
+  const { subscribe, set } = writable({
     user: null,
     profile: null,
     loading: true,
     isAdmin: false
   });
 
+  const applySession = async (session) => {
+    if (session?.user) {
+      let profile = null;
+      let retries = 0;
+      const maxRetries = 5;
+
+      while (!profile && retries < maxRetries) {
+        const { data } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+
+        if (data) {
+          profile = data;
+        } else {
+          retries++;
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+      }
+
+      set({
+        user: session.user,
+        profile,
+        loading: false,
+        isAdmin: profile?.role === 'admin'
+      });
+      return { user: session.user, profile };
+    } else {
+      set({ user: null, profile: null, loading: false, isAdmin: false });
+      return { user: null, profile: null };
+    }
+  };
+
+  const loadCurrentSession = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    return applySession(session);
+  };
+
   return {
     subscribe,
     
     initialize: async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (session?.user) {
-        // Retry profile fetch in case trigger hasn't completed yet
-        let profile = null;
-        let retries = 0;
-        const maxRetries = 5;
-        
-        while (!profile && retries < maxRetries) {
-          const { data } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', session.user.id)
-            .single();
-          
-          if (data) {
-            profile = data;
-          } else {
-            retries++;
-            await new Promise(resolve => setTimeout(resolve, 500));
-          }
-        }
-        
-        set({
-          user: session.user,
-          profile: profile,
-          loading: false,
-          isAdmin: profile?.role === 'admin'
-        });
-      } else {
-        set({ user: null, profile: null, loading: false, isAdmin: false });
-      }
+      await loadCurrentSession();
 
-      // Listen for auth changes
       supabase.auth.onAuthStateChange(async (event, session) => {
-        if (session?.user) {
-          // Retry profile fetch in case trigger hasn't completed yet
-          let profile = null;
-          let retries = 0;
-          const maxRetries = 5;
-          
-          while (!profile && retries < maxRetries) {
-            const { data } = await supabase
-              .from('profiles')
-              .select('*')
-              .eq('id', session.user.id)
-              .single();
-            
-            if (data) {
-              profile = data;
-            } else {
-              retries++;
-              await new Promise(resolve => setTimeout(resolve, 500));
-            }
-          }
-          
-          set({
-            user: session.user,
-            profile: profile,
-            loading: false,
-            isAdmin: profile?.role === 'admin'
-          });
-        } else {
-          set({ user: null, profile: null, loading: false, isAdmin: false });
-        }
+        await applySession(session);
       });
+    },
+
+    refreshSession: async () => {
+      return loadCurrentSession();
     },
 
     signUp: async (email, password, firstName, lastName, role = 'volunteer') => {
@@ -89,16 +71,13 @@ function createAuthStore() {
           data: {
             first_name: firstName,
             last_name: lastName,
-            role: role
+            role
           }
         }
       });
 
       if (error) throw error;
 
-      // Profile is created automatically by database trigger
-      // The trigger reads first_name and last_name from user metadata
-      // Wait a brief moment for trigger to complete
       if (data.user) {
         await new Promise(resolve => setTimeout(resolve, 500));
       }
@@ -114,7 +93,6 @@ function createAuthStore() {
 
       if (error) throw error;
 
-      // Update last_login
       await supabase
         .from('profiles')
         .update({ last_login: new Date().toISOString() })

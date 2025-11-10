@@ -26,6 +26,7 @@
   
   // Volunteer Leader routes
   import LeaderDashboard from './routes/leader/Dashboard.svelte';
+  import DomainInvite from './routes/invite/Domain.svelte';
   
   // Profile
   import Profile from './routes/Profile.svelte';
@@ -42,6 +43,7 @@
     '/profile': Profile,
     '/onboarding': Onboarding,
     '/leader': LeaderDashboard,
+    '/invite/:domainId': DomainInvite,
     '/admin': AdminDashboard,
     '/admin/roles': RolesList,
     '/admin/roles/:id': RolesList,
