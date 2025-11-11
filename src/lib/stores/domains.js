@@ -7,8 +7,10 @@ function createDomainsStore() {
   return {
     subscribe,
     
-    fetchDomains: async () => {
-      const { data, error } = await supabase
+    fetchDomains: async (options = {}) => {
+      const { leaderId } = options;
+
+      let query = supabase
         .from('volunteer_leader_domains')
         .select(`
           *,
@@ -22,6 +24,12 @@ function createDomainsStore() {
           roles:volunteer_roles(count)
         `)
         .order('name', { ascending: true });
+
+      if (leaderId) {
+        query = query.eq('leader_id', leaderId);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
 

@@ -36,7 +36,7 @@ test.describe('User Login Flow', () => {
     await expect(page.locator('.alert-error')).toBeVisible({ timeout: 5000 });
   });
 
-  test('should successfully login and redirect based on role', async ({ page, context }) => {
+  test('should successfully login and redirect based on role', async ({ page }) => {
     // First create an account
     await page.goto('/#/auth/signup');
     await page.fill('#firstName', testUser.firstName);
@@ -48,10 +48,7 @@ test.describe('User Login Flow', () => {
     
     // Wait for signup success (database trigger may take time)
     await expect(page.locator('.alert-success')).toBeVisible({ timeout: 15000 });
-    
-    // Sign out
-    await page.click('text=Sign Out');
-    await page.waitForTimeout(1000);
+    await page.waitForURL(/.*#\/onboarding/, { timeout: 15000 });
     
     // Now login
     await page.goto('/#/auth/login');
@@ -92,6 +89,14 @@ test.describe('User Login Flow', () => {
     await page.click('button[type="submit"]');
     
     await expect(page.locator('.alert-success')).toBeVisible({ timeout: 15000 });
+    
+    await page.waitForURL(/.*#\/onboarding/, { timeout: 15000 });
+    
+    await page.goto('/#/auth/login');
+    await page.fill('#email', testUser.email);
+    await page.fill('#password', testUser.password);
+    await page.click('button[type="submit"]');
+    await expect(page).toHaveURL(/.*#\/volunteer/, { timeout: 10000 });
     
     // Refresh page
     await page.reload();

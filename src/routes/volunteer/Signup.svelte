@@ -18,37 +18,67 @@
   let signatureName = '';
   let submitting = false;
   let success = false;
-  let needsWaiver = true;
+  let needsWaiver = false;
+  let isAuthenticated = false;
+  let hasLoadedUserData = false;
+  let loadingUserData = false;
 
-  onMount(async () => {
-    if (!$auth.user) {
-      push('/auth/login');
-      return;
-    }
+  async function loadAuthenticatedData(userId) {
+    loadingUserData = true;
 
     try {
-      // Fetch role details
-      role = await roles.fetchRole(params.id);
-
-      // Check waiver status
-      const status = await waiverStore.checkWaiverStatus($auth.user.id);
+      const status = await waiverStore.checkWaiverStatus(userId);
       needsWaiver = status.needsToSign;
 
       if (needsWaiver) {
         const currentWaiver = await waiverStore.fetchCurrentWaiver();
         waiverText = currentWaiver.text;
+      } else {
+        waiverText = '';
       }
 
-      // Pre-fill signature with user's name
       if ($auth.profile?.first_name && $auth.profile?.last_name) {
         signatureName = `${$auth.profile.first_name} ${$auth.profile.last_name}`;
       }
+
+      hasLoadedUserData = true;
     } catch (err) {
-      error = err.message;
+      error = err.message || 'Unable to prepare signup form.';
+      hasLoadedUserData = false;
+    } finally {
+      loadingUserData = false;
+    }
+  }
+
+  onMount(async () => {
+    isAuthenticated = !!$auth.user;
+
+    try {
+      role = await roles.fetchRole(params.id);
+
+      if (isAuthenticated && $auth.user) {
+        await loadAuthenticatedData($auth.user.id);
+      }
+    } catch (err) {
+      error = err.message || 'Unable to load volunteer role.';
     } finally {
       loading = false;
     }
   });
+
+  $: isAuthenticated = !!$auth.user;
+
+  $: if (isAuthenticated && role && !hasLoadedUserData && !loadingUserData && $auth.user) {
+    loadAuthenticatedData($auth.user.id);
+  }
+
+  $: if (!isAuthenticated) {
+    hasLoadedUserData = false;
+    needsWaiver = false;
+    waiverText = '';
+    waiverAgreed = false;
+    signatureName = '';
+  }
 
   function formatTime(time) {
     const [hours, minutes] = time.split(':');
@@ -67,6 +97,11 @@
 
   async function handleSubmit() {
     error = '';
+
+    if (!isAuthenticated || !$auth.user) {
+      error = 'Please sign in to volunteer for this opportunity.';
+      return;
+    }
 
     if (needsWaiver && !waiverAgreed) {
       error = 'You must agree to the waiver to continue';
@@ -172,87 +207,104 @@
         {/if}
       </div>
 
-      <form on:submit|preventDefault={handleSubmit}>
-        <div class="form-section">
-          <h3>Your Information</h3>
-          
-          <div class="form-group">
-            <label for="email">Email (from your account)</label>
-            <input
-              type="email"
-              id="email"
-              value={$auth.profile?.email}
-              disabled
-            />
-          </div>
-
-          <div class="form-group">
-            <label for="phone">Phone Number (optional)</label>
-            <input
-              type="tel"
-              id="phone"
-              bind:value={phone}
-              placeholder="(555) 123-4567"
-              disabled={submitting}
-            />
-            <small>Optional - we may use this to contact you on event day</small>
+      {#if !isAuthenticated}
+        <div class="login-prompt">
+          <h3>Ready to volunteer?</h3>
+          <p>Log in or create an account to claim this opportunity.</p>
+          <div class="login-actions">
+            <button class="btn btn-primary" on:click={() => push('/auth/login')}>
+              Log In to Sign Up
+            </button>
+            <button class="btn btn-outline" on:click={() => push('/auth/signup')}>
+              Create Account
+            </button>
           </div>
         </div>
-
-        {#if needsWaiver}
-          <div class="form-section waiver-section">
-            <h3>Liability Waiver</h3>
+      {:else if loadingUserData && !hasLoadedUserData}
+        <div class="loading secondary">Preparing your signup form...</div>
+      {:else}
+        <form on:submit|preventDefault={handleSubmit}>
+          <div class="form-section">
+            <h3>Your Information</h3>
             
-            <div class="waiver-text">
-              {waiverText}
+            <div class="form-group">
+              <label for="email">Email (from your account)</label>
+              <input
+                type="email"
+                id="email"
+                value={$auth.profile?.email}
+                disabled
+              />
             </div>
 
             <div class="form-group">
-              <label for="signature">Digital Signature (Full Name)</label>
+              <label for="phone">Phone Number (optional)</label>
               <input
-                type="text"
-                id="signature"
-                bind:value={signatureName}
-                placeholder="Your Full Name"
-                required
+                type="tel"
+                id="phone"
+                bind:value={phone}
+                placeholder="(555) 123-4567"
                 disabled={submitting}
               />
-            </div>
-
-            <div class="checkbox-group">
-              <input
-                type="checkbox"
-                id="waiver-agree"
-                bind:checked={waiverAgreed}
-                required
-                disabled={submitting}
-              />
-              <label for="waiver-agree">
-                I have read and agree to the waiver above
-              </label>
+              <small>Optional - we may use this to contact you on event day</small>
             </div>
           </div>
-        {/if}
 
-        <div class="form-actions">
-          <button
-            type="button"
-            class="btn btn-secondary"
-            on:click={() => push('/volunteer')}
-            disabled={submitting}
-          >
-            Cancel
-          </button>
-          
-          <button
-            type="submit"
-            class="btn btn-primary"
-            disabled={submitting || (needsWaiver && (!waiverAgreed || !signatureName.trim()))}
-          >
-            {submitting ? 'Signing up...' : 'Confirm Signup'}
-          </button>
-        </div>
-      </form>
+          {#if needsWaiver}
+            <div class="form-section waiver-section">
+              <h3>Liability Waiver</h3>
+              
+              <div class="waiver-text">
+                {waiverText}
+              </div>
+
+              <div class="form-group">
+                <label for="signature">Digital Signature (Full Name)</label>
+                <input
+                  type="text"
+                  id="signature"
+                  bind:value={signatureName}
+                  placeholder="Your Full Name"
+                  required
+                  disabled={submitting}
+                />
+              </div>
+
+              <div class="checkbox-group">
+                <input
+                  type="checkbox"
+                  id="waiver-agree"
+                  bind:checked={waiverAgreed}
+                  required
+                  disabled={submitting}
+                />
+                <label for="waiver-agree">
+                  I have read and agree to the waiver above
+                </label>
+              </div>
+            </div>
+          {/if}
+
+          <div class="form-actions">
+            <button
+              type="button"
+              class="btn btn-secondary"
+              on:click={() => push('/volunteer')}
+              disabled={submitting}
+            >
+              Cancel
+            </button>
+            
+            <button
+              type="submit"
+              class="btn btn-primary"
+              disabled={submitting || (needsWaiver && (!waiverAgreed || !signatureName.trim()))}
+            >
+              {submitting ? 'Signing up...' : 'Confirm Signup'}
+            </button>
+          </div>
+        </form>
+      {/if}
     </div>
   {/if}
 </div>
@@ -267,6 +319,10 @@
     text-align: center;
     padding: 3rem;
     color: #6c757d;
+  }
+
+  .loading.secondary {
+    padding: 2rem;
   }
 
   .error-card,
@@ -473,6 +529,46 @@
 
   .btn-secondary:hover:not(:disabled) {
     background: #f8f9fa;
+  }
+
+  .btn-outline {
+    background: white;
+    color: #1f2937;
+    border: 1px solid #cbd5e1;
+    transition: background 0.2s, border-color 0.2s;
+  }
+
+  .btn-outline:hover {
+    background: #f8fafc;
+    border-color: #94a3b8;
+  }
+
+  .login-prompt {
+    background: #f5f8ff;
+    border: 1px solid #cfe0ff;
+    border-radius: 12px;
+    padding: 2rem;
+    text-align: center;
+  }
+
+  .login-prompt h3 {
+    margin: 0 0 0.75rem 0;
+    color: #1a1a1a;
+  }
+
+  .login-prompt p {
+    margin: 0 0 1.5rem 0;
+    color: #475569;
+  }
+
+  .login-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .login-actions .btn {
+    width: 100%;
   }
 </style>
 

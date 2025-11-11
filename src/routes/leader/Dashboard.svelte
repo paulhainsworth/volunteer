@@ -8,7 +8,7 @@
   let loading = true;
   let error = '';
   let myRoles = [];
-let groupedDomains = [];
+let sortedRoles = [];
 let volunteerForms = {};
 let addStates = {};
 let volunteerSuggestions = {};
@@ -38,6 +38,7 @@ const shareTimers = {};
 
   let popstateUnsubscribe = null;
   let refreshing = false;
+  let openActionMenu = { roleId: null, signupId: null };
 
   onMount(async () => {
     const authState = await waitForAuthReady();
@@ -61,9 +62,16 @@ const shareTimers = {};
     window.addEventListener('hashchange', handleNavigation);
     window.addEventListener('popstate', handleNavigation);
 
+    const handleGlobalClick = () => {
+      closeActionMenu();
+    };
+
+    window.addEventListener('click', handleGlobalClick);
+
     popstateUnsubscribe = () => {
       window.removeEventListener('hashchange', handleNavigation);
       window.removeEventListener('popstate', handleNavigation);
+      window.removeEventListener('click', handleGlobalClick);
     };
   });
 
@@ -163,7 +171,7 @@ const shareTimers = {};
       };
     });
 
-    groupedDomains = groupRolesByDomain(myRoles);
+    sortedRoles = [...myRoles].sort(compareRoles);
     initializeRoleForms(myRoles);
   }
 
@@ -182,6 +190,13 @@ const shareTimers = {};
     const end = formatTime(role.end_time);
     const timePart = start && end ? `${start} – ${end}` : '';
     return [datePart, timePart].filter(Boolean).join(' • ') || '—';
+  }
+
+  function formatVolunteerName(signup) {
+    const first = signup.volunteer?.first_name?.trim();
+    const last = signup.volunteer?.last_name?.trim();
+    const email = signup.volunteer?.email;
+    return [first, last].filter(Boolean).join(' ') || email || 'Volunteer';
   }
 
   function compareRoles(a, b) {
@@ -204,31 +219,6 @@ const shareTimers = {};
     }
 
     return a.name.localeCompare(b.name);
-  }
-
-  function groupRolesByDomain(roles) {
-    const groups = new Map();
-
-    roles.forEach(role => {
-      const domain = role.domain && role.domain.leader_id === $auth.user.id ? role.domain : null;
-      const groupKey = domain?.id || 'direct';
-
-      if (!groups.has(groupKey)) {
-        groups.set(groupKey, {
-          id: groupKey,
-          name: domain ? domain.name : 'Direct Assignments',
-          description: domain?.description || (domain ? '' : 'Roles assigned directly to you'),
-          roles: []
-        });
-      }
-
-      groups.get(groupKey).roles.push(role);
-    });
-
-    return Array.from(groups.values()).map(group => ({
-      ...group,
-      roles: group.roles.sort(compareRoles)
-    })).sort((a, b) => a.name.localeCompare(b.name));
   }
 
   function initializeRoleForms(roles) {
@@ -324,49 +314,49 @@ const shareTimers = {};
     }, 300);
   }
 
-  function getInviteLink(domainId) {
-    if (typeof window === 'undefined' || !domainId) return '';
-    return `${window.location.origin}#/invite/${domainId}`;
+  function getInviteLink(role) {
+    if (typeof window === 'undefined' || !role?.id) return '';
+    return `${window.location.origin}#/signup/${role.id}`;
   }
 
-  function setShareMessage(domainId, message) {
+  function setShareMessage(roleId, message) {
     shareMessages = {
       ...shareMessages,
-      [domainId]: message
+      [roleId]: message
     };
 
-    if (shareTimers[domainId]) {
-      clearTimeout(shareTimers[domainId]);
+    if (shareTimers[roleId]) {
+      clearTimeout(shareTimers[roleId]);
     }
 
-    shareTimers[domainId] = setTimeout(() => {
+    shareTimers[roleId] = setTimeout(() => {
       shareMessages = {
         ...shareMessages,
-        [domainId]: ''
+        [roleId]: ''
       };
-      delete shareTimers[domainId];
+      delete shareTimers[roleId];
     }, 4000);
   }
 
-  async function shareDomainInvite(domain) {
-    if (!domain?.id) return;
+  async function shareRoleInvite(role) {
+    if (!role?.id) return;
 
-    const url = getInviteLink(domain.id);
+    const url = getInviteLink(role);
     if (!url) return;
 
-    const title = `${domain.name} Volunteer Opportunities`;
-    const text = `Sign up to volunteer with the ${domain.name} team!`;
+    const title = `${role.name} Volunteer Opportunity`;
+    const text = `Join the ${role.name} team!`;
 
     try {
       if (typeof navigator !== 'undefined' && navigator.share) {
         await navigator.share({ title, text, url });
-        setShareMessage(domain.id, 'Invite ready to send!');
+        setShareMessage(role.id, 'Invite ready to send!');
         return;
       }
 
       if (typeof navigator !== 'undefined' && navigator.clipboard) {
         await navigator.clipboard.writeText(url);
-        setShareMessage(domain.id, 'Invite link copied to clipboard.');
+        setShareMessage(role.id, 'Invite link copied to clipboard.');
         return;
       }
 
@@ -378,11 +368,11 @@ const shareTimers = {};
       try {
         if (typeof navigator !== 'undefined' && navigator.clipboard) {
           await navigator.clipboard.writeText(url);
-          setShareMessage(domain.id, 'Invite link copied to clipboard.');
+          setShareMessage(role.id, 'Invite link copied to clipboard.');
         }
       } catch (copyError) {
         console.error('Clipboard copy failed:', copyError);
-        setShareMessage(domain.id, 'Unable to copy link. Please copy it manually.');
+        setShareMessage(role.id, 'Unable to copy link. Please copy it manually.');
       }
     }
   }
@@ -394,6 +384,23 @@ const shareTimers = {};
       popstateUnsubscribe();
     }
   });
+
+  function toggleActionMenu(event, roleId, signupId) {
+    event?.stopPropagation();
+
+    if (openActionMenu.roleId === roleId && openActionMenu.signupId === signupId) {
+      openActionMenu = { roleId: null, signupId: null };
+      return;
+    }
+
+    openActionMenu = { roleId, signupId };
+  }
+
+  function closeActionMenu() {
+    if (openActionMenu.roleId !== null || openActionMenu.signupId !== null) {
+      openActionMenu = { roleId: null, signupId: null };
+    }
+  }
 
   async function fetchVolunteerSuggestions(roleId, form) {
     try {
@@ -711,6 +718,7 @@ const shareTimers = {};
   }
 
   async function deleteVolunteerFromRole(role, signup) {
+    closeActionMenu();
     if (!confirm(`Remove ${signup.volunteer?.first_name || 'this volunteer'} from ${role.name}?`)) {
       return;
     }
@@ -836,6 +844,7 @@ const shareTimers = {};
   }
 
   function startEditing(roleId, signup) {
+    closeActionMenu();
     const roleEdits = editingStates[roleId] || {};
     const roleForms = editForms[roleId] || {};
 
@@ -999,8 +1008,9 @@ const shareTimers = {};
       <p>Manage the roles assigned to you</p>
     </div>
     {#if !loading && myRoles.length > 0 && totalVolunteers > 0}
-      <button class="btn btn-primary" on:click={toggleEmailForm}>
-        📧 Email My Volunteers
+      <button class="btn btn-primary with-icon" on:click={toggleEmailForm}>
+        <span class="btn-icon">📧</span>
+        <span>Email My Volunteers</span>
       </button>
     {/if}
   </div>
@@ -1079,226 +1089,231 @@ Examples:
       <p>Contact an administrator to get assigned roles.</p>
     </div>
   {:else}
-    <div class="domains-container">
+    <div class="roles-container">
       {#if refreshing}
         <div class="refreshing">Refreshing assignments…</div>
       {/if}
-      {#each groupedDomains as group (group.id)}
-        <section class="domain-section">
-          <div class="domain-header">
-            <div class="domain-info">
-              <h2>{group.name}</h2>
-              {#if group.description}
-                <p>{group.description}</p>
-              {/if}
+      {#each sortedRoles as role (role.id)}
+        {@const shiftText = formatShift(role)}
+        {@const totalSlots = role.positions_total ?? '—'}
+        {@const addForm = volunteerForms[role.id] || { first_name: '', last_name: '', email: '', phone: '' }}
+        {@const addState = addStates[role.id] || { loading: false, error: '', success: '' }}
+        <section class="role-card">
+          <header class="role-card__header">
+            <div class="role-card__info">
+              <div class="role-card__title-row">
+                <h2>{role.name}</h2>
+                <span class="filled-pill">{role.positions_filled}/{totalSlots} filled</span>
+              </div>
+              <p class="role-subtitle">
+                {#if role.domain?.name}
+                  <span>{role.domain.name}</span>
+                  {#if role.description || shiftText}
+                    <span class="separator">•</span>
+                  {/if}
+                {/if}
+                {#if role.description}
+                  <span>{role.description}</span>
+                  {#if shiftText}
+                    <span class="separator">•</span>
+                  {/if}
+                {/if}
+                {#if shiftText}
+                  <span>{shiftText}</span>
+                {/if}
+              </p>
             </div>
-            <div class="domain-actions">
-              <button type="button" class="share-link-btn" on:click={() => shareDomainInvite(group)}>
+            <div class="role-header-actions">
+              <button type="button" class="share-link-btn" on:click={() => shareRoleInvite(role)}>
                 Share invite link
               </button>
-              {#if shareMessages[group.id]}
-                <span class="share-message">{shareMessages[group.id]}</span>
+              {#if shareMessages[role.id]}
+                <span class="share-message">{shareMessages[role.id]}</span>
               {/if}
             </div>
-          </div>
+          </header>
 
           <div class="table-wrapper">
-            <table class="volunteer-table">
+            <table class="volunteer-table compact">
               <thead>
                 <tr>
-                  <th class="position-col">Position</th>
-                  <th>First</th>
-                  <th>Last</th>
+                  <th class="name-col">Name</th>
                   <th>Email</th>
                   <th>Phone</th>
                   <th class="actions-col">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {#each group.roles as role (role.id)}
-                  {@const volunteers = role.confirmedSignups}
-                  {@const rowSpan = volunteers.length > 0 ? volunteers.length + 1 : 2}
+                {#if role.confirmedSignups.length === 0}
+                  <tr class="empty-row">
+                    <td colspan="4">No volunteers yet</td>
+                  </tr>
+                {:else}
+                  {#each role.confirmedSignups as signup (signup.id)}
+                    {@const isEditing = editingStates[role.id]?.[signup.id]}
+                    {@const menuOpen = openActionMenu.roleId === role.id && openActionMenu.signupId === signup.id}
 
-                  {#if volunteers.length > 0}
-                    {#each volunteers as signup, index (signup.id)}
-                      <tr class="volunteer-row">
-                        {#if index === 0}
-                          <td class="position-cell" rowspan={rowSpan}>
-                            <div class="role-name">{role.name}</div>
-                            <div class="role-meta">
-                              <span>{formatShift(role)}</span>
-                              <span class="capacity">{role.positions_filled}/{role.positions_total} filled</span>
-                            </div>
-                          </td>
-                        {/if}
-                        {#if (editingStates[role.id] && editingStates[role.id][signup.id])}
-                          {@const editForm = editForms[role.id][signup.id]}
-                          <td>
+                    {#if isEditing}
+                      {@const editForm = editForms[role.id][signup.id]}
+                      <tr class="volunteer-row editing">
+                        <td>
+                          <div class="name-inputs">
                             <input
                               type="text"
-                              value={editForm.first_name}
+                              class="input"
+                              value={editForm.first_name || ''}
                               on:input={(event) => updateEditForm(role.id, signup.id, 'first_name', event.target.value)}
                               aria-label={`Edit first name for ${signup.volunteer?.email || ''}`}
                             />
-                          </td>
-                          <td>
                             <input
                               type="text"
-                              value={editForm.last_name}
+                              class="input"
+                              value={editForm.last_name || ''}
                               on:input={(event) => updateEditForm(role.id, signup.id, 'last_name', event.target.value)}
                               aria-label={`Edit last name for ${signup.volunteer?.email || ''}`}
                             />
-                          </td>
-                          <td>
-                            <input
-                              type="email"
-                              value={editForm.email}
-                              on:input={(event) => updateEditForm(role.id, signup.id, 'email', event.target.value)}
-                              aria-label={`Edit email for ${signup.volunteer?.email || ''}`}
-                            />
-                          </td>
-                          <td>
-                            <input
-                              type="tel"
-                              value={editForm.phone}
-                              on:input={(event) => updateEditForm(role.id, signup.id, 'phone', event.target.value)}
-                              aria-label={`Edit phone for ${signup.volunteer?.email || ''}`}
-                            />
-                          </td>
-                          <td class="actions-cell actions-editing">
-                            <button class="btn btn-sm" on:click={() => saveEditedVolunteer(role, signup)}>Save</button>
-                            <button class="btn btn-secondary btn-sm" on:click={() => cancelEditing(role.id, signup.id)}>Cancel</button>
-                          </td>
-                        {:else}
-                          <td>{signup.volunteer?.first_name || '—'}</td>
-                          <td>{signup.volunteer?.last_name || '—'}</td>
-                          <td>
-                            {#if signup.volunteer?.email}
-                              <a href="mailto:{signup.volunteer.email}">{signup.volunteer.email}</a>
-                            {:else}
-                              —
-                            {/if}
-                          </td>
-                          <td>{signup.phone || signup.volunteer?.phone || '—'}</td>
-                          <td class="actions-cell">
-                            <button class="btn btn-secondary btn-sm" on:click={() => startEditing(role.id, signup)}>Edit</button>
-                            <button class="btn btn-danger btn-sm" on:click={() => deleteVolunteerFromRole(role, signup)}>Delete</button>
-                          </td>
-                        {/if}
+                          </div>
+                        </td>
+                        <td>
+                          <input
+                            type="email"
+                            class="input"
+                            value={editForm.email || ''}
+                            on:input={(event) => updateEditForm(role.id, signup.id, 'email', event.target.value)}
+                            aria-label={`Edit email for ${signup.volunteer?.email || ''}`}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="tel"
+                            class="input"
+                            value={editForm.phone || ''}
+                            on:input={(event) => updateEditForm(role.id, signup.id, 'phone', event.target.value)}
+                            aria-label={`Edit phone for ${signup.volunteer?.email || ''}`}
+                          />
+                        </td>
+                        <td class="actions-cell editing-actions">
+                          <button class="btn btn-primary btn-sm" on:click={() => saveEditedVolunteer(role, signup)}>Save</button>
+                          <button class="btn btn-secondary btn-sm" on:click={() => cancelEditing(role.id, signup.id)}>Cancel</button>
+                        </td>
                       </tr>
-                    {/each}
-                  {:else}
-                    <tr class="volunteer-row empty">
-                      <td class="position-cell" rowspan="2">
-                        <div class="role-name">{role.name}</div>
-                        <div class="role-meta">
-                          <span>{formatShift(role)}</span>
-                          <span class="capacity">0/{role.positions_total} filled</span>
-                        </div>
-                      </td>
-                      <td class="no-volunteers" colspan="4">No volunteers yet</td>
-                      <td class="actions-cell">
-                        <span class="muted">—</span>
-                      </td>
-                    </tr>
-                  {/if}
-
-                  {@const form = volunteerForms[role.id] || { first_name: '', last_name: '', email: '', phone: '' }}
-                  {@const state = addStates[role.id] || { loading: false, error: '', success: '' }}
-
-                  <tr class="add-row">
-                    <td>
-                      <input
-                        type="text"
-                        placeholder="First name"
-                        value={form.first_name}
-                        on:input={(event) => updateVolunteerForm(role.id, 'first_name', event.target.value)}
-                        on:keydown={(event) => handleAddKeydown(event, role)}
-                        aria-label={`First name for ${role.name}`}
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="text"
-                        placeholder="Last name"
-                        value={form.last_name}
-                        on:input={(event) => updateVolunteerForm(role.id, 'last_name', event.target.value)}
-                        on:keydown={(event) => handleAddKeydown(event, role)}
-                        aria-label={`Last name for ${role.name}`}
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="email"
-                        placeholder="Email address"
-                        value={form.email}
-                        on:input={(event) => updateVolunteerForm(role.id, 'email', event.target.value)}
-                        on:keydown={(event) => handleAddKeydown(event, role)}
-                        aria-label={`Email for ${role.name}`}
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="tel"
-                        placeholder="Phone (optional)"
-                        value={form.phone}
-                        on:input={(event) => updateVolunteerForm(role.id, 'phone', event.target.value)}
-                        on:keydown={(event) => handleAddKeydown(event, role)}
-                        aria-label={`Phone for ${role.name}`}
-                      />
-                    </td>
-                    <td class="actions-cell">
-                      <button
-                        class="btn btn-primary btn-sm"
-                        on:click={() => addVolunteerToRole(role)}
-                        disabled={state.loading}
-                      >
-                        {state.loading ? 'Adding...' : 'Add'}
-                      </button>
-                    </td>
-                  </tr>
-
-                  {#if suggestionLoading[role.id]}
-                    <tr class="suggestions-row loading">
-                      <td colspan="5">Searching existing volunteers…</td>
-                      <td class="actions-cell"><span class="muted">—</span></td>
-                    </tr>
-                  {:else if volunteerSuggestions[role.id]?.length}
-                    <tr class="suggestions-row">
-                      <td colspan="5">
-                        <div class="suggestions-intro">Select an existing volunteer:</div>
-                        <div class="suggestions-list">
-                          {#each volunteerSuggestions[role.id] as profile (profile.id)}
-                            <button type="button" class="suggestion-chip" on:click={() => applyVolunteerSuggestion(role.id, profile)}>
-                              <span class="name">{profile.first_name || 'No'} {profile.last_name || 'Name'}</span>
-                              <span class="email">{profile.email}</span>
-                              {#if profile.phone}
-                                <span class="phone">{profile.phone}</span>
-                              {/if}
+                    {:else}
+                      <tr class="volunteer-row">
+                        <td>
+                          <div class="volunteer-name">
+                            <span class="volunteer-name__text">{formatVolunteerName(signup)}</span>
+                          </div>
+                        </td>
+                        <td>
+                          {#if signup.volunteer?.email}
+                            <a href="mailto:{signup.volunteer.email}">{signup.volunteer.email}</a>
+                          {:else}
+                            —
+                          {/if}
+                        </td>
+                        <td>{signup.phone || signup.volunteer?.phone || '—'}</td>
+                        <td class="actions-cell">
+                          <div class="actions-menu-wrapper">
+                            <button
+                              type="button"
+                              class="icon-button"
+                              on:click={(event) => toggleActionMenu(event, role.id, signup.id)}
+                              aria-label="Open volunteer actions"
+                              aria-expanded={menuOpen}
+                            >
+                              ⋮
                             </button>
-                          {/each}
-                        </div>
-                      </td>
-                      <td class="actions-cell"><span class="muted">Pick existing</span></td>
-                    </tr>
-                  {/if}
-
-                  {#if state.error}
-                    <tr class="message-row error">
-                      <td colspan="4">{state.error}</td>
-                      <td class="actions-cell"><span class="muted">—</span></td>
-                    </tr>
-                  {/if}
-
-                  {#if state.success}
-                    <tr class="message-row success">
-                      <td colspan="4">{state.success}</td>
-                      <td class="actions-cell"><span class="muted">—</span></td>
-                    </tr>
-                  {/if}
-                {/each}
+                            {#if menuOpen}
+                              <div class="actions-menu" on:click|stopPropagation>
+                                <button type="button" on:click={() => startEditing(role.id, signup)}>Edit volunteer</button>
+                                <button type="button" class="danger" on:click={() => deleteVolunteerFromRole(role, signup)}>Remove volunteer</button>
+                              </div>
+                            {/if}
+                          </div>
+                        </td>
+                      </tr>
+                    {/if}
+                  {/each}
+                {/if}
               </tbody>
             </table>
+          </div>
+
+          <div class="role-footer">
+            <div class="add-volunteer">
+              <div class="add-volunteer__grid">
+                <input
+                  type="text"
+                  class="input"
+                  placeholder="First name"
+                  value={addForm.first_name}
+                  on:input={(event) => updateVolunteerForm(role.id, 'first_name', event.target.value)}
+                  on:keydown={(event) => handleAddKeydown(event, role)}
+                  aria-label={`First name for ${role.name}`}
+                />
+                <input
+                  type="text"
+                  class="input"
+                  placeholder="Last name"
+                  value={addForm.last_name}
+                  on:input={(event) => updateVolunteerForm(role.id, 'last_name', event.target.value)}
+                  on:keydown={(event) => handleAddKeydown(event, role)}
+                  aria-label={`Last name for ${role.name}`}
+                />
+                <input
+                  type="email"
+                  class="input"
+                  placeholder="Email address"
+                  value={addForm.email}
+                  on:input={(event) => updateVolunteerForm(role.id, 'email', event.target.value)}
+                  on:keydown={(event) => handleAddKeydown(event, role)}
+                  aria-label={`Email for ${role.name}`}
+                />
+                <input
+                  type="tel"
+                  class="input"
+                  placeholder="Phone (optional)"
+                  value={addForm.phone}
+                  on:input={(event) => updateVolunteerForm(role.id, 'phone', event.target.value)}
+                  on:keydown={(event) => handleAddKeydown(event, role)}
+                  aria-label={`Phone for ${role.name}`}
+                />
+                <button
+                  class="btn btn-primary add-btn"
+                  on:click={() => addVolunteerToRole(role)}
+                  disabled={addState.loading}
+                >
+                  {addState.loading ? 'Adding…' : '+ Add'}
+                </button>
+              </div>
+
+              {#if suggestionLoading[role.id]}
+                <div class="suggestions suggestions--loading">Searching existing volunteers…</div>
+              {:else if volunteerSuggestions[role.id]?.length}
+                <div class="suggestions">
+                  <span class="suggestions-intro">Select an existing volunteer:</span>
+                  <div class="suggestions-list">
+                    {#each volunteerSuggestions[role.id] as profile (profile.id)}
+                      <button type="button" class="suggestion-chip" on:click={() => applyVolunteerSuggestion(role.id, profile)}>
+                        <span class="name">{profile.first_name || 'No'} {profile.last_name || 'Name'}</span>
+                        <span class="email">{profile.email}</span>
+                        {#if profile.phone}
+                          <span class="phone">{profile.phone}</span>
+                        {/if}
+                      </button>
+                    {/each}
+                  </div>
+                </div>
+              {/if}
+
+              {#if addState.error}
+                <div class="inline-alert error">{addState.error}</div>
+              {/if}
+
+              {#if addState.success}
+                <div class="inline-alert success">{addState.success}</div>
+              {/if}
+            </div>
           </div>
         </section>
       {/each}
@@ -1385,69 +1400,100 @@ Examples:
     gap: 1rem;
   }
 
-  .domains-container {
+  .roles-container {
     display: flex;
     flex-direction: column;
     gap: 2rem;
   }
 
-  .domain-section {
-    background: white;
-    border-radius: 14px;
-    border: 1px solid #dee2e6;
-    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.05);
+  .role-card {
+    background: #fff;
+    border-radius: 16px;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 22px 40px -25px rgba(15, 23, 42, 0.35);
     overflow: hidden;
   }
 
-  .domain-header {
-    background: #f4f8ff;
-    padding: 1.1rem 1.5rem;
-    border-bottom: 1px solid #dee2e6;
+  .role-card__header {
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    gap: 1rem;
+    align-items: flex-start;
+    gap: 1.5rem;
+    padding: 1.75rem 1.5rem 1.5rem;
+    background: linear-gradient(135deg, rgba(13, 110, 253, 0.09), rgba(13, 110, 253, 0.02));
     flex-wrap: wrap;
   }
 
-  .domain-header .domain-info {
-    flex-grow: 1;
+  .role-card__info {
+    flex: 1;
+    min-width: 240px;
   }
 
-  .domain-header h2 {
-    margin: 0;
-    font-size: 1.1rem;
-    color: #1a1a1a;
-  }
-
-  .domain-header p {
-    margin: 0.4rem 0 0;
-    color: #495057;
-    font-size: 0.95rem;
-  }
-
-  .domain-header .domain-actions {
+  .role-card__title-row {
     display: flex;
-    gap: 0.75rem;
     align-items: center;
+    gap: 0.85rem;
+    flex-wrap: wrap;
+  }
+
+  .role-card__title-row h2 {
+    margin: 0;
+    font-size: 1.3rem;
+    color: #16213e;
+  }
+
+  .filled-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.35rem 0.9rem;
+    border-radius: 999px;
+    background: rgba(13, 110, 253, 0.12);
+    color: #0b4ba5;
+    font-weight: 600;
+    font-size: 0.85rem;
+  }
+
+  .role-subtitle {
+    margin: 0.45rem 0 0;
+    color: #4b5b76;
+    display: flex;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+    font-size: 0.95rem;
+    line-height: 1.4;
+  }
+
+  .role-subtitle .separator {
+    color: #a0aec0;
+  }
+
+  .role-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
   }
 
   .share-link-btn {
-    padding: 0.5rem 1rem;
-    border: 1px solid #007bff;
-    border-radius: 8px;
-    background: white;
-    color: #007bff;
-    font-size: 0.9rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.6rem 1.25rem;
+    border-radius: 12px;
+    background: #fff;
+    border: 1px solid #0d6efd;
+    color: #0d6efd;
     font-weight: 600;
+    font-size: 0.92rem;
     cursor: pointer;
-    transition: background 0.2s, border-color 0.2s, color 0.2s;
+    transition: background 0.2s, box-shadow 0.2s, transform 0.2s;
   }
 
   .share-link-btn:hover:not(:disabled) {
-    background: #f0f4ff;
-    border-color: #0056b3;
-    color: #0056b3;
+    background: #edf4ff;
+    box-shadow: 0 10px 20px -12px rgba(13, 110, 253, 0.45);
+    transform: translateY(-1px);
   }
 
   .share-link-btn:disabled {
@@ -1457,7 +1503,7 @@ Examples:
 
   .share-message {
     font-size: 0.85rem;
-    color: #007bff;
+    color: #0d6efd;
     font-weight: 600;
   }
 
@@ -1468,130 +1514,200 @@ Examples:
   .volunteer-table {
     width: 100%;
     border-collapse: collapse;
-    min-width: 960px;
+    min-width: 720px;
   }
 
-  .volunteer-table th,
-  .volunteer-table td {
-    border: 1px solid #dee2e6;
-    padding: 0.75rem 0.9rem;
+  .volunteer-table.compact th,
+  .volunteer-table.compact td {
+    border-bottom: 1px solid #e2e8f0;
+    padding: 0.85rem 1rem;
+  }
+
+  .volunteer-table.compact thead th {
+    background: #f8fafc;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    color: #64748b;
     text-align: left;
-    vertical-align: top;
-    font-size: 0.95rem;
   }
 
-  .volunteer-table th {
-    background: #e9ecef;
-    font-weight: 600;
-    color: #495057;
-    white-space: nowrap;
-  }
-
-  .position-col {
-    width: 240px;
+  .volunteer-table .name-col {
+    width: 32%;
   }
 
   .actions-col {
-    width: 160px;
+    width: 120px;
     text-align: center;
   }
 
-  .position-cell {
-    background: #fffce8;
+  .volunteer-row:nth-child(even) td {
+    background: #fbfdff;
   }
 
-  .position-cell .role-name {
-    margin: 0 0 0.35rem 0;
+  .volunteer-row.editing td {
+    background: #f2f7ff;
+  }
+
+  .volunteer-name__text {
     font-weight: 600;
-    color: #1a1a1a;
-  }
-
-  .position-cell .role-meta {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-    font-size: 0.85rem;
-    color: #6c757d;
-  }
-
-  .position-cell .capacity {
-    font-weight: 600;
-    color: #495057;
-  }
-
-  .volunteer-row:nth-child(even) td:not(.position-cell):not(.notes-cell) {
-    background: #fafbff;
-  }
-
-  .volunteer-row.empty td {
-    background: #fff9e5;
-  }
-
-  .no-volunteers {
-    text-align: center;
-    color: #6c757d;
-    font-style: italic;
-    font-size: 0.9rem;
-  }
-
-  .notes-cell {
-    background: #f8f9fa;
-    color: #495057;
-    min-width: 200px;
-    font-size: 0.9rem;
+    color: #1b1f3b;
   }
 
   .actions-cell {
     display: flex;
     justify-content: center;
     align-items: center;
-    gap: 0.4rem;
+    gap: 0.5rem;
   }
 
-  .actions-cell .muted {
-    color: #adb5bd;
-    font-size: 0.85rem;
-  }
-
-  .add-row td {
-    background: #f5f9ff;
-    vertical-align: middle;
-  }
-
-  .add-row .add-row-content {
-    display: flex;
-    flex-wrap: wrap;
+  .editing-actions {
     gap: 0.6rem;
+  }
+
+  .name-inputs {
+    display: flex;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+  }
+
+  .input {
+    width: 100%;
+    min-width: 130px;
+    padding: 0.55rem 0.65rem;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    transition: border 0.2s, box-shadow 0.2s;
+  }
+
+  .input:focus {
+    outline: none;
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.18);
+  }
+
+  .icon-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: none;
+    background: #eef2ff;
+    color: #334155;
+    font-size: 1.2rem;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.2s;
+  }
+
+  .icon-button:hover,
+  .icon-button[aria-expanded="true"] {
+    background: #dbe4ff;
+    transform: translateY(-1px);
+  }
+
+  .actions-menu-wrapper {
+    position: relative;
+  }
+
+  .actions-menu {
+    position: absolute;
+    top: 110%;
+    right: 0;
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 18px 40px -20px rgba(15, 23, 42, 0.4);
+    border: 1px solid #e2e8f0;
+    padding: 0.5rem 0;
+    min-width: 180px;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+
+  .actions-menu button {
+    background: none;
+    border: none;
+    padding: 0.6rem 1rem;
+    text-align: left;
+    font-size: 0.92rem;
+    color: #1f2937;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+  }
+
+  .actions-menu button:hover {
+    background: #f1f5f9;
+    color: #0f172a;
+  }
+
+  .actions-menu button.danger {
+    color: #dc3545;
+  }
+
+  .empty-row td {
+    text-align: center;
+    color: #64748b;
+    font-style: italic;
+    padding: 1.75rem 1rem;
+    background: #f8fbff;
+  }
+
+  .role-footer {
+    padding: 1.5rem;
+    border-top: 1px solid #edf2f7;
+    background: #fefeff;
+  }
+
+  .add-volunteer {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .add-volunteer__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 0.75rem;
     align-items: center;
   }
 
-  .add-row input {
-    width: 160px;
-    padding: 0.45rem 0.6rem;
-    border: 1px solid #ced4da;
-    border-radius: 6px;
-    font-size: 0.95rem;
+  .add-btn {
+    justify-self: flex-start;
+    padding: 0.6rem 1.4rem;
+    border-radius: 12px;
+    font-weight: 600;
   }
 
-  .add-row input[type="email"] {
-    width: 220px;
+  .inline-alert {
+    border-radius: 10px;
+    padding: 0.75rem 1rem;
+    font-size: 0.9rem;
+    font-weight: 500;
   }
 
-  .add-row input[type="tel"] {
-    width: 180px;
+  .inline-alert.error {
+    background: #fdecea;
+    color: #b02a37;
+    border: 1px solid #f5c2c7;
   }
 
-  .notes-cell.muted {
-    color: #adb5bd;
-    font-style: italic;
+  .inline-alert.success {
+    background: #e6f4ea;
+    color: #1d7530;
+    border: 1px solid #b6e3c1;
   }
 
-  .suggestions-row td {
-    background: #fdfcff;
-    border-top: none;
+  .suggestions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
   }
 
-  .suggestions-row.loading td {
+  .suggestions--loading {
     color: #6c757d;
     font-style: italic;
   }
@@ -1599,7 +1715,6 @@ Examples:
   .suggestions-intro {
     font-size: 0.85rem;
     color: #6c757d;
-    margin-bottom: 0.5rem;
   }
 
   .suggestions-list {
@@ -1616,16 +1731,16 @@ Examples:
     padding: 0.55rem 0.75rem;
     border-radius: 8px;
     border: 1px solid #ced4da;
-    background: white;
+    background: #fff;
     cursor: pointer;
     font-size: 0.85rem;
-    min-width: 180px;
+    min-width: 190px;
     transition: border 0.2s, box-shadow 0.2s, transform 0.2s;
   }
 
   .suggestion-chip:hover {
-    border-color: #007bff;
-    box-shadow: 0 4px 12px rgba(0, 123, 255, 0.12);
+    border-color: #0d6efd;
+    box-shadow: 0 4px 12px rgba(13, 110, 253, 0.12);
     transform: translateY(-1px);
   }
 
@@ -1635,7 +1750,7 @@ Examples:
   }
 
   .suggestion-chip .email {
-    color: #007bff;
+    color: #0d6efd;
   }
 
   .suggestion-chip .phone {
@@ -1643,31 +1758,9 @@ Examples:
     font-size: 0.8rem;
   }
 
-  .muted {
-    color: #adb5bd;
-    font-size: 0.85rem;
-  }
-
   .btn-sm {
     padding: 0.45rem 0.9rem;
     font-size: 0.9rem;
-  }
-
-  .message-row td {
-    border-top: none;
-    font-size: 0.9rem;
-  }
-
-  .message-row.error td {
-    background: #fdecea;
-    color: #b02a37;
-    font-weight: 500;
-  }
-
-  .message-row.success td {
-    background: #e6f4ea;
-    color: #1d7530;
-    font-weight: 500;
   }
 
   .loading {
@@ -1708,6 +1801,17 @@ Examples:
     font-weight: 600;
     cursor: pointer;
     transition: transform 0.2s, box-shadow 0.2s, background 0.2s;
+  }
+
+  .btn.with-icon {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+
+  .btn-icon {
+    font-size: 1.1rem;
+    line-height: 1;
   }
 
   .btn-primary {
@@ -1782,8 +1886,8 @@ Examples:
   }
 
   @media (max-width: 1024px) {
-    .domain-section {
-      border-radius: 12px;
+    .role-card {
+      border-radius: 14px;
     }
   }
 
@@ -1795,6 +1899,24 @@ Examples:
     .form-actions {
       flex-direction: column;
       align-items: stretch;
+    }
+
+    .role-card__header {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .role-card__title-row {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+
+    .actions-col {
+      width: auto;
+    }
+
+    .add-volunteer__grid {
+      grid-template-columns: 1fr;
     }
   }
 </style>

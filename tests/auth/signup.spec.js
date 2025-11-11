@@ -81,8 +81,8 @@ test.describe('User Signup Flow', () => {
       timeout: 15000
     });
     
-    // Should redirect to volunteer page
-    await waitForNavigation(page, '/#/volunteer', 15000);
+    // Should redirect to onboarding page
+    await waitForNavigation(page, '/#/onboarding', 15000);
     
     // Check no console errors occurred
     expect(consoleErrors.filter(e => !e.includes('Download the'))).toHaveLength(0);
@@ -101,8 +101,7 @@ test.describe('User Signup Flow', () => {
     // Wait for success (database trigger may take time)
     await expect(page.locator('.alert-success')).toBeVisible({ timeout: 15000 });
     
-    // Sign out
-    await page.click('text=Sign Out');
+    await page.waitForURL(/.*#\/onboarding/, { timeout: 15000 });
     
     // Try to signup again with same email
     await page.goto('/#/auth/signup');

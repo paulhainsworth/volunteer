@@ -23,10 +23,16 @@ test.describe('Full Authentication Flow Integration', () => {
       timeout: 15000
     });
     
-    // Should redirect to volunteer dashboard
-    await expect(page).toHaveURL(/.*#\/volunteer/, { timeout: 15000 });
+    // Should redirect to onboarding first
+    await expect(page).toHaveURL(/.*#\/onboarding/, { timeout: 15000 });
     
-    // Verify user is logged in
+    // Login to verify access
+    await page.goto('/#/auth/login');
+    await page.fill('#email', testUser.email);
+    await page.fill('#password', testUser.password);
+    await page.click('button[type="submit"]');
+    
+    await expect(page).toHaveURL(/.*#\/volunteer/, { timeout: 10000 });
     await expect(page.locator(`text=${testUser.email}`)).toBeVisible();
     
     // Step 2: Logout
@@ -61,9 +67,17 @@ test.describe('Full Authentication Flow Integration', () => {
     
     await expect(page.locator('.alert-success')).toBeVisible({ timeout: 15000 });
     
+    // Login so we can immediately test logout and password reset
+    await page.waitForURL(/.*#\/onboarding/, { timeout: 15000 });
+    await page.goto('/#/auth/login');
+    await page.fill('#email', testUser.email);
+    await page.fill('#password', testUser.password);
+    await page.click('button[type="submit"]');
+    await expect(page).toHaveURL(/.*#\/volunteer/, { timeout: 10000 });
+    
     // Logout
     await page.click('text=Sign Out');
-    await page.waitForTimeout(1000);
+    await expect(page).toHaveURL(/.*#\/auth\/login/, { timeout: 5000 });
     
     // Request password reset
     await page.goto('/#/auth/reset-password');

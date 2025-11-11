@@ -12,6 +12,8 @@
   let filterDate = '';
   let filterStatus = 'all';
   let selectedRole = null; // For modal
+  let copyMessage = '';
+  let copyMessageTimeout = null;
 
   onMount(async () => {
     // Redirect to onboarding if no emergency contact
@@ -50,6 +52,17 @@
     if (percentage >= 75) return { label: 'Almost Full', class: 'almost-full' };
     if (percentage >= 50) return { label: 'Filling Up', class: 'filling' };
     return { label: 'Available', class: 'available' };
+  }
+
+  function getDomainMeta(role) {
+    const domainName = role.domain?.name || 'General Opportunities';
+    const leader = role.domain?.leader || role.direct_leader;
+    const leaderName = [leader?.first_name, leader?.last_name].filter(Boolean).join(' ').trim() || 'Volunteer Leader TBD';
+    return {
+      name: domainName,
+      leaderName,
+      leader
+    };
   }
 
   $: filteredRoles = $roles
@@ -93,6 +106,38 @@
       return 0;
     });
 
+  $: groupedDomains = (() => {
+    const map = new Map();
+    filteredRoles.forEach(role => {
+      const domainId = role.domain?.id || `general-${role.direct_leader?.id || 'unassigned'}`;
+      const meta = getDomainMeta(role);
+      const remainingSpots = Math.max((role.positions_total || 0) - (role.positions_filled || 0), 0);
+
+      if (!map.has(domainId)) {
+        map.set(domainId, {
+          id: domainId,
+          name: meta.name,
+          leaderName: meta.leaderName,
+          leader: meta.leader,
+          roles: [],
+          openSpots: 0
+        });
+      }
+
+      const domainEntry = map.get(domainId);
+      domainEntry.roles.push(role);
+      domainEntry.openSpots += remainingSpots;
+    });
+
+    return Array.from(map.values()).sort((a, b) => {
+      const firstRoleA = a.roles[0];
+      const firstRoleB = b.roles[0];
+      const dateCompare = new Date(firstRoleA.event_date) - new Date(firstRoleB.event_date);
+      if (dateCompare !== 0) return dateCompare;
+      return firstRoleA.start_time.localeCompare(firstRoleB.start_time);
+    });
+  })();
+
   function handleSignup(roleId) {
     if (!$auth.user) {
       push('/auth/login');
@@ -114,6 +159,56 @@
       navigator.clipboard.writeText(url);
       alert('Link copied to clipboard!');
     }
+  }
+
+  function copyRoleLink(role) {
+    const url = `${window.location.origin}#/signup/${role.id}`;
+
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(url)
+        .then(() => showCopyMessage('Link copied to clipboard!'))
+        .catch(() => fallbackCopy(url));
+    } else {
+      fallbackCopy(url);
+    }
+  }
+
+  function fallbackCopy(url) {
+    try {
+      const textarea = document.createElement('textarea');
+      textarea.value = url;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      const successful = document.execCommand('copy');
+      document.body.removeChild(textarea);
+
+      if (successful) {
+        showCopyMessage('Link copied to clipboard!');
+      } else {
+        showCopyMessage('Copy not supported. Please copy the link manually.', true);
+        window.prompt('Copy this volunteer role link:', url);
+      }
+    } catch (err) {
+      console.error('Copy failed:', err);
+      showCopyMessage('Copy not supported. Please copy the link manually.', true);
+      window.prompt('Copy this volunteer role link:', url);
+    }
+  }
+
+  function showCopyMessage(message, isError = false) {
+    copyMessage = isError ? `⚠️ ${message}` : message;
+
+    if (copyMessageTimeout) {
+      clearTimeout(copyMessageTimeout);
+    }
+
+    copyMessageTimeout = setTimeout(() => {
+      copyMessage = '';
+      copyMessageTimeout = null;
+    }, 4000);
   }
 
   function showMoreInfo(role) {
@@ -176,60 +271,82 @@
       <p>No volunteer opportunities found matching your filters.</p>
     </div>
   {:else}
-    <div class="roles-grid">
-      {#each filteredRoles as role (role.id)}
-        {@const status = getFillStatus(role)}
-        {@const duration = calculateDuration(role.start_time, role.end_time)}
-        {@const isFull = role.positions_filled >= role.positions_total}
-        
-        <div class="role-card">
-          <div class="role-header">
-            <h3>{role.name}</h3>
-            <span class="status-badge {status.class}">{status.label}</span>
+    <div class="domains-list">
+      {#each groupedDomains as domain (domain.id)}
+        <section class="domain-section">
+          <div class="domain-header">
+            <div class="domain-info">
+              <h2>{domain.name}</h2>
+              <p>Led by {domain.leaderName}</p>
+            </div>
+            <div class="domain-summary">
+              <span>{domain.openSpots} open spot{domain.openSpots === 1 ? '' : 's'}</span>
+            </div>
           </div>
 
-          <div class="role-details">
-            <div class="detail">
-              <span class="icon">📅</span>
-              <span>{format(new Date(role.event_date), 'EEEE, MMMM d, yyyy')}</span>
-            </div>
-            
-            <div class="detail">
-              <span class="icon">🕐</span>
-              <span>{formatTime(role.start_time)} - {formatTime(role.end_time)} ({duration}h)</span>
-            </div>
+          <div class="roles-grid">
+            {#each domain.roles as role (role.id)}
+              {@const status = getFillStatus(role)}
+              {@const duration = calculateDuration(role.start_time, role.end_time)}
+              {@const isFull = role.positions_filled >= role.positions_total}
 
-            {#if role.location}
-              <div class="detail">
-                <span class="icon">📍</span>
-                <span>{role.location}</span>
+              <div class="role-card">
+                <div class="role-header">
+                  <div>
+                    <h3>{role.name}</h3>
+                    <div class="role-meta">
+                      <span class="role-meta-label">Team</span>
+                      <span class="role-meta-value">{domain.name}</span>
+                    </div>
+                  </div>
+                  <span class="status-badge {status.class}">{status.label}</span>
+                </div>
+
+                <div class="role-details">
+                  <div class="detail">
+                    <span class="icon">📅</span>
+                    <span>{format(new Date(role.event_date), 'EEEE, MMMM d, yyyy')}</span>
+                  </div>
+                  
+                  <div class="detail">
+                    <span class="icon">🕐</span>
+                    <span>{formatTime(role.start_time)} - {formatTime(role.end_time)} ({duration}h)</span>
+                  </div>
+
+                  {#if role.location}
+                    <div class="detail">
+                      <span class="icon">📍</span>
+                      <span>{role.location}</span>
+                    </div>
+                  {/if}
+
+                  <div class="detail">
+                    <span class="icon">👥</span>
+                    <span>{role.positions_filled} / {role.positions_total} spots filled</span>
+                  </div>
+                </div>
+
+                <div class="role-actions">
+                  <button
+                    class="btn btn-primary"
+                    on:click={() => handleSignup(role.id)}
+                    disabled={isFull}
+                  >
+                    {isFull ? 'Full' : 'Sign Up'}
+                  </button>
+                  
+                  <button
+                    class="btn btn-secondary"
+                    on:click={() => showMoreInfo(role)}
+                    title="View full details"
+                  >
+                    More Info
+                  </button>
+                </div>
               </div>
-            {/if}
-
-            <div class="detail">
-              <span class="icon">👥</span>
-              <span>{role.positions_filled} / {role.positions_total} spots filled</span>
-            </div>
+            {/each}
           </div>
-
-          <div class="role-actions">
-            <button
-              class="btn btn-primary"
-              on:click={() => handleSignup(role.id)}
-              disabled={isFull}
-            >
-              {isFull ? 'Full' : 'Sign Up'}
-            </button>
-            
-            <button
-              class="btn btn-secondary"
-              on:click={() => showMoreInfo(role)}
-              title="View full details"
-            >
-              More Info
-            </button>
-          </div>
-        </div>
+        </section>
       {/each}
     </div>
   {/if}
@@ -239,6 +356,7 @@
   {@const status = getFillStatus(selectedRole)}
   {@const duration = calculateDuration(selectedRole.start_time, selectedRole.end_time)}
   {@const isFull = selectedRole.positions_filled >= selectedRole.positions_total}
+  {@const domainMeta = getDomainMeta(selectedRole)}
   
   <div class="modal-overlay" on:click={closeModal}>
     <div class="modal-content" on:click|stopPropagation>
@@ -286,6 +404,14 @@
               <p>{selectedRole.positions_filled} / {selectedRole.positions_total} spots filled</p>
             </div>
           </div>
+
+          <div class="detail-row">
+            <span class="icon">🤝</span>
+            <div>
+              <strong>Team</strong>
+              <p>{domainMeta.name} • Led by {domainMeta.leaderName}</p>
+            </div>
+          </div>
         </div>
 
         {#if selectedRole.description}
@@ -311,7 +437,20 @@
         >
           Share This Opportunity
         </button>
+
+        <button
+          class="btn btn-outline"
+          on:click={() => copyRoleLink(selectedRole)}
+        >
+          Copy Link
+        </button>
       </div>
+
+      {#if copyMessage}
+        <div class="copy-message">
+          {copyMessage}
+        </div>
+      {/if}
     </div>
   </div>
 {/if}
@@ -376,6 +515,51 @@
     gap: 1.5rem;
   }
 
+  .domains-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2.5rem;
+  }
+
+  .domain-section {
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 16px;
+    padding: 2rem;
+    box-shadow: 0 12px 36px rgba(15, 23, 42, 0.08);
+  }
+
+  .domain-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+    border-bottom: 1px solid #f1f3f5;
+    padding-bottom: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .domain-info h2 {
+    margin: 0;
+    font-size: 1.5rem;
+    color: #1a1a1a;
+  }
+
+  .domain-info p {
+    margin: 0.4rem 0 0 0;
+    color: #4c5d78;
+    font-weight: 500;
+  }
+
+  .domain-summary {
+    padding: 0.4rem 0.8rem;
+    background: #f1f5ff;
+    color: #2a4b9b;
+    border-radius: 999px;
+    font-weight: 600;
+    font-size: 0.9rem;
+  }
+
   .role-card {
     background: white;
     border: 1px solid #dee2e6;
@@ -401,6 +585,28 @@
     margin: 0;
     color: #1a1a1a;
     font-size: 1.3rem;
+  }
+
+  .role-meta {
+    margin-top: 0.35rem;
+    display: flex;
+    align-items: baseline;
+    gap: 0.4rem;
+    font-size: 0.9rem;
+    color: #6b7280;
+  }
+
+  .role-meta-label {
+    text-transform: uppercase;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    font-size: 0.75rem;
+    color: #94a3b8;
+  }
+
+  .role-meta-value {
+    font-weight: 600;
+    color: #1f2937;
   }
 
   .status-badge {
@@ -488,6 +694,32 @@
 
   .btn-secondary:hover {
     background: #f8f9fa;
+  }
+
+  .btn-outline {
+    padding: 0.75rem;
+    border-radius: 6px;
+    font-weight: 600;
+    background: white;
+    color: #1f2937;
+    border: 1px solid #cbd5e1;
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s;
+  }
+
+  .btn-outline:hover {
+    background: #f8fafc;
+    border-color: #94a3b8;
+  }
+
+  .copy-message {
+    margin-top: 0.5rem;
+    padding: 0.75rem;
+    background: #eef2ff;
+    color: #1e3a8a;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    border: 1px solid #c7d2fe;
   }
 
   /* Modal Styles */
@@ -636,6 +868,10 @@
   @media (max-width: 768px) {
     .filters {
       grid-template-columns: 1fr;
+    }
+
+    .domain-section {
+      padding: 1.5rem;
     }
 
     .roles-grid {

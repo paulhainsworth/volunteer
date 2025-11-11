@@ -18,12 +18,12 @@
     signingOut = true;
     try {
       await auth.signOut();
-      showMobileMenu = false;
-      push('/auth/login');
     } catch (error) {
       console.error('Sign out error:', error);
     } finally {
+      showMobileMenu = false;
       signingOut = false;
+      push('/auth/login');
     }
   }
 

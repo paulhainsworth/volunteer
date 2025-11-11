@@ -102,9 +102,35 @@ function createAuthStore() {
     },
 
     signOut: async () => {
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
-      set({ user: null, profile: null, loading: false, isAdmin: false });
+      const SIGN_OUT_TIMEOUT = 5000;
+      let timeoutId;
+
+      const timeoutPromise = new Promise((_, reject) => {
+        timeoutId = setTimeout(
+          () => reject(new Error('Sign out timed out')),
+          SIGN_OUT_TIMEOUT
+        );
+      });
+
+      try {
+        const { error } = await Promise.race([
+          supabase.auth.signOut(),
+          timeoutPromise
+        ]);
+
+        if (error) {
+          throw error;
+        }
+      } catch (error) {
+        console.error('Sign out failed:', error);
+        throw error;
+      } finally {
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+
+        set({ user: null, profile: null, loading: false, isAdmin: false });
+      }
     },
 
     resetPassword: async (email) => {

@@ -4,6 +4,7 @@
   import { auth } from '../../lib/stores/auth';
   import { supabase } from '../../lib/supabaseClient';
   import { push } from 'svelte-spa-router';
+  import { get } from 'svelte/store';
 
   let loading = true;
   let error = '';
@@ -13,6 +14,50 @@
   let editingDomain = null;
   let assigningRoles = null;
   let refreshKey = 0; // Force UI updates
+
+  let isAdminUser = false;
+  let isLeaderUser = false;
+  let currentUserId = null;
+  let accessibleDomainIds = [];
+
+  const unsubscribe = auth.subscribe(value => {
+    isAdminUser = !!value?.isAdmin;
+    isLeaderUser = value?.profile?.role === 'volunteer_leader';
+    currentUserId = value?.user?.id || null;
+  });
+
+function canManageDomain(domain) {
+  if (isAdminUser) return true;
+  return domain?.leader_id === currentUserId;
+}
+
+function canEditDomain(domain) {
+  return canManageDomain(domain);
+}
+
+async function fetchDomainsForCurrentUser() {
+  const domainData = await domains.fetchDomains(
+    isAdminUser ? {} : { leaderId: currentUserId }
+  );
+  accessibleDomainIds = domainData.map(d => d.id);
+  return domainData;
+}
+
+function waitForAuthReady() {
+  const current = get(auth);
+  if (!current?.loading) {
+    return Promise.resolve(current);
+  }
+
+  return new Promise(resolve => {
+    const stop = auth.subscribe(value => {
+      if (!value.loading) {
+        stop();
+        resolve(value);
+      }
+    });
+  });
+}
   
   let formData = {
     name: '',
@@ -20,24 +65,48 @@
     leader_id: null
   };
 
-  onMount(async () => {
-    if (!$auth.isAdmin) {
+onMount(() => {
+  let cancelled = false;
+
+  (async () => {
+    const authState = await waitForAuthReady();
+
+    isAdminUser = !!authState?.isAdmin;
+    isLeaderUser = authState?.profile?.role === 'volunteer_leader';
+    currentUserId = authState?.user?.id || null;
+
+    if (!isAdminUser && !isLeaderUser) {
       push('/volunteer');
       return;
     }
 
     try {
-      await Promise.all([
-        domains.fetchDomains(),
-        fetchVolunteerLeaders(),
-        fetchAllRoles()
-      ]);
+      loading = true;
+      error = '';
+
+      await fetchDomainsForCurrentUser();
+
+      if (isAdminUser) {
+        await fetchVolunteerLeaders();
+      }
+
+      await fetchAllRoles();
     } catch (err) {
-      error = err.message;
+      if (!cancelled) {
+        error = err.message || 'Unable to load domains.';
+      }
     } finally {
-      loading = false;
+      if (!cancelled) {
+        loading = false;
+      }
     }
-  });
+  })();
+
+  return () => {
+    cancelled = true;
+    unsubscribe();
+  };
+});
 
   async function fetchVolunteerLeaders() {
     const { data } = await supabase
@@ -52,25 +121,46 @@
   }
 
   async function fetchAllRoles() {
-    const { data } = await supabase
+    let query = supabase
       .from('volunteer_roles')
       .select('id, name, event_date, domain_id')
       .order('event_date', { ascending: true })
       .order('name', { ascending: true });
-    
+
+    if (!isAdminUser) {
+      const filters = [];
+
+      if (accessibleDomainIds.length) {
+        const formattedIds = accessibleDomainIds
+          .map(id => `'${id}'`)
+          .join(',');
+        filters.push(`domain_id.in.(${formattedIds})`);
+      }
+
+      filters.push('domain_id.is.null');
+      query = query.or(filters.join(','));
+    }
+
+    const { data, error: rolesError } = await query;
+
+    if (rolesError) {
+      throw rolesError;
+    }
+
     if (data) {
-      // Force Svelte reactivity by creating a new array
       allRoles = [...data];
     }
   }
 
   function showCreateForm() {
+    if (!isAdminUser) return;
     editingDomain = null;
     formData = { name: '', description: '', leader_id: null };
     showForm = true;
   }
 
   function showEditForm(domain) {
+    if (!canEditDomain(domain)) return;
     editingDomain = domain;
     formData = {
       name: domain.name,
@@ -97,18 +187,24 @@
       
       showForm = false;
       editingDomain = null;
+      await fetchDomainsForCurrentUser();
+      await fetchAllRoles();
     } catch (err) {
       error = err.message;
     }
   }
 
   async function handleDelete(domainId) {
+    if (!isAdminUser) return;
+
     if (!confirm('Are you sure you want to delete this domain? Roles will be unassigned.')) {
       return;
     }
 
     try {
       await domains.deleteDomain(domainId);
+      await fetchDomainsForCurrentUser();
+      await fetchAllRoles();
     } catch (err) {
       error = err.message;
       alert(err.message);
@@ -116,14 +212,18 @@
   }
 
   async function assignLeader(domainId, leaderId) {
+    if (!isAdminUser) return;
+
     try {
       await domains.assignLeader(domainId, leaderId);
+      await fetchDomainsForCurrentUser();
     } catch (err) {
       error = err.message;
     }
   }
 
   function showRoleAssignment(domain) {
+    if (!canManageDomain(domain)) return;
     assigningRoles = domain;
     showForm = false;
   }
@@ -133,6 +233,16 @@
   }
 
   async function toggleRoleAssignment(roleId, domainId, currentDomainId) {
+    if (!canManageDomain(assigningRoles)) {
+      error = 'You do not have permission to manage this domain.';
+      return;
+    }
+
+    if (!isAdminUser && !accessibleDomainIds.includes(domainId)) {
+      error = 'You do not have permission to manage this domain.';
+      return;
+    }
+
     try {
       const newDomainId = currentDomainId === domainId ? null : domainId;
       
@@ -148,7 +258,13 @@
 
       // Refresh data and force UI update
       await fetchAllRoles();
-      await domains.fetchDomains();
+      const refreshedDomains = await fetchDomainsForCurrentUser();
+      if (assigningRoles) {
+        const updatedDomain = refreshedDomains.find(d => d.id === assigningRoles.id);
+        if (updatedDomain) {
+          assigningRoles = updatedDomain;
+        }
+      }
       
       // Force Svelte to re-render by incrementing the refresh key
       refreshKey++;
@@ -175,9 +291,11 @@
       <p>Organize roles by department and assign leaders</p>
     </div>
     
-    <button class="btn btn-primary" on:click={showCreateForm}>
-      + Create Domain
-    </button>
+    {#if isAdminUser}
+      <button class="btn btn-primary" on:click={showCreateForm}>
+        + Create Domain
+      </button>
+    {/if}
   </div>
 
   {#if error}
@@ -273,17 +391,19 @@
           ></textarea>
         </div>
 
-        <div class="form-group">
-          <label for="leader_id">Assign Volunteer Leader</label>
-          <select id="leader_id" bind:value={formData.leader_id}>
-            <option value={null}>No leader assigned</option>
-            {#each volunteerLeaders as leader}
-              <option value={leader.id}>
-                {leader.first_name} {leader.last_name} ({leader.email})
-              </option>
-            {/each}
-          </select>
-        </div>
+        {#if isAdminUser}
+          <div class="form-group">
+            <label for="leader_id">Assign Volunteer Leader</label>
+            <select id="leader_id" bind:value={formData.leader_id}>
+              <option value={null}>No leader assigned</option>
+              {#each volunteerLeaders as leader}
+                <option value={leader.id}>
+                  {leader.first_name} {leader.last_name} ({leader.email})
+                </option>
+              {/each}
+            </select>
+          </div>
+        {/if}
 
         <div class="form-actions">
           <button type="button" class="btn btn-secondary" on:click={cancelForm}>
@@ -311,15 +431,21 @@
           <div class="domain-header">
             <h3>{domain.name}</h3>
             <div class="domain-actions">
-              <button class="btn btn-sm btn-info" on:click={() => showRoleAssignment(domain)}>
-                📋 Manage Roles
-              </button>
-              <button class="btn btn-sm btn-secondary" on:click={() => showEditForm(domain)}>
-                Edit
-              </button>
-              <button class="btn btn-sm btn-danger" on:click={() => handleDelete(domain.id)}>
-                Delete
-              </button>
+              {#if canManageDomain(domain)}
+                <button class="btn btn-sm btn-info" on:click={() => showRoleAssignment(domain)}>
+                  📋 Manage Roles
+                </button>
+              {/if}
+              {#if canEditDomain(domain)}
+                <button class="btn btn-sm btn-secondary" on:click={() => showEditForm(domain)}>
+                  Edit
+                </button>
+              {/if}
+              {#if isAdminUser}
+                <button class="btn btn-sm btn-danger" on:click={() => handleDelete(domain.id)}>
+                  Delete
+                </button>
+              {/if}
             </div>
           </div>
 
@@ -349,21 +475,23 @@
             </div>
           </div>
 
-          <div class="quick-assign">
-            <label for="leader-{domain.id}">Quick assign leader:</label>
-            <select
-              id="leader-{domain.id}"
-              value={domain.leader_id || ''}
-              on:change={(e) => assignLeader(domain.id, e.target.value || null)}
-            >
-              <option value="">No leader</option>
-              {#each volunteerLeaders as leader}
-                <option value={leader.id}>
-                  {leader.first_name} {leader.last_name}
-                </option>
-              {/each}
-            </select>
-          </div>
+          {#if isAdminUser}
+            <div class="quick-assign">
+              <label for="leader-{domain.id}">Quick assign leader:</label>
+              <select
+                id="leader-{domain.id}"
+                value={domain.leader_id || ''}
+                on:change={(e) => assignLeader(domain.id, e.target.value || null)}
+              >
+                <option value="">No leader</option>
+                {#each volunteerLeaders as leader}
+                  <option value={leader.id}>
+                    {leader.first_name} {leader.last_name}
+                  </option>
+                {/each}
+              </select>
+            </div>
+          {/if}
         </div>
       {/each}
     </div>
