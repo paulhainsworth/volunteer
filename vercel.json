@@ -1,6 +1,14 @@
 {
   "rewrites": [
     {
+      "source": "/volunteer",
+      "destination": "/"
+    },
+    {
+      "source": "/volunteer/:path*",
+      "destination": "/"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
