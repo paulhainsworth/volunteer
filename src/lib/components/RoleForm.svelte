@@ -6,6 +6,7 @@
 
   export let role = null;
   export let loading = false;
+  export let defaultDomainId = null;
 
   let volunteerLeaders = [];
   let domains = [];
@@ -57,6 +58,12 @@
     formData.positions_total = role.positions_total || 1;
     formData.domain_id = role.domain_id || null;
     formData.leader_id = role.leader_id || null;
+  } else if (defaultDomainId) {
+    formData.domain_id = defaultDomainId;
+  }
+
+  $: if (!role && defaultDomainId && formData.domain_id !== defaultDomainId) {
+    formData.domain_id = defaultDomainId;
   }
 
   function handleSubmit() {

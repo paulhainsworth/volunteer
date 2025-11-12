@@ -30,6 +30,10 @@
   function toggleMobileMenu() {
     showMobileMenu = !showMobileMenu;
   }
+
+  function handleNavClick() {
+    showMobileMenu = false;
+  }
 </script>
 
 <div class="app-layout">
@@ -48,18 +52,18 @@
       <div class="nav-menu" class:active={showMobileMenu}>
         {#if $auth.user}
           {#if $auth.isAdmin}
-            <a href="#/admin" class="nav-link">Dashboard</a>
-            <a href="#/admin/roles" class="nav-link">Roles</a>
-            <a href="#/admin/domains" class="nav-link">Domains</a>
-            <a href="#/admin/volunteers" class="nav-link">Users</a>
-            <a href="#/admin/communications" class="nav-link">Communications</a>
+            <a href="#/admin" class="nav-link" on:click={handleNavClick}>Dashboard</a>
+            <a href="#/admin/roles" class="nav-link" on:click={handleNavClick}>Roles</a>
+            <a href="#/admin/domains" class="nav-link" on:click={handleNavClick}>Domains</a>
+            <a href="#/admin/volunteers" class="nav-link" on:click={handleNavClick}>Users</a>
+            <a href="#/admin/communications" class="nav-link" on:click={handleNavClick}>Communications</a>
           {:else if $auth.profile?.role === 'volunteer_leader'}
-            <a href="#/leader" class="nav-link">My Roles</a>
-            <a href="#/volunteer" class="nav-link">Browse Roles</a>
-            <a href="#/my-signups" class="nav-link">My Signups</a>
+            <a href="#/leader" class="nav-link" on:click={handleNavClick}>My Roles</a>
+            <a href="#/volunteer" class="nav-link" on:click={handleNavClick}>Browse Roles</a>
+            <a href="#/my-signups" class="nav-link" on:click={handleNavClick}>My Signups</a>
           {:else}
-            <a href="#/volunteer" class="nav-link">Browse Roles</a>
-            <a href="#/my-signups" class="nav-link">My Signups</a>
+            <a href="#/volunteer" class="nav-link" on:click={handleNavClick}>Browse Roles</a>
+            <a href="#/my-signups" class="nav-link" on:click={handleNavClick}>My Signups</a>
           {/if}
           
           <button class="theme-toggle" on:click={() => theme.toggle()} title="Toggle {$theme === 'light' ? 'dark' : 'light'} mode">
@@ -71,7 +75,7 @@
           </button>
           
           <div class="nav-user">
-            <a href="#/profile" class="user-email" title="Edit Profile">
+            <a href="#/profile" class="user-email" title="Edit Profile" on:click={handleNavClick}>
               {$auth.profile?.email}
             </a>
             <button type="button" class="btn-link" on:click={handleSignOut} disabled={signingOut}>
@@ -79,8 +83,8 @@
             </button>
           </div>
         {:else}
-          <a href="#/auth/login" class="nav-link">Login</a>
-          <a href="#/auth/signup" class="nav-link btn-primary">Sign Up</a>
+          <a href="#/auth/login" class="nav-link" on:click={handleNavClick}>Login</a>
+          <a href="#/auth/signup" class="nav-link btn-primary" on:click={handleNavClick}>Sign Up</a>
           
           <button class="theme-toggle" on:click={() => theme.toggle()} title="Toggle {$theme === 'light' ? 'dark' : 'light'} mode">
             {#if $theme === 'light'}
@@ -125,6 +129,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+    position: relative;
   }
 
   .nav-brand a {

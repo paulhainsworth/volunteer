@@ -14,6 +14,7 @@
   let editingDomain = null;
   let assigningRoles = null;
   let refreshKey = 0; // Force UI updates
+  let initialManageDomainId = null;
 
   let isAdminUser = false;
   let isLeaderUser = false;
@@ -84,6 +85,9 @@ onMount(() => {
       loading = true;
       error = '';
 
+      const searchParams = getHashSearchParams();
+      initialManageDomainId = searchParams.get('manageDomain');
+
       await fetchDomainsForCurrentUser();
 
       if (isAdminUser) {
@@ -91,6 +95,16 @@ onMount(() => {
       }
 
       await fetchAllRoles();
+
+      if (initialManageDomainId) {
+        const domainList = get(domains);
+        const matchedDomain = domainList.find(d => d.id === initialManageDomainId);
+        if (matchedDomain && canManageDomain(matchedDomain)) {
+          assigningRoles = matchedDomain;
+          showForm = false;
+          refreshKey++;
+        }
+      }
     } catch (err) {
       if (!cancelled) {
         error = err.message || 'Unable to load domains.';
@@ -211,17 +225,6 @@ onMount(() => {
     }
   }
 
-  async function assignLeader(domainId, leaderId) {
-    if (!isAdminUser) return;
-
-    try {
-      await domains.assignLeader(domainId, leaderId);
-      await fetchDomainsForCurrentUser();
-    } catch (err) {
-      error = err.message;
-    }
-  }
-
   function showRoleAssignment(domain) {
     if (!canManageDomain(domain)) return;
     assigningRoles = domain;
@@ -282,6 +285,27 @@ onMount(() => {
   function getUnassignedRoles() {
     return allRoles.filter(r => !r.domain_id);
   }
+
+  function getHashSearchParams() {
+    const hash = window.location.hash || '';
+    const queryIndex = hash.indexOf('?');
+    if (queryIndex === -1) {
+      return new URLSearchParams();
+    }
+    const queryString = hash.slice(queryIndex + 1);
+    return new URLSearchParams(queryString);
+  }
+
+  function createRoleForDomain(domain) {
+    if (!domain) return;
+    assigningRoles = null;
+    const params = new URLSearchParams({
+      domainId: domain.id,
+      returnTo: '/admin/domains',
+      returnDomainId: domain.id
+    });
+    push(`/admin/roles/new?${params.toString()}`);
+  }
 </script>
 
 <div class="domains-page">
@@ -306,9 +330,20 @@ onMount(() => {
     <div class="assign-roles-card">
       <div class="assign-header">
         <h3>Assign Roles to {assigningRoles.name}</h3>
-        <button class="btn btn-secondary btn-sm" on:click={cancelRoleAssignment}>
-          Done
-        </button>
+        <div class="assign-actions">
+          {#if canManageDomain(assigningRoles)}
+            <button
+              class="btn btn-primary btn-sm"
+              type="button"
+              on:click={() => createRoleForDomain(assigningRoles)}
+            >
+              + Create Role
+            </button>
+          {/if}
+          <button class="btn btn-secondary btn-sm" on:click={cancelRoleAssignment}>
+            Done
+          </button>
+        </div>
       </div>
 
       <div class="roles-assignment">
@@ -425,75 +460,90 @@ onMount(() => {
       <p>Create domains to organize your volunteer roles</p>
     </div>
   {:else}
-    <div class="domains-grid">
-      {#each $domains as domain (domain.id)}
-        <div class="domain-card">
-          <div class="domain-header">
-            <h3>{domain.name}</h3>
-            <div class="domain-actions">
-              {#if canManageDomain(domain)}
-                <button class="btn btn-sm btn-info" on:click={() => showRoleAssignment(domain)}>
-                  📋 Manage Roles
-                </button>
-              {/if}
-              {#if canEditDomain(domain)}
-                <button class="btn btn-sm btn-secondary" on:click={() => showEditForm(domain)}>
-                  Edit
-                </button>
-              {/if}
-              {#if isAdminUser}
-                <button class="btn btn-sm btn-danger" on:click={() => handleDelete(domain.id)}>
-                  Delete
-                </button>
-              {/if}
-            </div>
-          </div>
-
-          {#if domain.description}
-            <p class="domain-description">{domain.description}</p>
-          {/if}
-
-          <div class="domain-info">
-            <div class="info-item">
-              <span class="label">Leader:</span>
-              {#if domain.leader}
-                <div class="leader-info">
-                  <strong>{domain.leader.first_name} {domain.leader.last_name}</strong>
-                  <a href="mailto:{domain.leader.email}">{domain.leader.email}</a>
-                  {#if domain.leader.phone}
-                    <a href="tel:{domain.leader.phone}">📱 {domain.leader.phone}</a>
+    <div class="domains-table-container">
+      <table class="domains-table">
+        <thead>
+          <tr>
+            <th>Domain</th>
+            <th>Description</th>
+            <th>Leader</th>
+            <th>Contact</th>
+            <th>Roles</th>
+            <th class="actions-column">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {#each $domains as domain (domain.id)}
+            <tr>
+              <td class="domain-name-cell">
+                <div class="domain-name">
+                  <strong>{domain.name}</strong>
+                  {#if canManageDomain(domain)}
+                    <button
+                      class="btn btn-xs btn-info"
+                      type="button"
+                      on:click={() => showRoleAssignment(domain)}
+                    >
+                      📋 Manage Roles
+                    </button>
                   {/if}
                 </div>
-              {:else}
-                <span class="no-leader">No leader assigned</span>
-              {/if}
-            </div>
+              </td>
+              <td class="domain-desc">
+                {domain.description || '—'}
+              </td>
+              <td>
+                {#if domain.leader}
+                  <div class="leader-name">
+                    {domain.leader.first_name} {domain.leader.last_name}
+                  </div>
+                {:else}
+                  <span class="no-leader">No leader assigned</span>
+                {/if}
+              </td>
+              <td>
+                {#if domain.leader}
+                  <div class="leader-contact">
+                    <a href="mailto:{domain.leader.email}">{domain.leader.email}</a>
+                    {#if domain.leader.phone}
+                      <div class="leader-phone">📱 {domain.leader.phone}</div>
+                    {/if}
+                  </div>
+                {:else}
+                  —
+                {/if}
+              </td>
+              <td class="roles-count">
+                {domain.role_count || 0}
+              </td>
+              <td class="action-buttons-cell">
+                <div class="action-buttons">
+                  {#if canEditDomain(domain)}
+                    <button
+                      class="btn btn-xs btn-secondary"
+                      type="button"
+                      on:click={() => showEditForm(domain)}
+                    >
+                      Edit
+                    </button>
+                  {/if}
 
-            <div class="info-item">
-              <span class="label">Roles:</span>
-              <span class="role-count">{domain.role_count} {domain.role_count === 1 ? 'role' : 'roles'}</span>
-            </div>
-          </div>
+                  {#if isAdminUser}
+                    <button
+                      class="btn btn-xs btn-danger"
+                      type="button"
+                      on:click={() => handleDelete(domain.id)}
+                    >
+                      Delete
+                    </button>
+                  {/if}
+                </div>
 
-          {#if isAdminUser}
-            <div class="quick-assign">
-              <label for="leader-{domain.id}">Quick assign leader:</label>
-              <select
-                id="leader-{domain.id}"
-                value={domain.leader_id || ''}
-                on:change={(e) => assignLeader(domain.id, e.target.value || null)}
-              >
-                <option value="">No leader</option>
-                {#each volunteerLeaders as leader}
-                  <option value={leader.id}>
-                    {leader.first_name} {leader.last_name}
-                  </option>
-                {/each}
-              </select>
-            </div>
-          {/if}
-        </div>
-      {/each}
+              </td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
     </div>
   {/if}
 </div>
@@ -591,104 +641,12 @@ onMount(() => {
     margin-bottom: 0.5rem;
   }
 
-  .domains-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
-    gap: 1.5rem;
-  }
-
-  .domain-card {
+  .domains-table-container {
     background: white;
     border: 1px solid #dee2e6;
     border-radius: 12px;
-    padding: 1.5rem;
-    transition: box-shadow 0.2s;
-  }
-
-  .domain-card:hover {
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  }
-
-  .domain-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    margin-bottom: 1rem;
-    gap: 1rem;
-  }
-
-  .domain-header h3 {
-    margin: 0;
-    color: #1a1a1a;
-  }
-
-  .domain-actions {
-    display: flex;
-    gap: 0.5rem;
-  }
-
-  .domain-description {
-    color: #6c757d;
-    margin-bottom: 1.5rem;
-    line-height: 1.5;
-  }
-
-  .domain-info {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-    margin-bottom: 1.5rem;
-    padding: 1rem;
-    background: #f8f9fa;
-    border-radius: 8px;
-  }
-
-  .info-item {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-  }
-
-  .info-item .label {
-    font-weight: 600;
-    color: #495057;
-    font-size: 0.9rem;
-  }
-
-  .leader-info {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-  }
-
-  .leader-info a {
-    color: #007bff;
-    text-decoration: none;
-    font-size: 0.9rem;
-  }
-
-  .leader-info a:hover {
-    text-decoration: underline;
-  }
-
-  .no-leader {
-    color: #6c757d;
-    font-style: italic;
-  }
-
-  .role-count {
-    font-weight: 600;
-    color: #007bff;
-  }
-
-  .quick-assign {
-    padding-top: 1rem;
-    border-top: 1px solid #dee2e6;
-  }
-
-  .quick-assign label {
-    font-size: 0.9rem;
-    margin-bottom: 0.5rem;
+    overflow-x: auto;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
   }
 
   .btn {
@@ -703,6 +661,11 @@ onMount(() => {
   .btn-sm {
     padding: 0.5rem 0.75rem;
     font-size: 0.875rem;
+  }
+
+  .btn-xs {
+    padding: 0.35rem 0.6rem;
+    font-size: 0.75rem;
   }
 
   .btn-primary {
@@ -761,6 +724,14 @@ onMount(() => {
     margin-bottom: 2rem;
     padding-bottom: 1rem;
     border-bottom: 2px solid #dee2e6;
+    gap: 1rem;
+  }
+
+  .assign-actions {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    justify-content: flex-end;
   }
 
   .assign-header h3 {
@@ -877,11 +848,97 @@ onMount(() => {
     background: #c82333;
   }
 
-  @media (max-width: 768px) {
-    .domains-grid {
-      grid-template-columns: 1fr;
-    }
+  .domains-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
 
+  .domains-table thead {
+    background: #f8f9fa;
+  }
+
+  .domains-table th,
+  .domains-table td {
+    padding: 1rem;
+    text-align: left;
+    border-bottom: 1px solid #e9ecef;
+    vertical-align: top;
+  }
+
+  .domains-table th {
+    font-size: 0.85rem;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: #6c757d;
+  }
+
+  .domain-name {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .domain-desc {
+    color: #495057;
+  }
+
+  .leader-name {
+    font-weight: 600;
+  }
+
+  .leader-contact {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    font-size: 0.9rem;
+  }
+
+  .leader-contact a {
+    color: #007bff;
+    text-decoration: none;
+  }
+
+  .leader-contact a:hover {
+    text-decoration: underline;
+  }
+
+  .leader-phone {
+    color: #495057;
+  }
+
+  .no-leader {
+    color: #6c757d;
+    font-style: italic;
+  }
+
+  .roles-count {
+    font-weight: 700;
+    color: #007bff;
+    min-width: 3rem;
+  }
+
+  .action-buttons-cell {
+    min-width: 200px;
+  }
+
+  .action-buttons {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  .actions-column {
+    width: 18%;
+  }
+
+  @media (max-width: 1024px) {
+    .domains-table th,
+    .domains-table td {
+      padding: 0.75rem;
+    }
+  }
+
+  @media (max-width: 768px) {
     .header {
       flex-direction: column;
       gap: 1rem;
@@ -891,8 +948,13 @@ onMount(() => {
       grid-template-columns: 1fr;
     }
 
-    .domain-actions {
-      flex-wrap: wrap;
+    .domains-table-container {
+      border-radius: 8px;
+    }
+
+    .domains-table th,
+    .domains-table td {
+      font-size: 0.9rem;
     }
   }
 </style>

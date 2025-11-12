@@ -40,11 +40,31 @@ import { format } from 'date-fns';
   };
   let addingVolunteer = false;
   let addVolunteerError = '';
+  let defaultDomainId = null;
+  let returnToPath = '';
+  let returnDomainId = '';
 
   onMount(async () => {
     if (!$auth.isAdmin) {
       push('/volunteer');
       return;
+    }
+
+    const hash = window.location.hash || '';
+    const queryIndex = hash.indexOf('?');
+    if (queryIndex !== -1) {
+      const queryString = hash.slice(queryIndex + 1);
+      const searchParams = new URLSearchParams(queryString);
+      const domainParam = searchParams.get('domainId');
+      defaultDomainId = domainParam && domainParam !== 'null' ? domainParam : null;
+      const returnParam = searchParams.get('returnTo');
+      returnToPath = returnParam ? returnParam : '';
+      const returnDomainParam = searchParams.get('returnDomainId');
+      returnDomainId = returnDomainParam && returnDomainParam !== 'null' ? returnDomainParam : '';
+    } else {
+      defaultDomainId = null;
+      returnToPath = '';
+      returnDomainId = '';
     }
 
     if (params.id === 'new') {
@@ -153,6 +173,19 @@ import { format } from 'date-fns';
     }
   }
 
+  function navigateAfterForm() {
+    if (returnToPath) {
+      let target = returnToPath;
+      if (returnDomainId) {
+        const separator = target.includes('?') ? '&' : '?';
+        target = `${target}${separator}manageDomain=${returnDomainId}`;
+      }
+      push(target);
+    } else {
+      push('/admin/roles');
+    }
+  }
+
   async function handleSubmit(event) {
     const formData = event.detail;
     submitting = true;
@@ -170,8 +203,8 @@ import { format } from 'date-fns';
           created_by: $auth.user.id
         });
       }
-      
-      push('/admin/roles');
+
+      navigateAfterForm();
     } catch (err) {
       error = err.message;
     } finally {
@@ -180,7 +213,7 @@ import { format } from 'date-fns';
   }
 
   function handleCancel() {
-    push('/admin/roles');
+    navigateAfterForm();
   }
 
   function showBulkUploadDialog() {
@@ -726,6 +759,7 @@ import { format } from 'date-fns';
         loading={submitting}
         on:submit={handleSubmit}
         on:cancel={handleCancel}
+        defaultDomainId={defaultDomainId}
       />
     </div>
   {:else}
