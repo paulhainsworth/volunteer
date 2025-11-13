@@ -186,8 +186,25 @@ import { format } from 'date-fns';
     }
   }
 
+  function normalizeRoleFormData(formData) {
+    const sanitizeSelect = (value) => {
+      if (value === undefined || value === null || value === '' || value === 'null') {
+        return null;
+      }
+      return value;
+    };
+
+    return {
+      ...formData,
+      positions_total: Number(formData.positions_total) || 0,
+      domain_id: sanitizeSelect(formData.domain_id),
+      leader_id: sanitizeSelect(formData.leader_id)
+    };
+  }
+
   async function handleSubmit(event) {
-    const formData = event.detail;
+    const rawFormData = event.detail;
+    const formData = normalizeRoleFormData(rawFormData);
     submitting = true;
     error = '';
 
