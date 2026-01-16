@@ -11,7 +11,14 @@
   let sortBy = 'date';
   let filterDate = '';
   let filterStatus = 'all';
+  let raceDayFilter = 'all'; // 'all', 'bhrr', 'bsc', 'pre-race', 'post-race'
   let selectedRole = null; // For modal
+  let expandedDomains = new Set(); // Track which domains are expanded
+  let domainsInitialized = false; // Track if we've initialized domains
+
+  // Race dates
+  const BHRR_DATE = '2026-04-18'; // Saturday April 18, 2026
+  const BSC_DATE = '2026-04-19'; // Sunday April 19, 2026
   let copyMessage = '';
   let copyMessageTimeout = null;
 
@@ -65,6 +72,78 @@
     };
   }
 
+  // Normalize date to YYYY-MM-DD format for consistent comparison
+  function normalizeDate(dateValue) {
+    if (!dateValue) return null;
+    
+    // Trim whitespace
+    const trimmed = String(dateValue).trim();
+    
+    // If already in YYYY-MM-DD format, return as is
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+      return trimmed;
+    }
+    
+    // If it contains 'T' (timestamp), extract just the date part
+    if (trimmed.includes('T')) {
+      const datePart = trimmed.split('T')[0].trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(datePart)) {
+        return datePart;
+      }
+    }
+    
+    // Try to parse as Date
+    const dateObj = new Date(trimmed);
+    if (!isNaN(dateObj.getTime())) {
+      // Format as YYYY-MM-DD
+      const year = dateObj.getFullYear();
+      const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+      const day = String(dateObj.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+    
+    // If parsing fails, try extracting YYYY-MM-DD from string
+    const match = trimmed.match(/(\d{4}-\d{2}-\d{2})/);
+    if (match) return match[1];
+    
+    return null;
+  }
+
+  // Format date for display - parse as local date to avoid timezone issues
+  function formatDateForDisplay(dateString) {
+    if (!dateString) return '';
+    // Parse YYYY-MM-DD as local date (not UTC) to avoid timezone shifting
+    const [year, month, day] = dateString.split('-').map(Number);
+    const localDate = new Date(year, month - 1, day);
+    return format(localDate, 'EEEE, MMMM d, yyyy');
+  }
+
+  // Format date for compact display
+  function formatDateCompact(dateString) {
+    if (!dateString) return '';
+    const [year, month, day] = dateString.split('-').map(Number);
+    const localDate = new Date(year, month - 1, day);
+    return format(localDate, 'EEE, MMM d, yyyy');
+  }
+
+  // Toggle domain expansion
+  function toggleDomain(domainId) {
+    const newSet = new Set(expandedDomains);
+    if (newSet.has(domainId)) {
+      newSet.delete(domainId);
+    } else {
+      newSet.add(domainId);
+    }
+    expandedDomains = newSet;
+  }
+
+  // Initialize domains as closed by default (only once)
+  $: if (groupedDomains && groupedDomains.length > 0 && !domainsInitialized) {
+    // Start with all domains closed (empty set)
+    expandedDomains = new Set();
+    domainsInitialized = true;
+  }
+
   $: filteredRoles = $roles
     .filter(role => {
       // Search filter
@@ -76,8 +155,38 @@
         if (!matchesName && !matchesDescription && !matchesLocation) return false;
       }
 
-      // Date filter
-      if (filterDate && role.event_date !== filterDate) return false;
+      // Race day filter (takes precedence over manual date filter)
+      if (raceDayFilter !== 'all') {
+        const roleDateStr = normalizeDate(role.event_date);
+        
+        if (!roleDateStr) {
+          // If we can't parse the date, skip this role for exact date matches
+          if (raceDayFilter === 'bhrr' || raceDayFilter === 'bsc') {
+            return false;
+          }
+          // For pre/post-race, include roles with invalid dates (they'll be filtered elsewhere)
+          return true;
+        }
+        
+        if (raceDayFilter === 'bhrr') {
+          // Show only April 18, 2026
+          if (roleDateStr !== BHRR_DATE) {
+            return false;
+          }
+        } else if (raceDayFilter === 'bsc') {
+          // Show only April 19, 2026
+          if (roleDateStr !== BSC_DATE) return false;
+        } else if (raceDayFilter === 'pre-race') {
+          // Show dates before April 18, 2026 (string comparison works for YYYY-MM-DD format)
+          if (roleDateStr >= BHRR_DATE) return false;
+        } else if (raceDayFilter === 'post-race') {
+          // Show dates after April 19, 2026
+          if (roleDateStr <= BSC_DATE) return false;
+        }
+      } else {
+        // Manual date filter (only applies when race day filter is 'all')
+        if (filterDate && role.event_date !== filterDate) return false;
+      }
 
       // Status filter
       if (filterStatus === 'available' && role.positions_filled >= role.positions_total) return false;
@@ -248,8 +357,16 @@
       <option value="duration">Sort by Duration</option>
     </select>
 
-    <select bind:value={filterStatus} class="filter-select">
+    <select bind:value={raceDayFilter} class="filter-select">
       <option value="all">All Roles</option>
+      <option value="bhrr">Race day: BHRR</option>
+      <option value="bsc">Race day: BSC</option>
+      <option value="pre-race">Pre-race</option>
+      <option value="post-race">Post-race</option>
+    </select>
+
+    <select bind:value={filterStatus} class="filter-select">
+      <option value="all">All Status</option>
       <option value="available">Available Only</option>
       <option value="urgent">Urgent Need</option>
     </select>
@@ -271,81 +388,94 @@
       <p>No volunteer opportunities found matching your filters.</p>
     </div>
   {:else}
+    {@const totalOpenSpots = groupedDomains.reduce((sum, d) => sum + d.openSpots, 0)}
+    <div class="opportunities-summary">
+      <span>{totalOpenSpots} total open spot{totalOpenSpots === 1 ? '' : 's'}</span>
+    </div>
+
     <div class="domains-list">
       {#each groupedDomains as domain (domain.id)}
+        {@const isExpanded = expandedDomains.has(domain.id)}
         <section class="domain-section">
-          <div class="domain-header">
-            <div class="domain-info">
-              <h2>{domain.name}</h2>
-              <p>Led by {domain.leaderName}</p>
+          <div 
+            class="domain-header clickable" 
+            on:click={() => toggleDomain(domain.id)}
+            role="button"
+            tabindex="0"
+            on:keydown={(e) => e.key === 'Enter' && toggleDomain(domain.id)}
+          >
+            <div class="domain-toggle">
+              <span class="toggle-icon">{isExpanded ? '▼' : '►'}</span>
+              <div class="domain-info">
+                <h2>{domain.name}</h2>
+                <p>Led by {domain.leaderName}</p>
+              </div>
             </div>
             <div class="domain-summary">
-              <span>{domain.openSpots} open spot{domain.openSpots === 1 ? '' : 's'}</span>
+              <span>{domain.openSpots} open</span>
             </div>
           </div>
 
-          <div class="roles-grid">
-            {#each domain.roles as role (role.id)}
-              {@const status = getFillStatus(role)}
-              {@const duration = calculateDuration(role.start_time, role.end_time)}
-              {@const isFull = role.positions_filled >= role.positions_total}
+          {#if isExpanded}
+            <div class="roles-grid">
+              {#each domain.roles as role (role.id)}
+                {@const status = getFillStatus(role)}
+                {@const duration = calculateDuration(role.start_time, role.end_time)}
+                {@const isFull = role.positions_filled >= role.positions_total}
 
-              <div class="role-card">
-                <div class="role-header">
-                  <div>
-                    <h3>{role.name}</h3>
-                    <div class="role-meta">
-                      <span class="role-meta-label">Team</span>
-                      <span class="role-meta-value">{domain.name}</span>
+                <div class="role-card compact">
+                  <div class="role-main">
+                    <div class="role-title-row">
+                      <h3>{role.name}</h3>
+                      <span class="status-badge {status.class}">{status.label}</span>
+                    </div>
+
+                    <div class="role-details-compact">
+                      <div class="detail-inline">
+                        <span class="icon">📅</span>
+                        <span>{formatDateCompact(role.event_date)}</span>
+                      </div>
+                      
+                      <div class="detail-inline">
+                        <span class="icon">🕐</span>
+                        <span>{formatTime(role.start_time)} - {formatTime(role.end_time)} (~{duration}h)</span>
+                      </div>
+
+                      {#if role.location}
+                        <div class="detail-inline">
+                          <span class="icon">📍</span>
+                          <span>{role.location}</span>
+                        </div>
+                      {/if}
+
+                      <div class="detail-inline">
+                        <span class="icon">👥</span>
+                        <span>{role.positions_filled} / {role.positions_total} spots filled</span>
+                      </div>
                     </div>
                   </div>
-                  <span class="status-badge {status.class}">{status.label}</span>
-                </div>
 
-                <div class="role-details">
-                  <div class="detail">
-                    <span class="icon">📅</span>
-                    <span>{format(new Date(role.event_date), 'EEEE, MMMM d, yyyy')}</span>
-                  </div>
-                  
-                  <div class="detail">
-                    <span class="icon">🕐</span>
-                    <span>{formatTime(role.start_time)} - {formatTime(role.end_time)} ({duration}h)</span>
-                  </div>
-
-                  {#if role.location}
-                    <div class="detail">
-                      <span class="icon">📍</span>
-                      <span>{role.location}</span>
-                    </div>
-                  {/if}
-
-                  <div class="detail">
-                    <span class="icon">👥</span>
-                    <span>{role.positions_filled} / {role.positions_total} spots filled</span>
+                  <div class="role-actions-compact">
+                    <button
+                      class="btn btn-primary btn-compact"
+                      on:click={() => handleSignup(role.id)}
+                      disabled={isFull}
+                    >
+                      {isFull ? 'Full' : 'Sign Up'}
+                    </button>
+                    
+                    <button
+                      class="btn btn-secondary btn-compact"
+                      on:click={() => showMoreInfo(role)}
+                      title="View full details"
+                    >
+                      Info
+                    </button>
                   </div>
                 </div>
-
-                <div class="role-actions">
-                  <button
-                    class="btn btn-primary"
-                    on:click={() => handleSignup(role.id)}
-                    disabled={isFull}
-                  >
-                    {isFull ? 'Full' : 'Sign Up'}
-                  </button>
-                  
-                  <button
-                    class="btn btn-secondary"
-                    on:click={() => showMoreInfo(role)}
-                    title="View full details"
-                  >
-                    More Info
-                  </button>
-                </div>
-              </div>
-            {/each}
-          </div>
+              {/each}
+            </div>
+          {/if}
         </section>
       {/each}
     </div>
@@ -375,7 +505,7 @@
             <span class="icon">📅</span>
             <div>
               <strong>Date</strong>
-              <p>{format(new Date(selectedRole.event_date), 'EEEE, MMMM d, yyyy')}</p>
+              <p>{formatDateForDisplay(selectedRole.event_date)}</p>
             </div>
           </div>
           
@@ -477,7 +607,7 @@
 
   .filters {
     display: grid;
-    grid-template-columns: 2fr 1fr 1fr 1fr;
+    grid-template-columns: 2fr 1fr 1fr 1fr 1fr;
     gap: 1rem;
     margin-bottom: 2rem;
   }
@@ -509,82 +639,127 @@
     color: #dc3545;
   }
 
+  .opportunities-summary {
+    text-align: right;
+    margin-bottom: 1rem;
+    color: #6c757d;
+    font-weight: 500;
+  }
+
   .roles-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-    gap: 1.5rem;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
   }
 
   .domains-list {
     display: flex;
     flex-direction: column;
-    gap: 2.5rem;
+    gap: 1rem;
   }
 
   .domain-section {
     background: white;
     border: 1px solid #dee2e6;
-    border-radius: 16px;
-    padding: 2rem;
-    box-shadow: 0 12px 36px rgba(15, 23, 42, 0.08);
+    border-radius: 8px;
+    padding: 1rem;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
   }
 
   .domain-header {
     display: flex;
     justify-content: space-between;
-    align-items: flex-start;
+    align-items: center;
     gap: 1rem;
-    border-bottom: 1px solid #f1f3f5;
-    padding-bottom: 1.5rem;
-    margin-bottom: 1.5rem;
+    padding: 0.5rem 0;
+  }
+
+  .domain-header.clickable {
+    cursor: pointer;
+    user-select: none;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+  }
+
+  .domain-header.clickable:hover {
+    background: #f8f9fa;
+  }
+
+  .domain-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 1;
+  }
+
+  .toggle-icon {
+    font-size: 0.75rem;
+    color: #6c757d;
+    min-width: 1rem;
   }
 
   .domain-info h2 {
     margin: 0;
-    font-size: 1.5rem;
+    font-size: 1.1rem;
     color: #1a1a1a;
+    font-weight: 600;
   }
 
   .domain-info p {
-    margin: 0.4rem 0 0 0;
-    color: #4c5d78;
-    font-weight: 500;
+    margin: 0.25rem 0 0 0;
+    color: #6c757d;
+    font-weight: 400;
+    font-size: 0.9rem;
   }
 
   .domain-summary {
-    padding: 0.4rem 0.8rem;
+    padding: 0.25rem 0.75rem;
     background: #f1f5ff;
     color: #2a4b9b;
     border-radius: 999px;
     font-weight: 600;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
+    white-space: nowrap;
   }
 
-  .role-card {
-    background: white;
-    border: 1px solid #dee2e6;
-    border-radius: 12px;
-    padding: 1.5rem;
+  .role-card.compact {
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    padding: 1rem;
     transition: transform 0.2s, box-shadow 0.2s;
-  }
-
-  .role-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  }
-
-  .role-header {
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    margin-bottom: 1rem;
     gap: 1rem;
   }
 
-  .role-header h3 {
+  .role-card.compact:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    border-color: #007bff;
+  }
+
+  .role-main {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .role-title-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 0.75rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .role-title-row h3 {
     margin: 0;
     color: #1a1a1a;
-    font-size: 1.3rem;
+    font-size: 1rem;
+    font-weight: 600;
+    flex: 1;
   }
 
   .role-meta {
@@ -644,6 +819,12 @@
     margin-bottom: 1rem;
   }
 
+  .role-details-compact {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
   .detail {
     display: flex;
     align-items: center;
@@ -652,14 +833,35 @@
     color: #495057;
   }
 
+  .detail-inline {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+    color: #495057;
+    line-height: 1.4;
+  }
+
   .icon {
-    font-size: 1.1rem;
+    font-size: 1rem;
+    flex-shrink: 0;
+  }
+
+  .detail-inline .icon {
+    font-size: 0.9rem;
   }
 
   .role-actions {
     display: flex;
     gap: 0.75rem;
     margin-top: 1rem;
+  }
+
+  .role-actions-compact {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    flex-shrink: 0;
   }
 
   .btn {
@@ -670,6 +872,17 @@
     font-weight: 600;
     cursor: pointer;
     transition: background 0.2s;
+  }
+
+  .btn-compact {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    white-space: nowrap;
+    min-width: 70px;
+  }
+
+  .role-actions-compact .btn {
+    flex: none;
   }
 
   .btn-primary {
@@ -871,11 +1084,24 @@
     }
 
     .domain-section {
-      padding: 1.5rem;
+      padding: 0.75rem;
     }
 
     .roles-grid {
       grid-template-columns: 1fr;
+    }
+
+    .role-card.compact {
+      flex-direction: column;
+    }
+
+    .role-actions-compact {
+      flex-direction: row;
+      width: 100%;
+    }
+
+    .role-actions-compact .btn {
+      flex: 1;
     }
 
     .modal-content {

@@ -31,6 +31,9 @@
   // Profile
   import Profile from './routes/Profile.svelte';
   import Onboarding from './routes/Onboarding.svelte';
+  
+  // Board
+  import Board from './routes/Board.svelte';
 
   const routes = {
     '/': Home,
@@ -49,7 +52,8 @@
     '/admin/roles/:id': RolesList,
     '/admin/volunteers': VolunteersList,
     '/admin/domains': Domains,
-    '/admin/communications': Communications
+    '/admin/communications': Communications,
+    '/board': Board
   };
 
   onMount(() => {
