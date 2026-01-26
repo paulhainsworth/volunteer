@@ -8,6 +8,7 @@ import { push } from 'svelte-spa-router';
 import RoleForm from '../../lib/components/RoleForm.svelte';
 import BulkUpload from '../../lib/components/BulkUpload.svelte';
 import { format } from 'date-fns';
+import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
 
   export let params = {};
 
@@ -98,14 +99,6 @@ import { format } from 'date-fns';
       }
     }
   });
-
-  function formatTime(time) {
-    const [hours, minutes] = time.split(':');
-    const hour = parseInt(hours);
-    const ampm = hour >= 12 ? 'pm' : 'am';
-    const displayHour = hour % 12 || 12;
-    return `${displayHour}:${minutes}${ampm}`;
-  }
 
   async function toggleRoleExpansion(roleId) {
     if (expandedRoles.has(roleId)) {
@@ -247,23 +240,32 @@ import { format } from 'date-fns';
       let successCount = 0;
       let failCount = 0;
       const errors = [];
+      /** Cache domain name -> id so we create each new domain only once per import */
+      const domainNameToId = new Map();
 
       for (const roleData of rolesToImport) {
         try {
-          // Look up domain_id from domain_name if provided
+          // Resolve domain_id from domain_name: use cache, existing, or create missing
           let domainId = null;
           if (roleData.domain_name) {
-            const { data: domainData } = await supabase
-              .from('volunteer_leader_domains')
-              .select('id')
-              .eq('name', roleData.domain_name)
-              .single();
-            
-            if (domainData) {
-              domainId = domainData.id;
+            const name = String(roleData.domain_name).trim();
+            if (domainNameToId.has(name)) {
+              domainId = domainNameToId.get(name);
             } else {
-              // Domain not found - warn but continue
-              errors.push(`${roleData.name}: Domain "${roleData.domain_name}" not found - role created without domain`);
+              const { data: domainData } = await supabase
+                .from('volunteer_leader_domains')
+                .select('id')
+                .eq('name', name)
+                .maybeSingle();
+
+              if (domainData) {
+                domainId = domainData.id;
+                domainNameToId.set(name, domainId);
+              } else {
+                const created = await domains.createDomain({ name, description: null, leader_id: null });
+                domainId = created.id;
+                domainNameToId.set(name, domainId);
+              }
             }
           }
 
@@ -287,9 +289,14 @@ import { format } from 'date-fns';
 
           // Remove non-column fields from data
           const { leader_email, domain_name, ...roleDataClean } = roleData;
+          const sentinel = flexibleSentinel();
+          const startTime = roleDataClean.start_time === 'flexible' ? sentinel.start_time : roleDataClean.start_time;
+          const endTime = roleDataClean.end_time === 'flexible' ? sentinel.end_time : roleDataClean.end_time;
 
           await roles.createRole({
             ...roleDataClean,
+            start_time: startTime,
+            end_time: endTime,
             domain_id: domainId,
             leader_id: leaderId,
             created_by: $auth.user.id
@@ -311,8 +318,7 @@ import { format } from 'date-fns';
 
       showBulkUpload = false;
       
-      // Refresh roles list
-      await roles.fetchRoles();
+      await Promise.all([roles.fetchRoles(), domains.fetchDomains()]);
     } catch (err) {
       error = err.message;
     } finally {
@@ -346,16 +352,20 @@ import { format } from 'date-fns';
 
   function exportToCSV() {
     const headers = ['Role Name', 'Event Date', 'Start Time', 'End Time', 'Location', 'Total Positions', 'Filled Positions', 'Fill %'];
-    const rows = $roles.map(role => [
-      role.name,
-      format(new Date(role.event_date), 'yyyy-MM-dd'),
-      role.start_time,
-      role.end_time,
-      role.location || '',
-      role.positions_total,
-      role.positions_filled,
-      Math.round((role.positions_filled / role.positions_total) * 100)
-    ]);
+    const rows = $roles.map(role => {
+      const start = isFlexibleTime(role) ? 'Flexible' : (role.start_time || '');
+      const end = isFlexibleTime(role) ? 'Flexible' : (role.end_time || '');
+      return [
+        role.name,
+        format(new Date(role.event_date), 'yyyy-MM-dd'),
+        start,
+        end,
+        role.location || '',
+        role.positions_total,
+        role.positions_filled,
+        Math.round((role.positions_filled / role.positions_total) * 100)
+      ];
+    });
 
     const csvContent = [
       headers.join(','),

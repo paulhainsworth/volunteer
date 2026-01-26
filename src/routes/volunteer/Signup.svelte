@@ -6,6 +6,7 @@
   import { auth } from '../../lib/stores/auth';
   import { push } from 'svelte-spa-router';
   import { format } from 'date-fns';
+  import { formatTimeRange, calculateDuration } from '../../lib/utils/timeDisplay';
 
   export let params = {};
 
@@ -80,21 +81,6 @@
     signatureName = '';
   }
 
-  function formatTime(time) {
-    const [hours, minutes] = time.split(':');
-    const hour = parseInt(hours);
-    const ampm = hour >= 12 ? 'PM' : 'AM';
-    const displayHour = hour % 12 || 12;
-    return `${displayHour}:${minutes} ${ampm}`;
-  }
-
-  function calculateDuration(startTime, endTime) {
-    const start = new Date(`2000-01-01 ${startTime}`);
-    const end = new Date(`2000-01-01 ${endTime}`);
-    const hours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
-    return hours;
-  }
-
   async function handleSubmit() {
     error = '';
 
@@ -156,6 +142,7 @@
   {:else if role}
     {@const duration = calculateDuration(role.start_time, role.end_time)}
     {@const isFull = role.positions_filled >= role.positions_total}
+    {@const timeDisplay = formatTimeRange(role) + (duration != null ? ` (${duration} hours)` : '')}
 
     <div class="signup-container">
       <h1>Sign Up to Volunteer</h1>
@@ -183,7 +170,7 @@
           
           <div class="detail">
             <strong>Time:</strong>
-            {formatTime(role.start_time)} - {formatTime(role.end_time)} ({duration} hours)
+            {timeDisplay}
           </div>
 
           {#if role.location}

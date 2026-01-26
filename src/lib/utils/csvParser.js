@@ -12,13 +12,17 @@ export function parseCSV(csvText) {
   // Parse header
   const headers = lines[0].split(',').map(h => h.trim());
   
-  // Validate required headers
-  const requiredHeaders = ['name', 'event_date', 'start_time', 'end_time', 'positions_total'];
+  // Validate required headers (start_time, end_time optional — empty → "flexible")
+  const requiredHeaders = ['name', 'event_date', 'positions_total'];
   const missingHeaders = requiredHeaders.filter(h => !headers.includes(h));
   
   if (missingHeaders.length > 0) {
     throw new Error(`Missing required columns: ${missingHeaders.join(', ')}`);
   }
+
+  // Optional time columns: if missing from headers, rows won't have them; we default in validateRole
+  const hasStart = headers.includes('start_time');
+  const hasEnd = headers.includes('end_time');
 
   // Parse data rows
   const roles = [];
@@ -38,8 +42,10 @@ export function parseCSV(csvText) {
 
       const role = {};
       headers.forEach((header, index) => {
-        role[header] = values[index];
+        role[header] = values[index] !== undefined ? String(values[index]).trim() : '';
       });
+      if (!hasStart) role.start_time = '';
+      if (!hasEnd) role.end_time = '';
 
       // Validate and transform the role
       const validatedRole = validateRole(role, i + 1);
@@ -93,14 +99,16 @@ function validateRole(role, rowNumber) {
     errors.push('Event date must be in YYYY-MM-DD format (e.g., 2026-06-15)');
   }
 
-  // Validate start_time (HH:MM format)
-  if (!role.start_time || !/^\d{2}:\d{2}$/.test(role.start_time)) {
-    errors.push('Start time must be in HH:MM format (e.g., 07:00)');
-  }
-
-  // Validate end_time (HH:MM format)
-  if (!role.end_time || !/^\d{2}:\d{2}$/.test(role.end_time)) {
-    errors.push('End time must be in HH:MM format (e.g., 09:00)');
+  // start_time / end_time: optional. Empty or invalid HH:MM → "flexible"
+  const validTime = (t) => t && /^\d{2}:\d{2}$/.test(String(t).trim());
+  const startOk = validTime(role.start_time);
+  const endOk = validTime(role.end_time);
+  if (!startOk || !endOk) {
+    role.start_time = 'flexible';
+    role.end_time = 'flexible';
+  } else {
+    role.start_time = String(role.start_time).trim();
+    role.end_time = String(role.end_time).trim();
   }
 
   // Validate positions_total (must be positive integer)
@@ -111,8 +119,8 @@ function validateRole(role, rowNumber) {
     role.positions_total = positions;
   }
 
-  // Validate start_time < end_time
-  if (role.start_time && role.end_time) {
+  // Validate start_time < end_time (skip when flexible)
+  if (role.start_time !== 'flexible' && role.end_time !== 'flexible') {
     const start = new Date(`2000-01-01 ${role.start_time}`);
     const end = new Date(`2000-01-01 ${role.end_time}`);
     if (start >= end) {
@@ -138,7 +146,8 @@ export function generateTemplateCSV() {
   const exampleRows = [
     ['Registration Table', 'Check in riders and hand out race numbers', '2026-06-15', '07:00', '09:00', 'Main tent near start/finish', '4', 'Registration & Check-in', ''],
     ['Course Marshal - Corner 1', 'Direct riders at first turn', '2026-06-15', '08:00', '12:00', 'Corner of Main St and Oak Ave', '2', 'Course Marshals', ''],
-    ['Water Station 1', 'Hand out water bottles to riders', '2026-06-15', '08:30', '11:30', 'Mile marker 10', '3', 'Water Stations & Aid', '']
+    ['Water Station 1', 'Hand out water bottles to riders', '2026-06-15', '08:30', '11:30', 'Mile marker 10', '3', 'Water Stations & Aid', ''],
+    ['Pre-race Setup (flexible)', 'Help with setup; time TBD', '2026-06-14', '', '', 'Event site', '2', 'Loading & Logistics', '']
   ];
 
   const csvContent = [

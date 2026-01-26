@@ -17,27 +17,32 @@
 |--------|--------|---------|-------------|
 | `name` | Text | Registration Table | Role name (max 255 chars) |
 | `event_date` | YYYY-MM-DD | 2026-06-15 | Event date (ISO format) |
-| `start_time` | HH:MM | 07:00 | Start time (24-hour format) |
-| `end_time` | HH:MM | 09:00 | End time (24-hour format) |
 | `positions_total` | Integer | 4 | Number of volunteer spots (≥1) |
 
 ### Optional Columns
 
 | Column | Format | Example | Description |
 |--------|--------|---------|-------------|
+| `start_time` | HH:MM or empty | 07:00 | Start time (24-hour). **Leave empty for flexible** |
+| `end_time` | HH:MM or empty | 09:00 | End time (24-hour). **Leave empty for flexible** |
 | `description` | Text | Check in riders and hand out race numbers | Role description/responsibilities |
 | `location` | Text | Main tent near start/finish | Meeting point or location |
+| `domain_name` | Text | Course Marshals | Domain name (must match an existing domain) |
+| `leader_email` | Email | leader@example.com | Direct leader (if no domain) |
 
 ---
 
 ## Example CSV
 
 ```csv
-name,description,event_date,start_time,end_time,location,positions_total
-Registration Table,Check in riders and hand out race numbers,2026-06-15,07:00,09:00,Main tent near start/finish,4
-Course Marshal - Corner 1,Direct riders at first turn,2026-06-15,08:00,12:00,Corner of Main St and Oak Ave,2
-Water Station 1,Hand out water bottles to riders,2026-06-15,08:30,11:30,Mile marker 10,3
+name,description,event_date,start_time,end_time,location,positions_total,domain_name,leader_email
+Registration Table,Check in riders and hand out race numbers,2026-06-15,07:00,09:00,Main tent near start/finish,4,Registration & Check-in,
+Course Marshal - Corner 1,Direct riders at first turn,2026-06-15,08:00,12:00,Corner of Main St and Oak Ave,2,Course Marshals,
+Water Station 1,Hand out water bottles to riders,2026-06-15,08:30,11:30,Mile marker 10,3,Water Stations & Aid,
+Pre-race Setup (flexible),Help with setup; time TBD,2026-06-14,,,Event site,2,Loading & Logistics,
 ```
+
+**Flexible times:** Rows 4 has empty `start_time` and `end_time`. Those roles are shown as **Flexible** on the volunteer site.
 
 ---
 
@@ -52,12 +57,13 @@ Water Station 1,Hand out water bottles to riders,2026-06-15,08:30,11:30,Mile mar
 ### Time Format
 - ✅ `07:00` (24-hour format with leading zero)
 - ✅ `13:30` (afternoon in 24-hour)
+- ✅ **Empty** → role is **Flexible** (no specific time). Leave both `start_time` and `end_time` empty.
 - ❌ `7:00` (missing leading zero)
 - ❌ `7:00 AM` (12-hour format with AM/PM)
-- ❌ `1:30 PM` (12-hour format)
 
 ### Time Logic
-- Start time MUST be before end time
+- If both `start_time` and `end_time` are empty → **Flexible** (displayed as "Flexible" on the site).
+- If both are provided: start MUST be before end.
 - ✅ `07:00` to `09:00`
 - ❌ `09:00` to `07:00`
 - ❌ `09:00` to `09:00` (same time)

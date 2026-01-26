@@ -3,6 +3,7 @@
   import { format } from 'date-fns';
   import { push } from 'svelte-spa-router';
   import { domains } from '../../lib/stores/domains';
+  import { formatTimeRange, calculateDuration } from '../../lib/utils/timeDisplay';
 
   export let params = {};
 
@@ -37,24 +38,6 @@
       loading = false;
     }
   });
-
-  function formatTime(time) {
-    if (!time) return '';
-    const [hours, minutes] = time.split(':');
-    const hour = parseInt(hours, 10);
-    const ampm = hour >= 12 ? 'PM' : 'AM';
-    const displayHour = hour % 12 || 12;
-    return `${displayHour}:${minutes} ${ampm}`;
-  }
-
-  function formatDuration(start, end) {
-    if (!start || !end) return '';
-    const startDate = new Date(`2000-01-01T${start}`);
-    const endDate = new Date(`2000-01-01T${end}`);
-    const hours = (endDate - startDate) / (1000 * 60 * 60);
-    if (!Number.isFinite(hours)) return '';
-    return `${hours.toFixed(hours % 1 === 0 ? 0 : 1)} hour${hours === 1 ? '' : 's'}`;
-  }
 
   function handleSignup(roleId) {
     if (!roleId) return;
@@ -126,6 +109,7 @@
           {#each domain.roles as role (role.id)}
             {@const spotsFilled = role.positions_filled || 0}
             {@const isFull = spotsFilled >= role.positions_total}
+            {@const duration = calculateDuration(role.start_time, role.end_time)}
             <article class="role-card {isFull ? 'full' : ''}">
               <header>
                 <h3>{role.name}</h3>
@@ -140,13 +124,8 @@
                 <li>
                   <span class="label">Time</span>
                   <span>
-                    {#if role.start_time && role.end_time}
-                      {formatTime(role.start_time)} – {formatTime(role.end_time)}
-                      {#if formatDuration(role.start_time, role.end_time)}
-                        <span class="muted">({formatDuration(role.start_time, role.end_time)})</span>
-                      {/if}
-                    {:else}
-                      TBD
+                    {formatTimeRange(role)}{#if duration != null}
+                      <span class="muted">({duration}{duration === 1 ? ' hour' : ' hours'})</span>
                     {/if}
                   </span>
                 </li>

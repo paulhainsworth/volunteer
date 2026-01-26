@@ -6,6 +6,7 @@
   import { push } from 'svelte-spa-router';
   import { format } from 'date-fns';
   import ContactLeader from '../../lib/components/ContactLeader.svelte';
+  import { formatTimeRange, calculateDuration } from '../../lib/utils/timeDisplay';
 
   let loading = true;
   let error = '';
@@ -69,21 +70,6 @@
       loading = false;
     }
   });
-
-  function formatTime(time) {
-    const [hours, minutes] = time.split(':');
-    const hour = parseInt(hours);
-    const ampm = hour >= 12 ? 'PM' : 'AM';
-    const displayHour = hour % 12 || 12;
-    return `${displayHour}:${minutes} ${ampm}`;
-  }
-
-  function calculateDuration(startTime, endTime) {
-    const start = new Date(`2000-01-01 ${startTime}`);
-    const end = new Date(`2000-01-01 ${endTime}`);
-    const hours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
-    return hours;
-  }
 
   function showCancelConfirmation(signup) {
     cancellingSignup = signup;
@@ -152,7 +138,7 @@
         volunteer_email: volunteer.email,
         role_name: role.name,
         role_date: format(new Date(role.event_date), 'EEEE, MMMM d, yyyy'),
-        role_time: `${formatTime(role.start_time)} - ${formatTime(role.end_time)}`,
+        role_time: formatTimeRange(role),
         role_location: role.location || 'N/A'
       };
 
@@ -266,7 +252,8 @@ END:VCALENDAR`;
   $: upcomingSignups = mySignups.filter(s => new Date(s.role.event_date) >= new Date());
   $: pastSignups = mySignups.filter(s => new Date(s.role.event_date) < new Date());
   $: totalHours = mySignups.reduce((sum, signup) => {
-    return sum + calculateDuration(signup.role.start_time, signup.role.end_time);
+    const d = calculateDuration(signup.role.start_time, signup.role.end_time);
+    return sum + (d ?? 0);
   }, 0);
 </script>
 
@@ -328,7 +315,7 @@ END:VCALENDAR`;
                 
                 <div class="detail">
                   <span class="icon">🕐</span>
-                  <span>{formatTime(role.start_time)} - {formatTime(role.end_time)} ({duration}h)</span>
+                  <span>{formatTimeRange(role)}{#if duration != null} ({duration}h){/if}</span>
                 </div>
 
                 {#if role.location}
@@ -405,7 +392,7 @@ END:VCALENDAR`;
                 
                 <div class="detail">
                   <span class="icon">🕐</span>
-                  <span>{formatTime(role.start_time)} - {formatTime(role.end_time)} ({duration}h)</span>
+                  <span>{formatTimeRange(role)}{#if duration != null} ({duration}h){/if}</span>
                 </div>
               </div>
             </div>
@@ -439,7 +426,7 @@ END:VCALENDAR`;
           </div>
           <div class="detail">
             <span class="icon">🕐</span>
-            <span>{formatTime(cancellingSignup.role.start_time)} - {formatTime(cancellingSignup.role.end_time)}</span>
+            <span>{formatTimeRange(cancellingSignup.role)}</span>
           </div>
           {#if cancellingSignup.role.location}
             <div class="detail">
@@ -508,7 +495,7 @@ END:VCALENDAR`;
         <div class="role-context">
           <h3>Your Signup:</h3>
           <p><strong>{contactLeaderSignup.role.name}</strong></p>
-          <p>{format(new Date(contactLeaderSignup.role.event_date), 'EEEE, MMMM d, yyyy')} • {formatTime(contactLeaderSignup.role.start_time)} - {formatTime(contactLeaderSignup.role.end_time)}</p>
+          <p>{format(new Date(contactLeaderSignup.role.event_date), 'EEEE, MMMM d, yyyy')} • {formatTimeRange(contactLeaderSignup.role)}</p>
         </div>
 
         {#if leader}

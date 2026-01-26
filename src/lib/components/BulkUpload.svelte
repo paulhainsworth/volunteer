@@ -1,6 +1,7 @@
 <script>
   import { createEventDispatcher } from 'svelte';
   import { parseCSV, downloadTemplate } from '../utils/csvParser';
+  import { formatTimeRange } from '../utils/timeDisplay';
 
   const dispatch = createEventDispatcher();
 
@@ -87,18 +88,21 @@
       <ul>
         <li><code>name</code> - Role name (required)</li>
         <li><code>event_date</code> - Date in YYYY-MM-DD format (required)</li>
-        <li><code>start_time</code> - Time in HH:MM format, e.g., 07:00 (required)</li>
-        <li><code>end_time</code> - Time in HH:MM format, e.g., 09:00 (required)</li>
         <li><code>positions_total</code> - Number of positions (required)</li>
       </ul>
       
       <h4>Optional Columns:</h4>
       <ul>
+        <li><code>start_time</code> - Time in HH:MM format, e.g. 07:00. Leave empty for <strong>flexible</strong></li>
+        <li><code>end_time</code> - Time in HH:MM format, e.g. 09:00. Leave empty for <strong>flexible</strong></li>
         <li><code>description</code> - Role description</li>
         <li><code>location</code> - Meeting point or location</li>
         <li><code>domain_name</code> - Domain name (e.g., "Course Marshals", "Registration & Check-in")</li>
         <li><code>leader_email</code> - Direct leader assignment (email address of volunteer leader)</li>
       </ul>
+      <p class="info-note">
+        <strong>Times:</strong> If <code>start_time</code> or <code>end_time</code> is empty, both are treated as <strong>flexible</strong> and displayed as "Flexible" on the site.
+      </p>
       <p class="info-note">
         <strong>Note:</strong> If both <code>domain_name</code> and <code>leader_email</code> are provided, 
         the domain assignment takes precedence (recommended approach).
@@ -191,7 +195,7 @@
                       {/if}
                     </td>
                     <td>{role.event_date}</td>
-                    <td>{role.start_time} - {role.end_time}</td>
+                    <td>{formatTimeRange(role)}</td>
                     <td>{role.positions_total}</td>
                     <td>{role.location || '-'}</td>
                   </tr>

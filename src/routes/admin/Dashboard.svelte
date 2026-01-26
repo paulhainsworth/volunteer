@@ -4,6 +4,7 @@
   import { auth } from '../../lib/stores/auth';
   import { push } from 'svelte-spa-router';
   import { format } from 'date-fns';
+  import { formatTimeRange } from '../../lib/utils/timeDisplay';
 
   let loading = true;
   let error = '';
@@ -152,7 +153,7 @@
                     {format(new Date(role.event_date), 'MMM d, yyyy')}
                     <small>({daysUntil} days)</small>
                   </td>
-                  <td>{role.start_time}</td>
+                  <td>{formatTimeRange(role)}</td>
                   <td>
                     <div class="fill-status {getFillClass(role)}">
                       {role.positions_filled} / {role.positions_total}

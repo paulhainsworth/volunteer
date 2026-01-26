@@ -4,6 +4,7 @@
   import { supabase } from '../../lib/supabaseClient';
   import { push } from 'svelte-spa-router';
   import { format } from 'date-fns';
+  import { formatTimeRange, isFlexibleTime } from '../../lib/utils/timeDisplay';
 
   let loading = true;
   let error = '';
@@ -175,20 +176,9 @@ const shareTimers = {};
     initializeRoleForms(myRoles);
   }
 
-  function formatTime(time) {
-    if (!time) return '';
-    const [hours, minutes] = time.split(':');
-    const hour = parseInt(hours, 10);
-    const displayHour = hour % 12 || 12;
-    const ampm = hour >= 12 ? 'pm' : 'am';
-    return `${displayHour}:${minutes}${ampm}`;
-  }
-
   function formatShift(role) {
     const datePart = role.event_date ? format(new Date(role.event_date), 'EEE, MMM d') : '';
-    const start = formatTime(role.start_time);
-    const end = formatTime(role.end_time);
-    const timePart = start && end ? `${start} – ${end}` : '';
+    const timePart = formatTimeRange(role);
     return [datePart, timePart].filter(Boolean).join(' • ') || '—';
   }
 
@@ -212,6 +202,8 @@ const shareTimers = {};
       return 1;
     }
 
+    if (isFlexibleTime(a) && !isFlexibleTime(b)) return 1;
+    if (!isFlexibleTime(a) && isFlexibleTime(b)) return -1;
     const timeA = a.start_time || '';
     const timeB = b.start_time || '';
     if (timeA !== timeB) {

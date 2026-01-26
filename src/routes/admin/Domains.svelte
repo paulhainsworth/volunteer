@@ -1,5 +1,5 @@
 <script>
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { domains } from '../../lib/stores/domains';
   import { auth } from '../../lib/stores/auth';
   import { supabase } from '../../lib/supabaseClient';
@@ -65,6 +65,157 @@ function waitForAuthReady() {
     description: '',
     leader_id: null
   };
+
+  const ADD_NEW_LEADER = '__add_new_leader__';
+  let showAddLeaderModal = false;
+  let addLeaderForm = { first_name: '', last_name: '', email: '', phone: '' };
+  let addingLeader = false;
+  let addLeaderError = '';
+  let leaderAssignSuccess = null;
+
+  function handleLeaderSelectChange(e) {
+    const v = e.currentTarget.value;
+    if (v === ADD_NEW_LEADER) {
+      formData.leader_id = null;
+      showAddLeaderModal = true;
+      addLeaderError = '';
+      addLeaderForm = { first_name: '', last_name: '', email: '', phone: '' };
+    }
+  }
+
+  function closeAddLeaderModal() {
+    showAddLeaderModal = false;
+    addLeaderForm = { first_name: '', last_name: '', email: '', phone: '' };
+    addLeaderError = '';
+    addingLeader = false;
+  }
+
+  function handleKeydown(e) {
+    if (e.key === 'Escape' && showAddLeaderModal) {
+      closeAddLeaderModal();
+    }
+  }
+
+  async function createLeaderAccount({ first_name, last_name, email, phone = null }) {
+    const tempPassword = Math.random().toString(36).slice(-12) + Math.random().toString(36).slice(-12);
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email,
+      password: tempPassword,
+      options: {
+        data: { first_name, last_name, role: 'volunteer_leader' },
+        emailRedirectTo: `${window.location.origin}/#/auth/reset-password`
+      }
+    });
+    if (authError) throw authError;
+    if (!authData?.user) throw new Error('User creation failed.');
+    const userId = authData.user.id;
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .upsert({
+        id: userId,
+        email,
+        first_name,
+        last_name,
+        phone,
+        role: 'volunteer_leader'
+      });
+    if (profileError) throw profileError;
+    const { error: updateErr } = await supabase
+      .from('profiles')
+      .update({ first_name, last_name, phone, role: 'volunteer_leader' })
+      .eq('id', userId);
+    if (updateErr) console.warn('Profile update warning:', updateErr.message);
+    return userId;
+  }
+
+  async function sendLeaderInviteEmail({ email, first_name, domainName }) {
+    const loginUrl = `${window.location.origin}/#/auth/login`;
+    await supabase.functions.invoke('send-email', {
+      body: {
+        to: email,
+        subject: `You're now the volunteer leader for ${domainName}`,
+        html: `
+          <h2>Welcome aboard!</h2>
+          <p>Hi ${first_name || 'there'},</p>
+          <p>You've been added as the volunteer leader for <strong>${domainName}</strong>.</p>
+          <p>Please follow these steps to finish setting up:</p>
+          <ol>
+            <li>Visit <a href="${loginUrl}">${loginUrl}</a> and sign in with this email address.</li>
+            <li>Create your password when prompted (or use "Forgot password" if you've already signed up).</li>
+            <li>Complete any missing profile details and fill out the emergency contact form.</li>
+            <li>Once finished, you'll see your Volunteer Leader dashboard with all the roles you manage.</li>
+          </ol>
+          <p>If you have any questions or need help getting started, just reply to this email.</p>
+          <p>Thank you for leading our volunteers!</p>
+        `
+      }
+    });
+  }
+
+  function withTimeout(promise, ms, message = 'Request timed out. Please check your connection and try again.') {
+    return Promise.race([
+      promise,
+      new Promise((_, reject) => setTimeout(() => reject(new Error(message)), ms))
+    ]);
+  }
+
+  function getCreateLeaderErrorMessage(err) {
+    const msg = (err?.message || err?.error_description || '').toLowerCase();
+    if (msg.includes('already') && (msg.includes('registered') || msg.includes('exists') || msg.includes('email'))) {
+      return 'This email is already in use. Select them from the dropdown above, or use a different email.';
+    }
+    return err?.message || err?.error_description || 'Failed to create volunteer leader.';
+  }
+
+  async function createLeaderAndAssign() {
+    if (!editingDomain) {
+      addLeaderError = 'No domain selected.';
+      return;
+    }
+    const first = addLeaderForm.first_name?.trim() || '';
+    const last = addLeaderForm.last_name?.trim() || '';
+    const email = addLeaderForm.email?.trim() || '';
+    if (!first || !last || !email) {
+      addLeaderError = 'First name, last name, and email are required.';
+      return;
+    }
+    addingLeader = true;
+    addLeaderError = '';
+    const domainId = editingDomain.id;
+    const domainName = editingDomain.name;
+    const leaderDetails = { first_name: first, last_name: last, email, phone: addLeaderForm.phone?.trim() || null };
+    try {
+      await withTimeout(
+        (async () => {
+          const userId = await createLeaderAccount(leaderDetails);
+          await domains.assignLeader(domainId, userId);
+          await fetchVolunteerLeaders();
+          closeAddLeaderModal();
+          showForm = false;
+          editingDomain = null;
+          leaderAssignSuccess = {
+            domainName,
+            leaderName: `${first} ${last}`.trim(),
+            leaderEmail: email
+          };
+          await fetchDomainsForCurrentUser();
+          await fetchAllRoles();
+          sendLeaderInviteEmail({ email, first_name: first, domainName })
+            .then(() => {})
+            .catch((err) => {
+              console.error('Leader invite email failed:', err);
+              leaderAssignSuccess = { ...leaderAssignSuccess, emailFailed: true };
+            });
+        })(),
+        25_000
+      );
+    } catch (err) {
+      console.error('Create leader error:', err);
+      addLeaderError = getCreateLeaderErrorMessage(err);
+    } finally {
+      addingLeader = false;
+    }
+  }
 
 onMount(() => {
   let cancelled = false;
@@ -171,6 +322,7 @@ onMount(() => {
     editingDomain = null;
     formData = { name: '', description: '', leader_id: null };
     showForm = true;
+    leaderAssignSuccess = null;
   }
 
   function showEditForm(domain) {
@@ -182,11 +334,13 @@ onMount(() => {
       leader_id: domain.leader_id
     };
     showForm = true;
+    leaderAssignSuccess = null;
   }
 
   function cancelForm() {
     showForm = false;
     editingDomain = null;
+    leaderAssignSuccess = null;
   }
 
   async function handleSubmit() {
@@ -225,14 +379,18 @@ onMount(() => {
     }
   }
 
-  function showRoleAssignment(domain) {
+  async function showRoleAssignment(domain) {
     if (!canManageDomain(domain)) return;
     assigningRoles = domain;
     showForm = false;
+    await tick();
+    const el = document.querySelector('.assign-roles-card');
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   function cancelRoleAssignment() {
     assigningRoles = null;
+    leaderAssignSuccess = null;
   }
 
   async function toggleRoleAssignment(roleId, domainId, currentDomainId) {
@@ -308,6 +466,8 @@ onMount(() => {
   }
 </script>
 
+<svelte:window on:keydown={handleKeydown} />
+
 <div class="domains-page">
   <div class="header">
     <div>
@@ -324,6 +484,18 @@ onMount(() => {
 
   {#if error}
     <div class="alert alert-error">{error}</div>
+  {/if}
+
+  {#if leaderAssignSuccess}
+    <div class="alert alert-success leader-assign-success">
+      <strong>✓ {leaderAssignSuccess.leaderName}</strong> is now the volunteer leader for <strong>{leaderAssignSuccess.domainName}</strong>.
+      {#if leaderAssignSuccess.emailFailed}
+        <span class="email-failed">The notification email could not be sent. Please contact {leaderAssignSuccess.leaderEmail} manually.</span>
+      {:else}
+        An email has been sent to {leaderAssignSuccess.leaderEmail}.
+      {/if}
+      <button type="button" class="btn-dismiss" on:click={() => (leaderAssignSuccess = null)} aria-label="Dismiss">×</button>
+    </div>
   {/if}
 
   {#if assigningRoles}
@@ -429,13 +601,19 @@ onMount(() => {
         {#if isAdminUser}
           <div class="form-group">
             <label for="leader_id">Assign Volunteer Leader</label>
-            <select id="leader_id" bind:value={formData.leader_id}>
+            <select
+              id="leader_id"
+              bind:value={formData.leader_id}
+              on:change={handleLeaderSelectChange}
+              disabled={addingLeader}
+            >
               <option value={null}>No leader assigned</option>
               {#each volunteerLeaders as leader}
                 <option value={leader.id}>
                   {leader.first_name} {leader.last_name} ({leader.email})
                 </option>
               {/each}
+              <option value={ADD_NEW_LEADER}>➕ Add new leader</option>
             </select>
           </div>
         {/if}
@@ -450,9 +628,7 @@ onMount(() => {
         </div>
       </form>
     </div>
-  {/if}
-
-  {#if loading}
+  {:else if loading}
     <div class="loading">Loading domains...</div>
   {:else if $domains.length === 0}
     <div class="empty">
@@ -546,6 +722,77 @@ onMount(() => {
       </table>
     </div>
   {/if}
+
+  {#if showAddLeaderModal}
+    <div class="modal-overlay" on:click={closeAddLeaderModal}>
+      <div class="modal-content add-leader-modal" role="dialog" aria-modal="true" aria-labelledby="add-leader-title" tabindex="-1" on:click|stopPropagation>
+        <button class="modal-close" on:click={closeAddLeaderModal} aria-label="Close">×</button>
+        <div class="modal-header">
+          <h2 id="add-leader-title">Add New Volunteer</h2>
+          <p class="modal-subtitle">
+            Create a new volunteer leader and assign them to <strong>{editingDomain?.name || 'this domain'}</strong>.
+            An invitation email will be sent to set up their account.
+          </p>
+        </div>
+        <div class="modal-body">
+          {#if addLeaderError}
+            <div class="alert alert-error">{addLeaderError}</div>
+          {/if}
+          <div class="form-row">
+            <div class="form-group">
+              <label for="add-leader-first">First Name *</label>
+              <input
+                id="add-leader-first"
+                type="text"
+                bind:value={addLeaderForm.first_name}
+                placeholder="First name"
+                disabled={addingLeader}
+              />
+            </div>
+            <div class="form-group">
+              <label for="add-leader-last">Last Name *</label>
+              <input
+                id="add-leader-last"
+                type="text"
+                bind:value={addLeaderForm.last_name}
+                placeholder="Last name"
+                disabled={addingLeader}
+              />
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="add-leader-email">Email Address *</label>
+            <input
+              id="add-leader-email"
+              type="email"
+              bind:value={addLeaderForm.email}
+              placeholder="email@example.com"
+              disabled={addingLeader}
+            />
+            <small>An invitation email will be sent to this address.</small>
+          </div>
+          <div class="form-group">
+            <label for="add-leader-phone">Phone Number (Optional)</label>
+            <input
+              id="add-leader-phone"
+              type="tel"
+              bind:value={addLeaderForm.phone}
+              placeholder="(555) 123-4567"
+              disabled={addingLeader}
+            />
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" on:click={closeAddLeaderModal} disabled={addingLeader}>
+            Cancel
+          </button>
+          <button type="button" class="btn btn-primary" on:click={createLeaderAndAssign} disabled={addingLeader}>
+            {addingLeader ? 'Creating...' : 'Create Volunteer'}
+          </button>
+        </div>
+      </div>
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -578,6 +825,41 @@ onMount(() => {
     background: #f8d7da;
     color: #721c24;
     border: 1px solid #f5c6cb;
+  }
+
+  .alert-success {
+    background: #d4edda;
+    color: #155724;
+    border-color: #c3e6cb;
+  }
+
+  .leader-assign-success {
+    position: relative;
+    padding-right: 2.5rem;
+  }
+
+  .leader-assign-success .btn-dismiss {
+    position: absolute;
+    top: 0.75rem;
+    right: 0.75rem;
+    background: transparent;
+    border: none;
+    font-size: 1.25rem;
+    cursor: pointer;
+    color: #155724;
+    padding: 0 0.25rem;
+    line-height: 1;
+  }
+
+  .leader-assign-success .btn-dismiss:hover {
+    color: #0d3d1a;
+  }
+
+  .leader-assign-success .email-failed {
+    display: block;
+    margin-top: 0.5rem;
+    font-size: 0.9rem;
+    opacity: 0.9;
   }
 
   .form-card {
@@ -929,6 +1211,100 @@ onMount(() => {
 
   .actions-column {
     width: 18%;
+  }
+
+  .modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 1rem;
+  }
+
+  .modal-content {
+    background: white;
+    border-radius: 16px;
+    max-width: 520px;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+    position: relative;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  }
+
+  .modal-close {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    background: #f8f9fa;
+    border: none;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    font-size: 1.5rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #6c757d;
+    z-index: 1;
+  }
+
+  .modal-close:hover {
+    background: #e2e3e5;
+    color: #1a1a1a;
+  }
+
+  .add-leader-modal .modal-header {
+    padding: 2rem 2rem 1rem 2rem;
+    padding-right: 4rem;
+    border-bottom: 1px solid #dee2e6;
+  }
+
+  .add-leader-modal .modal-header h2 {
+    margin: 0 0 0.5rem 0;
+    font-size: 1.5rem;
+  }
+
+  .add-leader-modal .modal-subtitle {
+    margin: 0;
+    color: #6c757d;
+    font-size: 0.9rem;
+  }
+
+  .add-leader-modal .modal-body {
+    padding: 2rem;
+  }
+
+  .add-leader-modal .form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+
+  .add-leader-modal .form-group {
+    margin-bottom: 1.5rem;
+  }
+
+  .add-leader-modal .form-group small {
+    display: block;
+    margin-top: 0.35rem;
+    color: #6c757d;
+    font-size: 0.85rem;
+  }
+
+  .add-leader-modal .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    padding: 1rem 2rem 2rem;
+    border-top: 1px solid #dee2e6;
   }
 
   @media (max-width: 1024px) {

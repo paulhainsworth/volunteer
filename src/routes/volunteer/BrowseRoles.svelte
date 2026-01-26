@@ -4,6 +4,7 @@
   import { auth } from '../../lib/stores/auth';
   import { format } from 'date-fns';
   import { push } from 'svelte-spa-router';
+  import { formatTimeRange, calculateDuration, isFlexibleTime } from '../../lib/utils/timeDisplay';
 
   let loading = true;
   let error = '';
@@ -37,21 +38,6 @@
       loading = false;
     }
   });
-
-  function formatTime(time) {
-    const [hours, minutes] = time.split(':');
-    const hour = parseInt(hours);
-    const ampm = hour >= 12 ? 'PM' : 'AM';
-    const displayHour = hour % 12 || 12;
-    return `${displayHour}:${minutes} ${ampm}`;
-  }
-
-  function calculateDuration(startTime, endTime) {
-    const start = new Date(`2000-01-01 ${startTime}`);
-    const end = new Date(`2000-01-01 ${endTime}`);
-    const hours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
-    return hours;
-  }
 
   function getFillStatus(role) {
     const percentage = (role.positions_filled / role.positions_total) * 100;
@@ -202,12 +188,16 @@
       if (sortBy === 'date') {
         const dateCompare = new Date(a.event_date).getTime() - new Date(b.event_date).getTime();
         if (dateCompare !== 0) return dateCompare;
-        return a.start_time.localeCompare(b.start_time);
+        if (isFlexibleTime(a) && !isFlexibleTime(b)) return 1;
+        if (!isFlexibleTime(a) && isFlexibleTime(b)) return -1;
+        return (a.start_time || '').localeCompare(b.start_time || '');
       }
       if (sortBy === 'duration') {
         const durationA = calculateDuration(a.start_time, a.end_time);
         const durationB = calculateDuration(b.start_time, b.end_time);
-        return durationA - durationB;
+        const da = durationA ?? Infinity;
+        const db = durationB ?? Infinity;
+        return da - db;
       }
       if (sortBy === 'name') {
         return a.name.localeCompare(b.name);
@@ -241,9 +231,11 @@
     return Array.from(map.values()).sort((a, b) => {
       const firstRoleA = a.roles[0];
       const firstRoleB = b.roles[0];
-      const dateCompare = new Date(firstRoleA.event_date) - new Date(firstRoleB.event_date);
+      const dateCompare = new Date(firstRoleA.event_date).getTime() - new Date(firstRoleB.event_date).getTime();
       if (dateCompare !== 0) return dateCompare;
-      return firstRoleA.start_time.localeCompare(firstRoleB.start_time);
+      if (isFlexibleTime(firstRoleA) && !isFlexibleTime(firstRoleB)) return 1;
+      if (!isFlexibleTime(firstRoleA) && isFlexibleTime(firstRoleB)) return -1;
+      return (firstRoleA.start_time || '').localeCompare(firstRoleB.start_time || '');
     });
   })();
 
@@ -438,7 +430,7 @@
                       
                       <div class="detail-inline">
                         <span class="icon">🕐</span>
-                        <span>{formatTime(role.start_time)} - {formatTime(role.end_time)} (~{duration}h)</span>
+                        <span>{formatTimeRange(role)}{#if duration != null} (~{duration}h){/if}</span>
                       </div>
 
                       {#if role.location}
@@ -487,6 +479,7 @@
   {@const duration = calculateDuration(selectedRole.start_time, selectedRole.end_time)}
   {@const isFull = selectedRole.positions_filled >= selectedRole.positions_total}
   {@const domainMeta = getDomainMeta(selectedRole)}
+  {@const timeDisplay = formatTimeRange(selectedRole) + (duration != null ? ` (${duration}h)` : '')}
   
   <div class="modal-overlay" on:click={closeModal}>
     <div class="modal-content" on:click|stopPropagation>
@@ -513,7 +506,7 @@
             <span class="icon">🕐</span>
             <div>
               <strong>Time</strong>
-              <p>{formatTime(selectedRole.start_time)} - {formatTime(selectedRole.end_time)} ({duration}h)</p>
+              <p>{timeDisplay}</p>
             </div>
           </div>
 

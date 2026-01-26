@@ -5,6 +5,7 @@
   import { supabase } from '../../lib/supabaseClient';
   import { push } from 'svelte-spa-router';
   import { format } from 'date-fns';
+  import { formatTimeRange, isFlexibleTime } from '../../lib/utils/timeDisplay';
 
   let loading = true;
   let error = '';
@@ -508,14 +509,17 @@
 
     $volunteers.forEach(volunteer => {
       volunteer.signups.forEach(signup => {
+        const r = signup.role;
+        const start = isFlexibleTime(r) ? 'Flexible' : (r.start_time || '');
+        const end = isFlexibleTime(r) ? 'Flexible' : (r.end_time || '');
         rows.push([
           `${volunteer.first_name} ${volunteer.last_name}`,
           volunteer.email,
           volunteer.phone || signup.phone || '',
           signup.role.name,
           format(new Date(signup.role.event_date), 'yyyy-MM-dd'),
-          signup.role.start_time,
-          signup.role.end_time
+          start,
+          end
         ]);
       });
     });
@@ -984,7 +988,7 @@
                       <strong>{signup.role.name}</strong>
                       <span class="signup-meta">
                         {format(new Date(signup.role.event_date), 'MMM d, yyyy')} • 
-                        {signup.role.start_time} - {signup.role.end_time}
+                        {formatTimeRange(signup.role)}
                       </span>
                     </div>
                     <button 
