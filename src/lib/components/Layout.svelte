@@ -40,16 +40,22 @@
   <nav class="navbar">
     <div class="nav-container">
       <div class="nav-brand">
-        <a href="#/">🚴 Volunteer Manager</a>
+        <a href="#/" class="nav-brand-link">
+          <img src="/bbc-logo.png" alt="Berkeley Bicycle Club" class="nav-logo" />
+        </a>
       </div>
-      
-      <button class="mobile-menu-btn" on:click={toggleMobileMenu} aria-label="Toggle menu">
-        <span></span>
-        <span></span>
-        <span></span>
-      </button>
 
-      <div class="nav-menu" class:active={showMobileMenu}>
+      <div class="nav-center">
+        <span class="nav-title">2026 Berkeley Omnium Volunteer Hub</span>
+      </div>
+
+      <div class="nav-right">
+        <button class="mobile-menu-btn" on:click={toggleMobileMenu} aria-label="Toggle menu">
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
+        <div class="nav-menu" class:active={showMobileMenu}>
         {#if $auth.user}
           {#if $auth.isAdmin}
             <a href="#/admin" class="nav-link" on:click={handleNavClick}>Dashboard</a>
@@ -93,6 +99,7 @@
             {/if}
           </button>
         {/if}
+        </div>
       </div>
     </div>
   </nav>
@@ -125,17 +132,46 @@
     max-width: 1200px;
     margin: 0 auto;
     padding: 0 1rem;
-    display: flex;
-    justify-content: space-between;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
     align-items: center;
     position: relative;
+    gap: 1rem;
   }
 
-  .nav-brand a {
-    font-size: 1.5rem;
-    font-weight: bold;
-    color: var(--text-primary);
+  .nav-brand {
+    justify-self: start;
+  }
+
+  .nav-brand-link {
+    display: flex;
+    align-items: center;
     text-decoration: none;
+    color: var(--text-primary);
+  }
+
+  .nav-logo {
+    height: 36px;
+    width: auto;
+    display: block;
+  }
+
+  .nav-center {
+    justify-self: center;
+    text-align: center;
+  }
+
+  .nav-title {
+    font-size: 3rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+  }
+
+  .nav-right {
+    display: flex;
+    align-items: center;
+    justify-self: end;
   }
 
   .mobile-menu-btn {
@@ -261,6 +297,16 @@
   }
 
   @media (max-width: 768px) {
+    .nav-container {
+      grid-template-columns: auto 1fr auto;
+    }
+
+    .nav-title {
+      font-size: 2rem;
+      white-space: normal;
+      line-height: 1.2;
+    }
+
     .mobile-menu-btn {
       display: flex;
     }

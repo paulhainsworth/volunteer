@@ -42,34 +42,39 @@ function createRolesStore() {
     subscribe,
     
     fetchRoles: async (filters = {}) => {
-      let query = supabase
-        .from('volunteer_roles')
-        .select(`
-          *,
-          signups:signups(count),
-          created_by:profiles!created_by(first_name, last_name, email),
-          direct_leader:profiles!leader_id(id, first_name, last_name),
-          domain:volunteer_leader_domains!domain_id(
-            id,
-            name,
-            leader:profiles!leader_id(id, first_name, last_name)
-          )
-        `)
-        .order('event_date', { ascending: true, nullsFirst: false })
-        .order('start_time', { ascending: true, nullsFirst: false });
+      try {
+        let query = supabase
+          .from('volunteer_roles')
+          .select(`
+            *,
+            signups:signups(count),
+            created_by:profiles!created_by(first_name, last_name, email),
+            direct_leader:profiles!leader_id(id, first_name, last_name),
+            domain:volunteer_leader_domains!domain_id(
+              id,
+              name,
+              leader:profiles!leader_id(id, first_name, last_name)
+            )
+          `)
+          .order('event_date', { ascending: true, nullsFirst: false })
+          .order('start_time', { ascending: true, nullsFirst: false });
 
-      if (filters.startDate) query = query.gte('event_date', filters.startDate);
-      if (filters.endDate) query = query.lte('event_date', filters.endDate);
+        if (filters.startDate) query = query.gte('event_date', filters.startDate);
+        if (filters.endDate) query = query.lte('event_date', filters.endDate);
 
-      const { data, error } = await query;
-      if (error) throw error;
+        const { data, error } = await query;
+        if (error) throw error;
 
-      const rolesWithCounts = data.map(role => ({
-        ...role,
-        positions_filled: role.signups?.[0]?.count || 0
-      }));
-      set(rolesWithCounts);
-      return rolesWithCounts;
+        const rolesWithCounts = (data || []).map(role => ({
+          ...role,
+          positions_filled: role.signups?.[0]?.count ?? 0
+        }));
+        set(rolesWithCounts);
+        return rolesWithCounts;
+      } catch (e) {
+        set([]);
+        throw e;
+      }
     },
 
     fetchRole,
