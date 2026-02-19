@@ -146,7 +146,7 @@ Row Level Security (RLS) policies ensure:
 3. Add environment variables
 4. Deploy!
 
-Auto-deploys on push to main branch.
+Auto-deploys on push to main branch. In Vercel, the **production domain** (e.g. www.berkeleyomnium.com) is tied to the **Production Branch** (usually `main`). Pushes to other branches (e.g. `omnium2026`) create **Preview** deployments only (separate URLs), not the live site.
 
 ### Manual Build
 
