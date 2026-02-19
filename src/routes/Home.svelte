@@ -89,7 +89,7 @@
       {:else}
         <div class="role-cards">
           {#each homeRoles as role (role.id)}
-            <a href="#/signup/{role.id}" class="role-card">
+            <a href="#/volunteer?signup={role.id}" class="role-card">
               <h3 class="role-card-name">{role.name}</h3>
               {#if role.event_date}
                 <p class="role-card-date">{formatEventDateInPacific(role.event_date, 'short')}</p>
