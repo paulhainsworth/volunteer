@@ -3,6 +3,7 @@
   import { domains } from '../../lib/stores/domains';
   import { auth } from '../../lib/stores/auth';
   import { supabase } from '../../lib/supabaseClient';
+  import { getEdgeInvokeErrorMessage } from '../../lib/edgeFunctionError';
   import { push } from 'svelte-spa-router';
   import { get } from 'svelte/store';
 
@@ -72,6 +73,9 @@ function waitForAuthReady() {
   let addingLeader = false;
   let addLeaderError = '';
   let leaderAssignSuccess = null;
+  let addLeaderSuggestions = [];
+  let addLeaderSuggestionLoading = false;
+  let addLeaderSuggestionTimer = null;
 
   function handleLeaderSelectChange(e) {
     const v = e.currentTarget.value;
@@ -88,6 +92,108 @@ function waitForAuthReady() {
     addLeaderForm = { first_name: '', last_name: '', email: '', phone: '' };
     addLeaderError = '';
     addingLeader = false;
+    if (addLeaderSuggestionTimer) {
+      clearTimeout(addLeaderSuggestionTimer);
+      addLeaderSuggestionTimer = null;
+    }
+    addLeaderSuggestions = [];
+  }
+
+  function scheduleAddLeaderSuggestions() {
+    if (addLeaderSuggestionTimer) clearTimeout(addLeaderSuggestionTimer);
+    const email = (addLeaderForm.email || '').trim();
+    const first = (addLeaderForm.first_name || '').trim();
+    const last = (addLeaderForm.last_name || '').trim();
+    if (!email && first.length < 2 && last.length < 2) {
+      addLeaderSuggestions = [];
+      addLeaderSuggestionLoading = false;
+      return;
+    }
+    addLeaderSuggestionLoading = true;
+    addLeaderSuggestionTimer = setTimeout(() => fetchAddLeaderSuggestions(), 300);
+  }
+
+  async function fetchAddLeaderSuggestions() {
+    addLeaderSuggestionTimer = null;
+    try {
+      const email = (addLeaderForm.email || '').trim();
+      const first = (addLeaderForm.first_name || '').trim().replace(/[,%]/g, '');
+      const last = (addLeaderForm.last_name || '').trim().replace(/[,%]/g, '');
+
+      let profilesQuery = supabase
+        .from('profiles')
+        .select('id, first_name, last_name, email, phone, role')
+        .in('role', ['volunteer', 'volunteer_leader', 'admin'])
+        .limit(5)
+        .order('first_name');
+      if (email && email.includes('@')) {
+        profilesQuery = profilesQuery.ilike('email', `%${email}%`);
+      } else if (first || last) {
+        const filters = [];
+        if (first) {
+          filters.push(`first_name.ilike.%${first}%`);
+          filters.push(`last_name.ilike.%${first}%`);
+        }
+        if (last) {
+          filters.push(`first_name.ilike.%${last}%`);
+          filters.push(`last_name.ilike.%${last}%`);
+        }
+        if (first && last) filters.push(`and(first_name.ilike.%${first}%,last_name.ilike.%${last}%)`);
+        if (filters.length) profilesQuery = profilesQuery.or(filters.join(','));
+      }
+
+      let contactsQuery = supabase
+        .from('volunteer_contacts')
+        .select('id, first_name, last_name, email, phone')
+        .is('profile_id', null)
+        .limit(5);
+      if (email && email.includes('@')) {
+        contactsQuery = contactsQuery.ilike('email', `%${email}%`);
+      } else if (first || last) {
+        const filters = [];
+        if (first) {
+          filters.push(`first_name.ilike.%${first}%`);
+          filters.push(`last_name.ilike.%${last}%`);
+        }
+        if (last) {
+          filters.push(`first_name.ilike.%${last}%`);
+          filters.push(`last_name.ilike.%${last}%`);
+        }
+        if (first && last) filters.push(`and(first_name.ilike.%${first}%,last_name.ilike.%${last}%)`);
+        if (filters.length) contactsQuery = contactsQuery.or(filters.join(','));
+      } else {
+        contactsQuery = contactsQuery.limit(0);
+      }
+
+      const [profilesRes, contactsRes] = await Promise.all([
+        profilesQuery,
+        email || first || last ? contactsQuery : { data: [] }
+      ]);
+      const profiles = (profilesRes.data || []).filter((p) => p.email).map((p) => ({ ...p, source: 'profile' }));
+      const contacts = (contactsRes.data || []).filter((c) => c.email).map((c) => ({ ...c, source: 'contact' }));
+      const byEmail = new Map();
+      for (const p of profiles) byEmail.set((p.email || '').toLowerCase(), p);
+      for (const c of contacts) {
+        const key = (c.email || '').toLowerCase();
+        if (!byEmail.has(key)) byEmail.set(key, c);
+      }
+      addLeaderSuggestions = Array.from(byEmail.values()).slice(0, 8);
+    } catch (err) {
+      console.error('Add leader suggestions error:', err);
+      addLeaderSuggestions = [];
+    } finally {
+      addLeaderSuggestionLoading = false;
+    }
+  }
+
+  function applyAddLeaderSuggestion(person) {
+    addLeaderForm = {
+      first_name: person.first_name || '',
+      last_name: person.last_name || '',
+      email: person.email || '',
+      phone: person.phone || addLeaderForm.phone
+    };
+    addLeaderSuggestions = [];
   }
 
   function handleKeydown(e) {
@@ -103,7 +209,7 @@ function waitForAuthReady() {
       password: tempPassword,
       options: {
         data: { first_name, last_name, role: 'volunteer_leader' },
-        emailRedirectTo: `${window.location.origin}/#/auth/reset-password`
+        emailRedirectTo: `${window.location.origin}/#/volunteer`
       }
     });
     if (authError) throw authError;
@@ -141,7 +247,7 @@ function waitForAuthReady() {
           <p>Please follow these steps to finish setting up:</p>
           <ol>
             <li>Visit <a href="${loginUrl}">${loginUrl}</a> and sign in with this email address.</li>
-            <li>Create your password when prompted (or use "Forgot password" if you've already signed up).</li>
+            <li>Check your email for a sign-in link. Click it to access the volunteer site (no password needed).</li>
             <li>Complete any missing profile details and fill out the emergency contact form.</li>
             <li>Once finished, you'll see your Volunteer Leader dashboard with all the roles you manage.</li>
           </ol>
@@ -187,8 +293,17 @@ function waitForAuthReady() {
     try {
       await withTimeout(
         (async () => {
-          const userId = await createLeaderAccount(leaderDetails);
-          await domains.assignLeader(domainId, userId);
+          const { data, error } = await supabase.functions.invoke('create-leader', {
+            body: {
+              domainId,
+              first_name: first,
+              last_name: last,
+              email,
+              phone: leaderDetails.phone
+            }
+          });
+          if (error || data?.error) throw new Error(await getEdgeInvokeErrorMessage(data, error, 'Failed to create leader'));
+          await domains.fetchDomains();
           await fetchVolunteerLeaders();
           closeAddLeaderModal();
           showForm = false;
@@ -745,6 +860,7 @@ onMount(() => {
                 id="add-leader-first"
                 type="text"
                 bind:value={addLeaderForm.first_name}
+                on:input={scheduleAddLeaderSuggestions}
                 placeholder="First name"
                 disabled={addingLeader}
               />
@@ -755,6 +871,7 @@ onMount(() => {
                 id="add-leader-last"
                 type="text"
                 bind:value={addLeaderForm.last_name}
+                on:input={scheduleAddLeaderSuggestions}
                 placeholder="Last name"
                 disabled={addingLeader}
               />
@@ -766,11 +883,30 @@ onMount(() => {
               id="add-leader-email"
               type="email"
               bind:value={addLeaderForm.email}
+              on:input={scheduleAddLeaderSuggestions}
               placeholder="email@example.com"
               disabled={addingLeader}
             />
             <small>An invitation email will be sent to this address.</small>
           </div>
+          {#if addLeaderSuggestionLoading}
+            <div class="add-leader-suggestions add-leader-suggestions--loading">Searching…</div>
+          {:else if addLeaderSuggestions.length}
+            <div class="add-leader-suggestions">
+              <span class="add-leader-suggestions-intro">Select to fill form:</span>
+              <div class="add-leader-suggestions-list">
+                {#each addLeaderSuggestions as person (person.id)}
+                  <button type="button" class="add-leader-suggestion-chip" on:click={() => applyAddLeaderSuggestion(person)}>
+                    <span class="name">{person.first_name || ''} {person.last_name || ''}</span>
+                    <span class="email">{person.email}</span>
+                    {#if person.source === 'contact'}
+                      <span class="badge">Past volunteer</span>
+                    {/if}
+                  </button>
+                {/each}
+              </div>
+            </div>
+          {/if}
           <div class="form-group">
             <label for="add-leader-phone">Phone Number (Optional)</label>
             <input
@@ -1297,6 +1433,53 @@ onMount(() => {
     margin-top: 0.35rem;
     color: #6c757d;
     font-size: 0.85rem;
+  }
+
+  .add-leader-suggestions {
+    margin-bottom: 1rem;
+  }
+  .add-leader-suggestions--loading {
+    color: #6c757d;
+    font-size: 0.9rem;
+  }
+  .add-leader-suggestions-intro {
+    display: block;
+    font-size: 0.85rem;
+    color: #6c757d;
+    margin-bottom: 0.5rem;
+  }
+  .add-leader-suggestions-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .add-leader-suggestion-chip {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    background: #f8f9fa;
+    cursor: pointer;
+    font-size: 0.9rem;
+    text-align: left;
+  }
+  .add-leader-suggestion-chip:hover {
+    border-color: #0d6efd;
+    background: #e7f1ff;
+  }
+  .add-leader-suggestion-chip .name {
+    font-weight: 600;
+  }
+  .add-leader-suggestion-chip .email {
+    color: #0d6efd;
+    font-size: 0.85rem;
+  }
+  .add-leader-suggestion-chip .badge {
+    font-size: 0.7rem;
+    color: #6c757d;
+    margin-top: 2px;
   }
 
   .add-leader-modal .modal-actions {

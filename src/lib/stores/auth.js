@@ -16,11 +16,11 @@ function createAuthStore() {
       const maxRetries = 5;
 
       while (!profile && retries < maxRetries) {
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from('profiles')
           .select('*')
           .eq('id', session.user.id)
-          .single();
+          .maybeSingle();
 
         if (data) {
           profile = data;
@@ -85,31 +85,38 @@ function createAuthStore() {
       return data;
     },
 
+    /** @deprecated Use signInWithMagicLink instead - password auth removed */
     signIn: async (email, password) => {
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password
       });
-
       if (error) throw error;
-
-      await supabase
-        .from('profiles')
-        .update({ last_login: new Date().toISOString() })
-        .eq('id', data.user.id);
-
+      await supabase.from('profiles').update({ last_login: new Date().toISOString() }).eq('id', data.user.id);
       return data;
     },
 
+    signInWithMagicLink: async (email) => {
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          // Use base URL only - Supabase appends tokens to hash; nested #/volunteer#access_token breaks parsing
+          emailRedirectTo: typeof window !== 'undefined' ? window.location.origin + '/' : ''
+        }
+      });
+      if (error) throw error;
+    },
+
     signOut: async () => {
-      const SIGN_OUT_TIMEOUT = 5000;
+      const SIGN_OUT_TIMEOUT = 15000; // 15s - Supabase server revoke can be slow
       let timeoutId;
+      let timedOut = false;
 
       const timeoutPromise = new Promise((_, reject) => {
-        timeoutId = setTimeout(
-          () => reject(new Error('Sign out timed out')),
-          SIGN_OUT_TIMEOUT
-        );
+        timeoutId = setTimeout(() => {
+          timedOut = true;
+          reject(new Error('Sign out timed out'));
+        }, SIGN_OUT_TIMEOUT);
       });
 
       try {
@@ -118,21 +125,24 @@ function createAuthStore() {
           timeoutPromise
         ]);
 
-        if (error) {
-          throw error;
-        }
-      } catch (error) {
-        console.error('Sign out failed:', error);
-        throw error;
-      } finally {
-        if (timeoutId) {
-          clearTimeout(timeoutId);
-        }
+        if (timeoutId) clearTimeout(timeoutId);
 
+        if (error) throw error;
+      } catch (error) {
+        if (timeoutId) clearTimeout(timeoutId);
+        if (timedOut) {
+          console.warn('Sign out timed out, clearing local session');
+        } else {
+          console.error('Sign out failed:', error);
+        }
+        // Ensure local session is cleared so refresh doesn't show logged in
+        await supabase.auth.signOut({ scope: 'local' });
+      } finally {
         set({ user: null, profile: null, loading: false, isAdmin: false });
       }
     },
 
+    /** @deprecated Password auth removed - use signInWithMagicLink */
     resetPassword: async (email) => {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/#/auth/reset-password`
@@ -140,10 +150,9 @@ function createAuthStore() {
       if (error) throw error;
     },
 
+    /** @deprecated Password auth removed */
     updatePassword: async (newPassword) => {
-      const { error } = await supabase.auth.updateUser({
-        password: newPassword
-      });
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
       if (error) throw error;
     }
   };

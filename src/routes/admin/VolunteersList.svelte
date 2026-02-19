@@ -38,6 +38,9 @@
     role_id: ''
   };
   let addingVolunteer = false;
+  let addVolunteerSuggestions = [];
+  let addVolunteerSuggestionLoading = false;
+  let addVolunteerSuggestionTimer = null;
 
   onMount(async () => {
     if (!$auth.isAdmin) {
@@ -382,6 +385,109 @@
     };
     error = '';
     availableRoles = [];
+    if (addVolunteerSuggestionTimer) {
+      clearTimeout(addVolunteerSuggestionTimer);
+      addVolunteerSuggestionTimer = null;
+    }
+    addVolunteerSuggestions = [];
+  }
+
+  function scheduleAddVolunteerSuggestions() {
+    if (addVolunteerSuggestionTimer) clearTimeout(addVolunteerSuggestionTimer);
+    const email = (addVolunteerForm.email || '').trim();
+    const first = (addVolunteerForm.first_name || '').trim();
+    const last = (addVolunteerForm.last_name || '').trim();
+    if (!email && first.length < 2 && last.length < 2) {
+      addVolunteerSuggestions = [];
+      addVolunteerSuggestionLoading = false;
+      return;
+    }
+    addVolunteerSuggestionLoading = true;
+    addVolunteerSuggestionTimer = setTimeout(() => fetchAddVolunteerSuggestions(), 300);
+  }
+
+  async function fetchAddVolunteerSuggestions() {
+    addVolunteerSuggestionTimer = null;
+    try {
+      const email = (addVolunteerForm.email || '').trim();
+      const first = (addVolunteerForm.first_name || '').trim().replace(/[,%]/g, '');
+      const last = (addVolunteerForm.last_name || '').trim().replace(/[,%]/g, '');
+
+      let profilesQuery = supabase
+        .from('profiles')
+        .select('id, first_name, last_name, email, phone, role')
+        .in('role', ['volunteer', 'volunteer_leader', 'admin'])
+        .limit(5)
+        .order('first_name');
+      if (email && email.includes('@')) {
+        profilesQuery = profilesQuery.ilike('email', `%${email}%`);
+      } else if (first || last) {
+        const filters = [];
+        if (first) {
+          filters.push(`first_name.ilike.%${first}%`);
+          filters.push(`last_name.ilike.%${first}%`);
+        }
+        if (last) {
+          filters.push(`first_name.ilike.%${last}%`);
+          filters.push(`last_name.ilike.%${last}%`);
+        }
+        if (first && last) filters.push(`and(first_name.ilike.%${first}%,last_name.ilike.%${last}%)`);
+        if (filters.length) profilesQuery = profilesQuery.or(filters.join(','));
+      }
+
+      let contactsQuery = supabase
+        .from('volunteer_contacts')
+        .select('id, first_name, last_name, email, phone')
+        .is('profile_id', null)
+        .limit(5);
+      if (email && email.includes('@')) {
+        contactsQuery = contactsQuery.ilike('email', `%${email}%`);
+      } else if (first || last) {
+        const filters = [];
+        if (first) {
+          filters.push(`first_name.ilike.%${first}%`);
+          filters.push(`last_name.ilike.%${last}%`);
+        }
+        if (last) {
+          filters.push(`first_name.ilike.%${last}%`);
+          filters.push(`last_name.ilike.%${last}%`);
+        }
+        if (first && last) filters.push(`and(first_name.ilike.%${first}%,last_name.ilike.%${last}%)`);
+        if (filters.length) contactsQuery = contactsQuery.or(filters.join(','));
+      } else {
+        contactsQuery = contactsQuery.limit(0);
+      }
+
+      const [profilesRes, contactsRes] = await Promise.all([
+        profilesQuery,
+        email || first || last ? contactsQuery : { data: [] }
+      ]);
+      const profiles = (profilesRes.data || []).filter((p) => p.email).map((p) => ({ ...p, source: 'profile' }));
+      const contacts = (contactsRes.data || []).filter((c) => c.email).map((c) => ({ ...c, source: 'contact' }));
+      const byEmail = new Map();
+      for (const p of profiles) byEmail.set((p.email || '').toLowerCase(), p);
+      for (const c of contacts) {
+        const key = (c.email || '').toLowerCase();
+        if (!byEmail.has(key)) byEmail.set(key, c);
+      }
+      addVolunteerSuggestions = Array.from(byEmail.values()).slice(0, 8);
+    } catch (err) {
+      console.error('Add volunteer suggestions error:', err);
+      addVolunteerSuggestions = [];
+    } finally {
+      addVolunteerSuggestionLoading = false;
+    }
+  }
+
+  function applyAddVolunteerSuggestion(person) {
+    addVolunteerForm = {
+      ...addVolunteerForm,
+      first_name: person.first_name || '',
+      last_name: person.last_name || '',
+      email: person.email || '',
+      phone: person.phone || addVolunteerForm.phone
+    };
+    addVolunteerSuggestions = [];
   }
 
   async function createVolunteer() {
@@ -406,7 +512,7 @@
             first_name: addVolunteerForm.first_name,
             last_name: addVolunteerForm.last_name
           },
-          emailRedirectTo: `${window.location.origin}/auth/reset-password`
+          emailRedirectTo: `${window.location.origin}/#/volunteer`
         }
       });
 
@@ -448,7 +554,7 @@
       await volunteers.fetchVolunteers();
       
       closeAddVolunteerModal();
-      alert(`✅ Volunteer created successfully! A confirmation email has been sent to ${addVolunteerForm.email} to set up their password.`);
+      alert(`✅ Volunteer created successfully! A sign-in link has been sent to ${addVolunteerForm.email}.`);
     } catch (err) {
       console.error('Create volunteer error:', err);
       error = 'Failed to create volunteer: ' + err.message;
@@ -1089,6 +1195,7 @@
               type="text"
               id="add-first-name"
               bind:value={addVolunteerForm.first_name}
+              on:input={scheduleAddVolunteerSuggestions}
               placeholder="First name"
               disabled={addingVolunteer}
             />
@@ -1100,6 +1207,7 @@
               type="text"
               id="add-last-name"
               bind:value={addVolunteerForm.last_name}
+              on:input={scheduleAddVolunteerSuggestions}
               placeholder="Last name"
               disabled={addingVolunteer}
             />
@@ -1112,11 +1220,31 @@
             type="email"
             id="add-email"
             bind:value={addVolunteerForm.email}
+            on:input={scheduleAddVolunteerSuggestions}
             placeholder="email@example.com"
             disabled={addingVolunteer}
           />
           <small>An invitation email will be sent to this address</small>
         </div>
+
+        {#if addVolunteerSuggestionLoading}
+          <div class="add-volunteer-suggestions add-volunteer-suggestions--loading">Searching…</div>
+        {:else if addVolunteerSuggestions.length}
+          <div class="add-volunteer-suggestions">
+            <span class="add-volunteer-suggestions-intro">Select to fill form:</span>
+            <div class="add-volunteer-suggestions-list">
+              {#each addVolunteerSuggestions as person (person.id)}
+                <button type="button" class="add-volunteer-suggestion-chip" on:click={() => applyAddVolunteerSuggestion(person)}>
+                  <span class="name">{person.first_name || ''} {person.last_name || ''}</span>
+                  <span class="email">{person.email}</span>
+                  {#if person.source === 'contact'}
+                    <span class="badge">Past volunteer</span>
+                  {/if}
+                </button>
+              {/each}
+            </div>
+          </div>
+        {/if}
 
         <div class="form-group">
           <label for="add-phone">Phone Number (Optional)</label>
@@ -1741,6 +1869,53 @@
     margin-top: 0.25rem;
     color: #6c757d;
     font-size: 0.875rem;
+  }
+
+  .add-volunteer-suggestions {
+    margin-bottom: 1rem;
+  }
+  .add-volunteer-suggestions--loading {
+    color: #6c757d;
+    font-size: 0.9rem;
+  }
+  .add-volunteer-suggestions-intro {
+    display: block;
+    font-size: 0.85rem;
+    color: #6c757d;
+    margin-bottom: 0.5rem;
+  }
+  .add-volunteer-suggestions-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .add-volunteer-suggestion-chip {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    background: #f8f9fa;
+    cursor: pointer;
+    font-size: 0.9rem;
+    text-align: left;
+  }
+  .add-volunteer-suggestion-chip:hover {
+    border-color: #0d6efd;
+    background: #e7f1ff;
+  }
+  .add-volunteer-suggestion-chip .name {
+    font-weight: 600;
+  }
+  .add-volunteer-suggestion-chip .email {
+    color: #0d6efd;
+    font-size: 0.85rem;
+  }
+  .add-volunteer-suggestion-chip .badge {
+    font-size: 0.7rem;
+    color: #6c757d;
+    margin-top: 2px;
   }
 
   .modal-actions {
