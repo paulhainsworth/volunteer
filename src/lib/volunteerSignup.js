@@ -106,11 +106,12 @@ export async function sendRoleConfirmationEmail({ to, first_name, role, roleId }
 
 /**
  * Sends welcome email with a one-click magic link (no extra email step).
- * Requires edge function send-welcome-with-magic-link; redirectTo must be in Supabase Auth redirect URL list.
+ * redirectTo is the current origin so the link sends users back to the same env (localhost / preview / production).
+ * That URL must be in Supabase Dashboard → Auth → URL Configuration → Redirect URLs, or Supabase will use Site URL (often production).
  */
 export async function sendWelcomeEmail({ to, first_name }) {
-  const redirectTo =
-    typeof window !== 'undefined' ? `${window.location.origin}/#/volunteer` : '';
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  const redirectTo = origin ? `${origin}/#/volunteer` : '';
 
   await supabase.functions.invoke('send-welcome-with-magic-link', {
     body: { to, first_name: first_name || '', redirectTo }

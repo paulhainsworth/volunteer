@@ -7,9 +7,17 @@ Sends the post–PII signup welcome email with a **one-click magic link** so the
 - `RESEND_API_KEY` – same as `send-email`
 - `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` – set by Supabase for edge functions
 
-## Redirect URL
+## Redirect URL (fix: magic links pointing to production)
 
-The `redirectTo` passed in the body (e.g. `https://yoursite.com/#/volunteer`) must be allowed in **Supabase Dashboard → Authentication → URL Configuration → Redirect URLs**.
+The app sends `redirectTo: window.location.origin + '/#/volunteer'` so the link matches where the user signed up (localhost, Vercel preview, or production). **Supabase only uses this if the exact URL is in the allow list.** If it’s not, Auth falls back to **Site URL** (often production), so magic links always go to production.
+
+**Fix:** In **Supabase Dashboard → Authentication → URL Configuration → Redirect URLs**, add every origin you use, for example:
+
+- `http://localhost:5173/#/volunteer` (or use wildcard `http://localhost:*/*` for any port)
+- `https://volunteer-git-omnium2026-paul-hainsworths-projects.vercel.app/#/volunteer` (or `https://*.vercel.app/*` for all previews)
+- `https://www.berkeleyomnium.com/#/volunteer` (production)
+
+After adding these, magic links will redirect to the same environment the user was on when they signed up.
 
 ## Magic link expiry (e.g. 730 hours)
 
