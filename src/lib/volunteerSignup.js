@@ -10,6 +10,12 @@ import { formatEventDateInPacific, formatTimeRange } from './utils/timeDisplay';
 
 const SITE_URL = typeof window !== 'undefined' ? `${window.location.origin}/#` : '';
 
+/** True if the error is the signups volunteer_id FK violation (profile not yet created by trigger). */
+function isSignupFkError(err) {
+  const msg = err?.message || String(err);
+  return msg.includes('foreign key constraint') && msg.includes('signups_volunteer_id_fkey');
+}
+
 export async function createVolunteerAndSignup(pii, roleId) {
   const { first_name, last_name, email, phone, emergency_contact_name, emergency_contact_phone } = pii;
 
@@ -35,7 +41,7 @@ export async function createVolunteerAndSignup(pii, roleId) {
   if (!authData?.user) throw new Error('User creation failed.');
 
   const userId = authData.user.id;
-  // Profile is created by handle_new_user trigger with full PII from metadata (no client upsert - avoids RLS)
+  // Profile is created by handle_new_user trigger; it may be a moment before it's visible. Retry signup on FK.
 
   // Sign waiver
   try {
@@ -44,8 +50,26 @@ export async function createVolunteerAndSignup(pii, roleId) {
     console.warn('Waiver sign failed (may already be signed):', waiverErr);
   }
 
-  // Create signup for role
-  await signups.createSignup(userId, roleId, phone || null);
+  // Create signup for role (retry on volunteer_id FK — profile may not exist yet)
+  const maxAttempts = 10;
+  const delayMs = 500;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      await signups.createSignup(userId, roleId, phone || null);
+      break;
+    } catch (err) {
+      const isLast = attempt === maxAttempts - 1;
+      if (isLast || !isSignupFkError(err)) {
+        if (isLast && isSignupFkError(err)) {
+          throw new Error(
+            'Your account was created but signup didn\'t complete. Please sign in and try signing up for this role again.'
+          );
+        }
+        throw err;
+      }
+      await new Promise((r) => setTimeout(r, delayMs));
+    }
+  }
 
   // Refresh auth so UI shows logged-in state (signUp returns session when confirm email is off)
   await auth.refreshSession();
