@@ -64,16 +64,20 @@
       loading = false;
     }
 
-    // If arrived with ?signup=ROLE_ID (e.g. from shared link or confirmation email)
+    // If arrived with ?info=ROLE_ID (e.g. from homepage featured role) → open Role Info modal
+    // If arrived with ?signup=ROLE_ID (e.g. from shared link or confirmation email) → open PII modal
     const hash = typeof window !== 'undefined' ? window.location.hash || '' : '';
     const queryIndex = hash.indexOf('?');
-    if (queryIndex !== -1) {
+    if (queryIndex !== -1 && rolesData.length) {
       const queryParams = new URLSearchParams(hash.slice(queryIndex));
+      const infoId = queryParams.get('info');
       const signupId = queryParams.get('signup');
-      if (signupId && rolesData.length) {
+      if (infoId) {
+        const r = rolesData.find((x) => x.id === infoId);
+        if (r) selectedRole = r;
+      } else if (signupId) {
         const r = rolesData.find((x) => x.id === signupId);
         if (r) {
-          // If user is logged in and already signed up for this role, go to signup page instead of PII modal
           if ($auth.user) {
             try {
               const mySignups = (await signups.fetchMySignups($auth.user.id)) ?? [];
