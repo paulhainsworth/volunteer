@@ -46,7 +46,7 @@
       </div>
 
       <div class="nav-center">
-        <span class="nav-title">2026 Berkeley Omnium Volunteer Hub</span>
+        <span class="nav-title">Omnium Volunteer Hub</span>
       </div>
 
       <div class="nav-right">
