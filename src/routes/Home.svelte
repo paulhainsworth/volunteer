@@ -38,8 +38,13 @@
         setTimeout(() => reject(new Error('timeout')), timeoutMs)
       );
       try {
-        const all = await Promise.race([roles.fetchRoles(), timeoutPromise]) || [];
-        homeRoles = Array.isArray(all) ? all.slice(0, 6) : [];
+        const featured = await Promise.race([roles.fetchFeaturedRoles(), timeoutPromise]) || [];
+        if (featured.length > 0) {
+          homeRoles = featured;
+        } else {
+          const all = await Promise.race([roles.fetchRoles(), timeoutPromise]) || [];
+          homeRoles = Array.isArray(all) ? all.slice(0, 6) : [];
+        }
         rolesLoadFailed = false;
       } catch (e) {
         homeRoles = [];

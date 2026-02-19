@@ -77,6 +77,27 @@ function createRolesStore() {
       }
     },
 
+    /** Fetch up to 6 featured roles for the homepage. Returns [] if none featured. */
+    fetchFeaturedRoles: async () => {
+      const select = `
+        *,
+        signups:signups(count),
+        domain:volunteer_leader_domains!domain_id(id, name, leader:profiles!leader_id(id, first_name, last_name))
+      `;
+      const { data, error } = await supabase
+        .from('volunteer_roles')
+        .select(select)
+        .eq('featured', true)
+        .order('event_date', { ascending: true, nullsFirst: false })
+        .order('start_time', { ascending: true, nullsFirst: false })
+        .limit(6);
+      if (error) throw error;
+      return (data || []).map(role => ({
+        ...role,
+        positions_filled: role.signups?.[0]?.count ?? 0
+      }));
+    },
+
     fetchRole,
 
     createRole: async (roleData) => {

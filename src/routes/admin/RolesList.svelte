@@ -359,6 +359,14 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
     }
   }
 
+  async function toggleFeatured(role) {
+    try {
+      await roles.updateRole(role.id, { featured: !role.featured });
+    } catch (err) {
+      error = err.message;
+    }
+  }
+
   function exportToCSV() {
     const headers = ['Role Name', 'Event Date', 'Start Time', 'End Time', 'Location', 'Total Positions', 'Filled Positions', 'Fill %'];
     const rows = $roles.map(role => {
@@ -1266,6 +1274,7 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
               <table>
                 <thead>
                   <tr>
+                    <th class="th-featured" title="Show on homepage">Featured</th>
                     <th>Role Name</th>
                     <th>Volunteer Leader</th>
                     <th>Fill Status</th>
@@ -1279,6 +1288,16 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
                     {@const volunteers = roleVolunteers[role.id] || []}
 
                     <tr>
+                      <td class="td-featured">
+                        <button
+                          type="button"
+                          class="featured-toggle {role.featured ? 'featured' : ''}"
+                          title={role.featured ? 'Remove from homepage' : 'Show on homepage'}
+                          on:click={() => toggleFeatured(role)}
+                        >
+                          ★
+                        </button>
+                      </td>
                       <td>
                         <div class="role-name-cell" on:click={() => toggleRoleExpansion(role.id)}>
                           <span class="expand-arrow {isExpanded ? 'expanded' : ''}">{isExpanded ? '▼' : '▶'}</span>
@@ -1318,7 +1337,7 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
 
                     {#if isExpanded}
                       <tr class="volunteers-row">
-                        <td colspan="4">
+                        <td colspan="5">
                           <div class="volunteers-container">
                             {#if volunteers.length > 0}
                               <h4>Volunteers ({volunteers.length})</h4>
@@ -1983,6 +2002,32 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
   .fill-text {
     font-size: 0.85rem;
     color: #495057;
+  }
+
+  .th-featured,
+  .td-featured {
+    width: 1%;
+    white-space: nowrap;
+    text-align: center;
+    vertical-align: middle;
+  }
+
+  .featured-toggle {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1.25rem;
+    padding: 0.25rem;
+    color: #dee2e6;
+    transition: color 0.15s;
+  }
+
+  .featured-toggle:hover {
+    color: #ffc107;
+  }
+
+  .featured-toggle.featured {
+    color: #ffc107;
   }
 
   .action-buttons {
