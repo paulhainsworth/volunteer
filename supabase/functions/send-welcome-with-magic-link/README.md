@@ -20,3 +20,4 @@ To set magic link expiry to 730 hours (~30 days):
 3. Set to `2628000` seconds (730 × 3600). If the dashboard caps the value (e.g. 86400), use the maximum allowed.
 
 Expiry is a project setting; this function does not override it.
+
