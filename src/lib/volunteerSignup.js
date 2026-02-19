@@ -104,23 +104,15 @@ export async function sendRoleConfirmationEmail({ to, first_name, role, roleId }
   });
 }
 
+/**
+ * Sends welcome email with a one-click magic link (no extra email step).
+ * Requires edge function send-welcome-with-magic-link; redirectTo must be in Supabase Auth redirect URL list.
+ */
 export async function sendWelcomeEmail({ to, first_name }) {
-  const signInUrl = `${SITE_URL}/auth/login`;
-  const browseUrl = `${SITE_URL}/volunteer`;
+  const redirectTo =
+    typeof window !== 'undefined' ? `${window.location.origin}/#/volunteer` : '';
 
-  await supabase.functions.invoke('send-email', {
-    body: {
-      to,
-      subject: 'Welcome to 2026 Berkeley Omnium',
-      html: `
-        <h2>Welcome to Berkeley Omnium 2026!</h2>
-        <p>Hi ${first_name || 'there'},</p>
-        <p>Thanks for signing up to volunteer. We're excited to have you.</p>
-        <p><strong>To return to the volunteer site:</strong></p>
-        <p><a href="${signInUrl}">Click here to sign in</a> — we'll send a verification link to your email. No password needed.</p>
-        <p>Or <a href="${browseUrl}">browse volunteer opportunities</a> (you can sign in when you're ready to manage your signups).</p>
-        <p>– Berkeley Omnium Volunteer Team</p>
-      `
-    }
+  await supabase.functions.invoke('send-welcome-with-magic-link', {
+    body: { to, first_name: first_name || '', redirectTo }
   });
 }
