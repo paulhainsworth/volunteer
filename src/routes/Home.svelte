@@ -7,36 +7,51 @@
 
   let homeRoles = [];
   let rolesLoading = true;
+  let rolesLoadFailed = false;
 
   onMount(() => {
-    if ($auth.user) {
-      // Check if needs onboarding (no emergency contact)
-      if (!$auth.profile?.emergency_contact_name) {
-        push('/onboarding');
+    const run = async () => {
+      // Wait for auth to settle so we don't fetch then redirect
+      let waited = 0;
+      while ($auth.loading && waited < 5000) {
+        await new Promise((r) => setTimeout(r, 100));
+        waited += 100;
+      }
+      if ($auth.user) {
+        if (!$auth.profile?.emergency_contact_name) {
+          push('/onboarding');
+          return;
+        }
+        if ($auth.isAdmin) {
+          push('/admin');
+        } else if ($auth.profile?.role === 'volunteer_leader') {
+          push('/leader');
+        } else {
+          push('/volunteer');
+        }
+        rolesLoading = false;
         return;
       }
 
-      // Otherwise redirect to role-specific dashboard
-      if ($auth.isAdmin) {
-        push('/admin');
-      } else if ($auth.profile?.role === 'volunteer_leader') {
-        push('/leader');
-      } else {
-        push('/volunteer');
-      }
-      return;
-    }
-
-    (async () => {
+      const timeoutMs = 12000;
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('timeout')), timeoutMs)
+      );
       try {
-        const all = await roles.fetchRoles() || [];
-        homeRoles = all.slice(0, 6);
-      } catch (_) {
+        const all = await Promise.race([roles.fetchRoles(), timeoutPromise]) || [];
+        homeRoles = Array.isArray(all) ? all.slice(0, 6) : [];
+        rolesLoadFailed = false;
+      } catch (e) {
         homeRoles = [];
+        rolesLoadFailed = true;
+        if (e?.message === 'timeout') {
+          console.warn('[Omnium] Home roles fetch timed out after 12s. Check Network tab for supabase.co requests.');
+        }
       } finally {
         rolesLoading = false;
       }
-    })();
+    };
+    run();
   });
 </script>
 
@@ -67,6 +82,8 @@
     <div class="roles-section">
       {#if rolesLoading}
         <p class="roles-loading">Loading roles…</p>
+      {:else if rolesLoadFailed}
+        <p class="roles-empty">Roles couldn’t load. Try <a href="#/volunteer">See All Volunteer Roles</a>, or use a private/incognito window or disable browser extensions (e.g. wallet extensions) for this site.</p>
       {:else if homeRoles.length === 0}
         <p class="roles-empty">No volunteer roles yet. Check back soon.</p>
       {:else}
@@ -193,6 +210,11 @@
     text-align: center;
     color: var(--text-secondary, #6c757d);
     margin: 2rem 0;
+  }
+
+  .roles-empty a {
+    color: var(--primary-color, #007bff);
+    text-decoration: underline;
   }
 
   .role-cards {
