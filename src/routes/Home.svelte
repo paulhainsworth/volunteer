@@ -1,7 +1,12 @@
 <script>
   import { auth } from '../lib/stores/auth';
+  import { roles } from '../lib/stores/roles';
   import { push } from 'svelte-spa-router';
   import { onMount } from 'svelte';
+  import { formatEventDateInPacific } from '../lib/utils/timeDisplay';
+
+  let homeRoles = [];
+  let rolesLoading = true;
 
   onMount(() => {
     if ($auth.user) {
@@ -19,7 +24,19 @@
       } else {
         push('/volunteer');
       }
+      return;
     }
+
+    (async () => {
+      try {
+        const all = await roles.fetchRoles() || [];
+        homeRoles = all.slice(0, 6);
+      } catch (_) {
+        homeRoles = [];
+      } finally {
+        rolesLoading = false;
+      }
+    })();
   });
 </script>
 
@@ -37,38 +54,66 @@
         {:else}
           <a href="#/my-signups" class="btn btn-primary">My Signups</a>
         {/if}
-      {:else}
-        <a href="#/auth/signup" class="btn btn-primary">Get Started</a>
       {/if}
-      <a href="#/volunteer" class="btn btn-secondary">Browse Opportunities</a>
+      {#if !$auth.user}
+        <a href="#/volunteer" class="btn btn-secondary btn-see-all">See All Volunteer Roles</a>
+      {:else}
+        <a href="#/volunteer" class="btn btn-secondary">Browse Opportunities</a>
+      {/if}
     </div>
   </div>
 
-  <div class="features">
-    <div class="feature-card">
-      <div class="icon">📋</div>
-      <h3>Easy Role Management</h3>
-      <p>Create and manage volunteer roles with just a few clicks</p>
+  {#if !$auth.user}
+    <div class="roles-section">
+      {#if rolesLoading}
+        <p class="roles-loading">Loading roles…</p>
+      {:else if homeRoles.length === 0}
+        <p class="roles-empty">No volunteer roles yet. Check back soon.</p>
+      {:else}
+        <div class="role-cards">
+          {#each homeRoles as role (role.id)}
+            <a href="#/signup/{role.id}" class="role-card">
+              <h3 class="role-card-name">{role.name}</h3>
+              {#if role.event_date}
+                <p class="role-card-date">{formatEventDateInPacific(role.event_date, 'short')}</p>
+              {:else}
+                <p class="role-card-date">TBD</p>
+              {/if}
+              {#if role.domain?.name}
+                <p class="role-card-domain">{role.domain.name}</p>
+              {/if}
+              {#if role.positions_total != null}
+                <p class="role-card-slots">{role.positions_filled ?? 0} / {role.positions_total} filled</p>
+              {/if}
+            </a>
+          {/each}
+        </div>
+      {/if}
     </div>
-    
-    <div class="feature-card">
-      <div class="icon">👥</div>
-      <h3>Track Volunteers</h3>
-      <p>Monitor signups and see who's committed to each role</p>
+  {:else}
+    <div class="features">
+      <div class="feature-card">
+        <div class="icon">📋</div>
+        <h3>Easy Role Management</h3>
+        <p>Create and manage volunteer roles with just a few clicks</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon">👥</div>
+        <h3>Track Volunteers</h3>
+        <p>Monitor signups and see who's committed to each role</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon">📧</div>
+        <h3>Communicate</h3>
+        <p>Send reminders and updates directly to volunteers</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon">📊</div>
+        <h3>Real-time Dashboard</h3>
+        <p>View fill status and identify staffing gaps instantly</p>
+      </div>
     </div>
-    
-    <div class="feature-card">
-      <div class="icon">📧</div>
-      <h3>Communicate</h3>
-      <p>Send reminders and updates directly to volunteers</p>
-    </div>
-    
-    <div class="feature-card">
-      <div class="icon">📊</div>
-      <h3>Real-time Dashboard</h3>
-      <p>View fill status and identify staffing gaps instantly</p>
-    </div>
-  </div>
+  {/if}
 
   <div class="about">
     <h2>Built for Race Organizers</h2>
@@ -110,6 +155,10 @@
     flex-wrap: wrap;
   }
 
+  .btn-see-all {
+    margin-bottom: 0;
+  }
+
   .btn {
     padding: 1rem 2rem;
     font-size: 1.1rem;
@@ -133,6 +182,54 @@
     background: white;
     color: #007bff;
     border: 2px solid #007bff;
+  }
+
+  .roles-section {
+    margin: 2rem 0 4rem;
+  }
+
+  .roles-loading,
+  .roles-empty {
+    text-align: center;
+    color: var(--text-secondary, #6c757d);
+    margin: 2rem 0;
+  }
+
+  .role-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 1.5rem;
+    margin-top: 1.5rem;
+  }
+
+  .role-card {
+    background: white;
+    padding: 1.5rem;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    text-decoration: none;
+    color: inherit;
+    transition: transform 0.2s, box-shadow 0.2s;
+    border: 1px solid var(--border-color, #e9ecef);
+  }
+
+  .role-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  }
+
+  .role-card-name {
+    margin: 0 0 0.5rem;
+    font-size: 1.15rem;
+    color: #1a1a1a;
+  }
+
+  .role-card-date,
+  .role-card-domain,
+  .role-card-slots {
+    margin: 0.25rem 0;
+    font-size: 0.9rem;
+    color: #6c757d;
   }
 
   .features {

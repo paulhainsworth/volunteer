@@ -51,10 +51,15 @@
     }
 
     let rolesData = [];
+    const timeoutMs = 15000;
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Request timed out. Check your connection or try again.')), timeoutMs)
+    );
     try {
-      rolesData = await roles.fetchRoles() || [];
+      rolesData = await Promise.race([roles.fetchRoles(), timeoutPromise]) || [];
     } catch (err) {
       error = err?.message || 'Failed to load opportunities.';
+      console.error('BrowseRoles fetch error:', err);
     } finally {
       loading = false;
     }
@@ -236,11 +241,13 @@
       }
 
       // Status filter
-      if (filterStatus === 'available' && role.positions_filled >= role.positions_total) return false;
+      const total = role.positions_total ?? 0;
+      const filled = role.positions_filled ?? 0;
+      if (filterStatus === 'available' && total > 0 && filled >= total) return false;
       if (filterStatus === 'urgent') {
-        const percentage = (role.positions_filled / role.positions_total) * 100;
+        const percentage = total > 0 ? (filled / total) * 100 : 0;
         const daysUntil = role.event_date
-          ? Math.ceil((parseEventDate(role.event_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+          ? Math.ceil(((parseEventDate(role.event_date)?.getTime() ?? 0) - new Date().getTime()) / (1000 * 60 * 60 * 24))
           : Infinity;
         if (percentage >= 50 || daysUntil > 7) return false;
       }
@@ -268,7 +275,7 @@
         return da - db;
       }
       if (sortBy === 'name') {
-        return a.name.localeCompare(b.name);
+        return (a.name || '').localeCompare(b.name || '');
       }
       return 0;
     });
