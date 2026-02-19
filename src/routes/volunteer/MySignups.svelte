@@ -4,9 +4,8 @@
   import { auth } from '../../lib/stores/auth';
   import { supabase } from '../../lib/supabaseClient';
   import { push } from 'svelte-spa-router';
-  import { format } from 'date-fns';
   import ContactLeader from '../../lib/components/ContactLeader.svelte';
-  import { formatTimeRange, calculateDuration } from '../../lib/utils/timeDisplay';
+  import { formatTimeRange, calculateDuration, formatEventDateInPacific } from '../../lib/utils/timeDisplay';
 
   let loading = true;
   let error = '';
@@ -137,7 +136,7 @@
         volunteer_name: `${volunteer.first_name} ${volunteer.last_name}`,
         volunteer_email: volunteer.email,
         role_name: role.name,
-        role_date: format(new Date(role.event_date), 'EEEE, MMMM d, yyyy'),
+        role_date: formatEventDateInPacific(role.event_date, 'long'),
         role_time: formatTimeRange(role),
         role_location: role.location || 'N/A'
       };
@@ -249,8 +248,8 @@ END:VCALENDAR`;
     return null;
   }
 
-  $: upcomingSignups = mySignups.filter(s => new Date(s.role.event_date) >= new Date());
-  $: pastSignups = mySignups.filter(s => new Date(s.role.event_date) < new Date());
+  $: upcomingSignups = mySignups.filter(s => !s.role.event_date || new Date(s.role.event_date) >= new Date());
+  $: pastSignups = mySignups.filter(s => s.role.event_date && new Date(s.role.event_date) < new Date());
   $: totalHours = mySignups.reduce((sum, signup) => {
     const d = calculateDuration(signup.role.start_time, signup.role.end_time);
     return sum + (d ?? 0);
@@ -310,7 +309,7 @@ END:VCALENDAR`;
               <div class="signup-details">
                 <div class="detail">
                   <span class="icon">📅</span>
-                  <span>{format(new Date(role.event_date), 'EEEE, MMMM d, yyyy')}</span>
+                  <span>{role.event_date ? formatEventDateInPacific(role.event_date, 'long') : 'TBD'}</span>
                 </div>
                 
                 <div class="detail">
@@ -387,7 +386,7 @@ END:VCALENDAR`;
               <div class="signup-details">
                 <div class="detail">
                   <span class="icon">📅</span>
-                  <span>{format(new Date(role.event_date), 'EEEE, MMMM d, yyyy')}</span>
+                  <span>{role.event_date ? formatEventDateInPacific(role.event_date, 'long') : 'TBD'}</span>
                 </div>
                 
                 <div class="detail">
@@ -422,7 +421,7 @@ END:VCALENDAR`;
         <div class="role-info-box">
           <div class="detail">
             <span class="icon">📅</span>
-            <span>{format(new Date(cancellingSignup.role.event_date), 'EEEE, MMMM d, yyyy')}</span>
+            <span>{cancellingSignup.role.event_date ? formatEventDateInPacific(cancellingSignup.role.event_date, 'long') : 'TBD'}</span>
           </div>
           <div class="detail">
             <span class="icon">🕐</span>
@@ -495,7 +494,7 @@ END:VCALENDAR`;
         <div class="role-context">
           <h3>Your Signup:</h3>
           <p><strong>{contactLeaderSignup.role.name}</strong></p>
-          <p>{format(new Date(contactLeaderSignup.role.event_date), 'EEEE, MMMM d, yyyy')} • {formatTimeRange(contactLeaderSignup.role)}</p>
+          <p>{contactLeaderSignup.role.event_date ? formatEventDateInPacific(contactLeaderSignup.role.event_date, 'long') : 'TBD'} • {formatTimeRange(contactLeaderSignup.role)}</p>
         </div>
 
         {#if leader}

@@ -3,8 +3,7 @@
   import { auth } from '../../lib/stores/auth';
   import { supabase } from '../../lib/supabaseClient';
   import { push } from 'svelte-spa-router';
-  import { format } from 'date-fns';
-  import { formatTimeRange, isFlexibleTime } from '../../lib/utils/timeDisplay';
+  import { formatTimeRange, isFlexibleTime, formatEventDateInPacific, parseEventDate } from '../../lib/utils/timeDisplay';
 
   let loading = true;
   let error = '';
@@ -107,7 +106,8 @@ const shareTimers = {};
           id,
           name,
           description,
-          leader_id
+          leader_id,
+          leader:profiles!leader_id(first_name, last_name, email, phone)
         ),
         signups:signups!role_id(
           id,
@@ -177,7 +177,7 @@ const shareTimers = {};
   }
 
   function formatShift(role) {
-    const datePart = role.event_date ? format(new Date(role.event_date), 'EEE, MMM d') : '';
+    const datePart = role.event_date ? formatEventDateInPacific(role.event_date, 'short') : 'TBD';
     const timePart = formatTimeRange(role);
     return [datePart, timePart].filter(Boolean).join(' • ') || '—';
   }
@@ -190,8 +190,8 @@ const shareTimers = {};
   }
 
   function compareRoles(a, b) {
-    const dateA = a.event_date ? new Date(a.event_date) : null;
-    const dateB = b.event_date ? new Date(b.event_date) : null;
+    const dateA = parseEventDate(a.event_date);
+    const dateB = parseEventDate(b.event_date);
     if (dateA && dateB) {
       if (dateA.getTime() !== dateB.getTime()) {
         return dateA.getTime() - dateB.getTime();
@@ -396,54 +396,81 @@ const shareTimers = {};
 
   async function fetchVolunteerSuggestions(roleId, form) {
     try {
-      let query = supabase
+      const emailQuery = (form.email || '').trim();
+      const firstRaw = (form.first_name || '').trim();
+      const lastRaw = (form.last_name || '').trim();
+      const sanitize = (value) => value.replace(/[,%]/g, '').trim();
+      const first = sanitize(firstRaw);
+      const last = sanitize(lastRaw);
+
+      let profilesQuery = supabase
         .from('profiles')
         .select('id, first_name, last_name, email, phone, role')
         .neq('id', $auth.user.id)
         .limit(5)
         .order('first_name');
 
-      const emailQuery = (form.email || '').trim();
-      const firstRaw = (form.first_name || '').trim();
-      const lastRaw = (form.last_name || '').trim();
-
-      const sanitize = (value) => value.replace(/[,%]/g, '').trim();
-      const first = sanitize(firstRaw);
-      const last = sanitize(lastRaw);
-
       if (emailQuery && emailQuery.includes('@')) {
-        query = query.ilike('email', `%${emailQuery}%`);
+        profilesQuery = profilesQuery.ilike('email', `%${emailQuery}%`);
       } else {
         const filters = [];
-
         if (first) {
           filters.push(`first_name.ilike.%${first}%`);
           filters.push(`last_name.ilike.%${first}%`);
         }
-
         if (last) {
           filters.push(`first_name.ilike.%${last}%`);
           filters.push(`last_name.ilike.%${last}%`);
         }
-
         if (first && last) {
           filters.push(`and(first_name.ilike.%${first}%,last_name.ilike.%${last}%)`);
         }
+        if (filters.length) profilesQuery = profilesQuery.or(filters.join(','));
+      }
+      profilesQuery = profilesQuery.in('role', ['volunteer', 'volunteer_leader', 'admin']);
 
-        if (filters.length) {
-          query = query.or(filters.join(','));
+      let contactsQuery = supabase
+        .from('volunteer_contacts')
+        .select('id, first_name, last_name, email, phone')
+        .is('profile_id', null)
+        .limit(5);
+
+      if (emailQuery && emailQuery.includes('@')) {
+        contactsQuery = contactsQuery.ilike('email', `%${emailQuery}%`);
+      } else if (first || last) {
+        const filters = [];
+        if (first) {
+          filters.push(`first_name.ilike.%${first}%`);
+          filters.push(`last_name.ilike.%${first}%`);
         }
+        if (last) {
+          filters.push(`first_name.ilike.%${last}%`);
+          filters.push(`last_name.ilike.%${last}%`);
+        }
+        if (filters.length) contactsQuery = contactsQuery.or(filters.join(','));
+      } else {
+        contactsQuery = contactsQuery.limit(0);
       }
 
-      query = query.in('role', ['volunteer', 'volunteer_leader', 'admin']);
+      const [profilesRes, contactsRes] = await Promise.all([
+        profilesQuery,
+        emailQuery || first || last ? contactsQuery : { data: [] }
+      ]);
 
-      const { data, error: suggestionsError } = await query;
+      const profiles = (profilesRes.data || []).filter((p) => p.email).map((p) => ({ ...p, source: 'profile' }));
+      const contacts = (contactsRes.data || []).filter((c) => c.email).map((c) => ({ ...c, source: 'contact' }));
 
-      if (suggestionsError) throw suggestionsError;
+      const byEmail = new Map();
+      for (const p of profiles) byEmail.set((p.email || '').toLowerCase(), p);
+      for (const c of contacts) {
+        const key = (c.email || '').toLowerCase();
+        if (!byEmail.has(key)) byEmail.set(key, c);
+      }
+      const merged = Array.from(byEmail.values()).slice(0, 8);
 
       volunteerSuggestions = {
         ...volunteerSuggestions,
-        [roleId]: (data || []).filter(profile => profile.email)
+        [roleId]: merged
       };
     } catch (err) {
       console.error('Suggestion lookup error:', err);
@@ -496,6 +523,14 @@ const shareTimers = {};
       const subject = `You are scheduled for ${role.name}`;
       const loginUrl = `${window.location.origin}/#/auth/login`;
 
+      const leader = role.domain?.leader;
+      const leaderName = leader
+        ? [leader.first_name, leader.last_name].filter(Boolean).join(' ').trim() || 'Your volunteer leader'
+        : null;
+      const leaderContact = leader
+        ? [leader.email, leader.phone].filter(Boolean).join(leader.email && leader.phone ? ' • ' : '')
+        : '';
+
       await supabase.functions.invoke('send-email', {
         body: {
           to: email,
@@ -504,14 +539,16 @@ const shareTimers = {};
             <h2>${subject}</h2>
             <p>Hi ${firstName || 'there'},</p>
             <p>You have been added to the volunteer role <strong>${role.name}</strong>.</p>
+            ${role.description ? `<p>${role.description}</p>` : ''}
             <ul>
               <li><strong>Shift:</strong> ${shiftText}</li>
               ${role.location ? `<li><strong>Location:</strong> ${role.location}</li>` : ''}
               ${role.domain?.name ? `<li><strong>Domain:</strong> ${role.domain.name}</li>` : ''}
             </ul>
+            ${leaderName ? `<p><strong>Volunteer leader${role.domain?.name ? ` for ${role.domain.name}` : ''}:</strong> ${leaderName}${leaderContact ? ` — ${leaderContact}` : (leader?.email ? ` — ${leader.email}` : '')}</p>` : ''}
             <p>Please log in to the volunteer portal to review details, sign the waiver, and provide your emergency contact information.</p>
             <p><a href="${loginUrl}">Open the volunteer portal</a></p>
-            <p>If you have scheduling conflicts, please contact your volunteer coordinator.</p>
+            <p>If you have scheduling conflicts, please contact your volunteer coordinator${leader?.email ? ` or ${leaderName} at ${leader.email}` : ''}.</p>
           `
         }
       });
@@ -590,7 +627,7 @@ const shareTimers = {};
               first_name: firstName,
               last_name: lastName
             },
-            emailRedirectTo: `${window.location.origin}/auth/reset-password`
+            emailRedirectTo: `${window.location.origin}/#/volunteer`
           }
         });
 
@@ -1292,6 +1329,9 @@ Examples:
                         {#if profile.phone}
                           <span class="phone">{profile.phone}</span>
                         {/if}
+                        {#if profile.source === 'contact'}
+                          <span class="suggestion-badge">Past volunteer</span>
+                        {/if}
                       </button>
                     {/each}
                   </div>
@@ -1748,6 +1788,12 @@ Examples:
   .suggestion-chip .phone {
     color: #6c757d;
     font-size: 0.8rem;
+  }
+
+  .suggestion-chip .suggestion-badge {
+    font-size: 0.7rem;
+    color: #6c757d;
+    margin-top: 2px;
   }
 
   .btn-sm {

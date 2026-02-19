@@ -41,7 +41,7 @@ serve(async (req) => {
         'Authorization': `Bearer ${RESEND_API_KEY}`,
       },
       body: JSON.stringify({
-        from: 'Volunteer Manager <onboarding@resend.dev>', // Change this to your verified domain
+        from: 'Volunteer Manager <notifications@berkeleyomnium.com>',
         to: [to],
         subject: subject,
         html: html,

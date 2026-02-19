@@ -5,8 +5,8 @@
   import { waiver as waiverStore } from '../../lib/stores/waiver';
   import { auth } from '../../lib/stores/auth';
   import { push } from 'svelte-spa-router';
-  import { format } from 'date-fns';
-  import { formatTimeRange, calculateDuration } from '../../lib/utils/timeDisplay';
+  import { formatTimeRange, calculateDuration, formatEventDateInPacific } from '../../lib/utils/timeDisplay';
+  import { sendRoleConfirmationEmail } from '../../lib/volunteerSignup';
 
   export let params = {};
 
@@ -23,6 +23,7 @@
   let isAuthenticated = false;
   let hasLoadedUserData = false;
   let loadingUserData = false;
+  let alreadySignedUp = false;
 
   async function loadAuthenticatedData(userId) {
     loadingUserData = true;
@@ -57,8 +58,13 @@
     try {
       role = await roles.fetchRole(params.id);
 
+      // Don't redirect unauthenticated users - show role details + login prompt.
+      // (Redirecting to /volunteer?signup=... opened the PII modal for users who already signed up.)
+
       if (isAuthenticated && $auth.user) {
         await loadAuthenticatedData($auth.user.id);
+        const mySignups = (await signups.fetchMySignups($auth.user.id)) ?? [];
+        alreadySignedUp = mySignups.some((s) => s.role_id === params.id || s.role?.id === params.id);
       }
     } catch (err) {
       error = err.message || 'Unable to load volunteer role.';
@@ -70,7 +76,11 @@
   $: isAuthenticated = !!$auth.user;
 
   $: if (isAuthenticated && role && !hasLoadedUserData && !loadingUserData && $auth.user) {
-    loadAuthenticatedData($auth.user.id);
+    (async () => {
+      await loadAuthenticatedData($auth.user.id);
+      const mySignups = (await signups.fetchMySignups($auth.user.id)) ?? [];
+      alreadySignedUp = mySignups.some((s) => s.role_id === params.id || s.role?.id === params.id);
+    })();
   }
 
   $: if (!isAuthenticated) {
@@ -109,6 +119,14 @@
 
       // Create signup
       await signups.createSignup($auth.user.id, params.id, phone || null);
+
+      // Send confirmation email
+      sendRoleConfirmationEmail({
+        to: $auth.profile?.email || $auth.user?.email,
+        first_name: $auth.profile?.first_name || 'there',
+        role,
+        roleId: params.id
+      }).catch((err) => console.error('Confirmation email failed:', err));
 
       success = true;
 
@@ -165,7 +183,7 @@
         <div class="summary-details">
           <div class="detail">
             <strong>Date:</strong>
-            {format(new Date(role.event_date), 'EEEE, MMMM d, yyyy')}
+            {role.event_date ? formatEventDateInPacific(role.event_date, 'long') : 'TBD'}
           </div>
           
           <div class="detail">
@@ -206,6 +224,13 @@
               Create Account
             </button>
           </div>
+        </div>
+      {:else if alreadySignedUp}
+        <div class="success-card">
+          <div class="success-icon">✓</div>
+          <h2>You're signed up!</h2>
+          <p>You're already registered for this role. We'll send you a reminder before the event.</p>
+          <a href="#/my-signups" class="btn btn-primary">View My Signups</a>
         </div>
       {:else if loadingUserData && !hasLoadedUserData}
         <div class="loading secondary">Preparing your signup form...</div>

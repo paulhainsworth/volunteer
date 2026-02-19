@@ -4,6 +4,7 @@ import { roles } from '../../lib/stores/roles';
 import { domains } from '../../lib/stores/domains';
 import { auth } from '../../lib/stores/auth';
 import { supabase } from '../../lib/supabaseClient';
+import { getEdgeInvokeErrorMessage } from '../../lib/edgeFunctionError';
 import { push } from 'svelte-spa-router';
 import RoleForm from '../../lib/components/RoleForm.svelte';
 import BulkUpload from '../../lib/components/BulkUpload.svelte';
@@ -31,6 +32,11 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
   let groupedRoles = [];
   let leaderFormValues = {};
   let creatingLeaderFor = null;
+  let leaderAddSuccess = null;
+  let leaderAddSuccessTimeout = null;
+  let leaderSuggestions = {};
+  let leaderSuggestionLoading = {};
+  let leaderSuggestionTimers = {};
   let pendingDomainForNewLeader = null;
   let showAddVolunteerModal = false;
   let addVolunteerForm = {
@@ -41,6 +47,9 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
   };
   let addingVolunteer = false;
   let addVolunteerError = '';
+  let addVolunteerSuggestions = [];
+  let addVolunteerSuggestionLoading = false;
+  let addVolunteerSuggestionTimer = null;
   let defaultDomainId = null;
   let returnToPath = '';
   let returnDomainId = '';
@@ -517,10 +526,132 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
   }
 
   function handleLeaderFormInput(domainId, field, value) {
+    const existing = leaderFormValues[domainId] || {};
+    const updatedForm = { ...existing, [field]: value };
     setLeaderForm(domainId, { [field]: value });
+    scheduleLeaderSuggestions(domainId, updatedForm);
+  }
+
+  function scheduleLeaderSuggestions(domainId, formSnapshot) {
+    if (leaderSuggestionTimers[domainId]) clearTimeout(leaderSuggestionTimers[domainId]);
+    const form = formSnapshot ?? leaderFormValues[domainId] ?? {};
+    const email = (form.email || '').trim();
+    const first = (form.first_name || '').trim();
+    const last = (form.last_name || '').trim();
+    if (!email && first.length < 2 && last.length < 2) {
+      leaderSuggestions = { ...leaderSuggestions, [domainId]: [] };
+      leaderSuggestionLoading = { ...leaderSuggestionLoading, [domainId]: false };
+      return;
+    }
+    leaderSuggestionLoading = { ...leaderSuggestionLoading, [domainId]: true };
+    leaderSuggestionTimers[domainId] = setTimeout(() => fetchLeaderSuggestions(domainId, formSnapshot), 300);
+  }
+
+  async function fetchLeaderSuggestions(domainId, formSnapshot) {
+    leaderSuggestionTimers[domainId] = null;
+    const form = formSnapshot ?? leaderFormValues[domainId] ?? {};
+    try {
+      const email = (form.email || '').trim();
+      const first = (form.first_name || '').trim().replace(/[,%]/g, '');
+      const last = (form.last_name || '').trim().replace(/[,%]/g, '');
+
+      let profilesQuery = supabase
+        .from('profiles')
+        .select('id, first_name, last_name, email, phone, role')
+        .in('role', ['volunteer', 'volunteer_leader', 'admin'])
+        .limit(5)
+        .order('first_name');
+      if (email && email.includes('@')) {
+        profilesQuery = profilesQuery.ilike('email', `%${email}%`);
+      } else if (first || last) {
+        const filters = [];
+        if (first) {
+          filters.push(`first_name.ilike.%${first}%`);
+          filters.push(`last_name.ilike.%${first}%`);
+        }
+        if (last) {
+          filters.push(`first_name.ilike.%${last}%`);
+          filters.push(`last_name.ilike.%${last}%`);
+        }
+        if (first && last) filters.push(`and(first_name.ilike.%${first}%,last_name.ilike.%${last}%)`);
+        if (filters.length) profilesQuery = profilesQuery.or(filters.join(','));
+      }
+
+      let contactsQuery = supabase
+        .from('volunteer_contacts')
+        .select('id, first_name, last_name, email, phone')
+        .is('profile_id', null)
+        .limit(5);
+      if (email && email.includes('@')) {
+        contactsQuery = contactsQuery.ilike('email', `%${email}%`);
+      } else if (first || last) {
+        const filters = [];
+        if (first) {
+          filters.push(`first_name.ilike.%${first}%`);
+          filters.push(`last_name.ilike.%${last}%`);
+        }
+        if (last) {
+          filters.push(`first_name.ilike.%${last}%`);
+          filters.push(`last_name.ilike.%${last}%`);
+        }
+        if (first && last) filters.push(`and(first_name.ilike.%${first}%,last_name.ilike.%${last}%)`);
+        if (filters.length) contactsQuery = contactsQuery.or(filters.join(','));
+      } else {
+        contactsQuery = contactsQuery.limit(0);
+      }
+
+      const [profilesRes, contactsRes] = await Promise.all([
+        profilesQuery,
+        email || first || last ? contactsQuery : { data: [] }
+      ]);
+      const profiles = (profilesRes.data || []).filter((p) => p.email).map((p) => ({ ...p, source: 'profile' }));
+      const contacts = (contactsRes.data || []).filter((c) => c.email).map((c) => ({ ...c, source: 'contact' }));
+      const byEmail = new Map();
+      for (const p of profiles) byEmail.set((p.email || '').toLowerCase(), p);
+      for (const c of contacts) {
+        const key = (c.email || '').toLowerCase();
+        if (!byEmail.has(key)) byEmail.set(key, c);
+      }
+      leaderSuggestions = { ...leaderSuggestions, [domainId]: Array.from(byEmail.values()).slice(0, 8) };
+    } catch (err) {
+      console.error('Leader suggestions error:', err);
+      leaderSuggestions = { ...leaderSuggestions, [domainId]: [] };
+    } finally {
+      leaderSuggestionLoading = { ...leaderSuggestionLoading, [domainId]: false };
+    }
+  }
+
+  function applyLeaderSuggestion(domainId, person) {
+    setLeaderForm(domainId, {
+      first_name: person.first_name || '',
+      last_name: person.last_name || '',
+      email: person.email || '',
+      phone: person.phone || (leaderFormValues[domainId] || {}).phone || ''
+    });
+    leaderSuggestions = { ...leaderSuggestions, [domainId]: [] };
   }
 
   async function createLeaderAccount({ first_name, last_name, email, phone = null }) {
+    // Check if user already exists (signUp returns fake user when email exists + confirmations on)
+    const { data: existingProfile } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('email', email)
+      .maybeSingle();
+
+    if (existingProfile) {
+      await supabase
+        .from('profiles')
+        .update({
+          first_name,
+          last_name,
+          phone,
+          role: 'volunteer_leader'
+        })
+        .eq('id', existingProfile.id);
+      return existingProfile.id;
+    }
+
     const tempPassword = Math.random().toString(36).slice(-12) + Math.random().toString(36).slice(-12);
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
@@ -531,32 +662,36 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
           last_name,
           role: 'volunteer_leader'
         },
-        emailRedirectTo: `${window.location.origin}/auth/reset-password`
+        emailRedirectTo: `${window.location.origin}/#/volunteer`
       }
     });
 
     if (authError) throw authError;
-    if (!authData?.user) {
+    if (!authData?.user?.id) {
       throw new Error('User creation failed.');
     }
 
     const userId = authData.user.id;
 
+    // Wait for handle_new_user trigger to create profile
+    let profileReady = false;
+    for (let i = 0; i < 10; i++) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('id', userId)
+        .maybeSingle();
+      if (profile) {
+        profileReady = true;
+        break;
+      }
+      await new Promise((r) => setTimeout(r, 300));
+    }
+    if (!profileReady) {
+      throw new Error('Profile creation is taking longer than expected. Please try again in a moment.');
+    }
+
     const { error: profileError } = await supabase
-      .from('profiles')
-      .upsert({
-        id: userId,
-        email,
-        first_name,
-        last_name,
-        phone,
-        role: 'volunteer_leader'
-      });
-
-    if (profileError) throw profileError;
-
-    // Ensure the profile reflects the latest info (in case upsert was ignored)
-    const { error: updateCheckError } = await supabase
       .from('profiles')
       .update({
         first_name,
@@ -566,8 +701,8 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
       })
       .eq('id', userId);
 
-    if (updateCheckError) {
-      console.warn('Profile update warning:', updateCheckError.message);
+    if (profileError) {
+      console.warn('Profile update warning:', profileError.message);
     }
 
     return userId;
@@ -588,7 +723,7 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
             <p>Please follow these steps to finish setting up:</p>
             <ol>
               <li>Visit <a href="${loginUrl}">${loginUrl}</a> and sign in with this email address.</li>
-              <li>Create your password when prompted.</li>
+              <li>Check your email for a sign-in link. No password needed.</li>
               <li>Complete any missing profile details and fill out the emergency contact form.</li>
               <li>Once finished, you'll see your Volunteer Leader dashboard with all the roles you manage.</li>
             </ol>
@@ -604,12 +739,17 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
   }
 
   async function updateDomainLeader(domainId, leaderId) {
-    const { error: updateError } = await supabase
+    const { data, error: updateError } = await supabase
       .from('volunteer_leader_domains')
       .update({ leader_id: leaderId })
-      .eq('id', domainId);
+      .eq('id', domainId)
+      .select()
+      .maybeSingle();
 
     if (updateError) throw updateError;
+    if (!data) {
+      throw new Error('Failed to assign leader — update returned no rows. You may need admin permissions.');
+    }
 
     await Promise.all([roles.fetchRoles(), domains.fetchDomains()]);
   }
@@ -619,6 +759,108 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
     addingVolunteer = false;
     addVolunteerError = '';
     pendingDomainForNewLeader = null;
+    if (addVolunteerSuggestionTimer) {
+      clearTimeout(addVolunteerSuggestionTimer);
+      addVolunteerSuggestionTimer = null;
+    }
+    addVolunteerSuggestions = [];
+  }
+
+  function scheduleAddVolunteerSuggestions() {
+    if (addVolunteerSuggestionTimer) clearTimeout(addVolunteerSuggestionTimer);
+    const email = (addVolunteerForm.email || '').trim();
+    const first = (addVolunteerForm.first_name || '').trim();
+    const last = (addVolunteerForm.last_name || '').trim();
+    if (!email && first.length < 2 && last.length < 2) {
+      addVolunteerSuggestions = [];
+      addVolunteerSuggestionLoading = false;
+      return;
+    }
+    addVolunteerSuggestionLoading = true;
+    addVolunteerSuggestionTimer = setTimeout(() => fetchAddVolunteerSuggestions(), 300);
+  }
+
+  async function fetchAddVolunteerSuggestions() {
+    addVolunteerSuggestionTimer = null;
+    try {
+      const email = (addVolunteerForm.email || '').trim();
+      const first = (addVolunteerForm.first_name || '').trim().replace(/[,%]/g, '');
+      const last = (addVolunteerForm.last_name || '').trim().replace(/[,%]/g, '');
+
+      let profilesQuery = supabase
+        .from('profiles')
+        .select('id, first_name, last_name, email, phone, role')
+        .in('role', ['volunteer', 'volunteer_leader', 'admin'])
+        .limit(5)
+        .order('first_name');
+      if (email && email.includes('@')) {
+        profilesQuery = profilesQuery.ilike('email', `%${email}%`);
+      } else if (first || last) {
+        const filters = [];
+        if (first) {
+          filters.push(`first_name.ilike.%${first}%`);
+          filters.push(`last_name.ilike.%${first}%`);
+        }
+        if (last) {
+          filters.push(`first_name.ilike.%${last}%`);
+          filters.push(`last_name.ilike.%${last}%`);
+        }
+        if (first && last) filters.push(`and(first_name.ilike.%${first}%,last_name.ilike.%${last}%)`);
+        if (filters.length) profilesQuery = profilesQuery.or(filters.join(','));
+      }
+
+      let contactsQuery = supabase
+        .from('volunteer_contacts')
+        .select('id, first_name, last_name, email, phone')
+        .is('profile_id', null)
+        .limit(5);
+      if (email && email.includes('@')) {
+        contactsQuery = contactsQuery.ilike('email', `%${email}%`);
+      } else if (first || last) {
+        const filters = [];
+        if (first) {
+          filters.push(`first_name.ilike.%${first}%`);
+          filters.push(`last_name.ilike.%${last}%`);
+        }
+        if (last) {
+          filters.push(`first_name.ilike.%${last}%`);
+          filters.push(`last_name.ilike.%${last}%`);
+        }
+        if (first && last) filters.push(`and(first_name.ilike.%${first}%,last_name.ilike.%${last}%)`);
+        if (filters.length) contactsQuery = contactsQuery.or(filters.join(','));
+      } else {
+        contactsQuery = contactsQuery.limit(0);
+      }
+
+      const [profilesRes, contactsRes] = await Promise.all([
+        profilesQuery,
+        email || first || last ? contactsQuery : { data: [] }
+      ]);
+      const profiles = (profilesRes.data || []).filter((p) => p.email).map((p) => ({ ...p, source: 'profile' }));
+      const contacts = (contactsRes.data || []).filter((c) => c.email).map((c) => ({ ...c, source: 'contact' }));
+      const byEmail = new Map();
+      for (const p of profiles) byEmail.set((p.email || '').toLowerCase(), p);
+      for (const c of contacts) {
+        const key = (c.email || '').toLowerCase();
+        if (!byEmail.has(key)) byEmail.set(key, c);
+      }
+      addVolunteerSuggestions = Array.from(byEmail.values()).slice(0, 8);
+    } catch (err) {
+      console.error('Add leader suggestions error:', err);
+      addVolunteerSuggestions = [];
+    } finally {
+      addVolunteerSuggestionLoading = false;
+    }
+  }
+
+  function applyAddVolunteerSuggestion(person) {
+    addVolunteerForm = {
+      first_name: person.first_name || '',
+      last_name: person.last_name || '',
+      email: person.email || '',
+      phone: person.phone || addVolunteerForm.phone
+    };
+    addVolunteerSuggestions = [];
   }
 
   async function createVolunteerLeader() {
@@ -645,9 +887,20 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
     };
 
     try {
-      const userId = await createLeaderAccount(newLeaderDetails);
+      const { data, error } = await supabase.functions.invoke('create-leader', {
+        body: {
+          domainId,
+          first_name: newLeaderDetails.first_name,
+          last_name: newLeaderDetails.last_name,
+          email: newLeaderDetails.email,
+          phone: newLeaderDetails.phone
+        }
+      });
+      if (error || data?.error) throw new Error(await getEdgeInvokeErrorMessage(data, error, 'Failed to create leader'));
+      const userId = data?.userId;
+      if (!userId) throw new Error('No user ID returned');
 
-      await updateDomainLeader(domainId, userId);
+      await Promise.all([roles.fetchRoles(), domains.fetchDomains()]);
 
       availableLeaders = [...availableLeaders, {
         id: userId,
@@ -694,6 +947,7 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
     const firstName = form.first_name?.trim() || '';
     const lastName = form.last_name?.trim() || '';
     const email = form.email?.trim() || '';
+    const phone = form.phone?.trim() || null;
 
     if (!firstName || !lastName || !email) {
       setLeaderForm(domain.id, { error: 'First name, last name, and email are required.' });
@@ -710,13 +964,14 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
     setLeaderForm(domain.id, { error: '', success: '' });
 
     try {
-      const userId = await createLeaderAccount({
-        first_name: firstName,
-        last_name: lastName,
-        email
+      const { data, error } = await supabase.functions.invoke('create-leader', {
+        body: { domainId: domain.id, first_name: firstName, last_name: lastName, email, phone }
       });
+      if (error || data?.error) throw new Error(await getEdgeInvokeErrorMessage(data, error, 'Failed to create leader'));
+      const userId = data?.userId;
+      if (!userId) throw new Error('No user ID returned');
 
-      await updateDomainLeader(domain.id, userId);
+      await Promise.all([roles.fetchRoles(), domains.fetchDomains()]);
 
       availableLeaders = [...availableLeaders, {
         id: userId,
@@ -737,17 +992,26 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
         error: ''
       });
 
-      alert(`✅ ${firstName} ${lastName} is now the volunteer leader for ${domain.name}.`);
-
       sendLeaderInviteEmail({
         email,
         first_name: firstName,
         domainName: domain.name
       }).then(() => {
         console.info(`Invite email sent to ${email}`);
+        leaderAddSuccess = { domainName: domain.name, leaderName: `${firstName} ${lastName}`.trim(), email };
+        if (leaderAddSuccessTimeout) clearTimeout(leaderAddSuccessTimeout);
+        leaderAddSuccessTimeout = setTimeout(() => {
+          leaderAddSuccess = null;
+          leaderAddSuccessTimeout = null;
+        }, 6000);
       }).catch(emailErr => {
         console.error('Email invite error:', emailErr);
-        alert(`Leader created, but we couldn't send the invite email automatically. Please contact ${email} manually.`);
+        leaderAddSuccess = { domainName: domain.name, leaderName: `${firstName} ${lastName}`.trim(), email, emailFailed: true };
+        if (leaderAddSuccessTimeout) clearTimeout(leaderAddSuccessTimeout);
+        leaderAddSuccessTimeout = setTimeout(() => {
+          leaderAddSuccess = null;
+          leaderAddSuccessTimeout = null;
+        }, 8000);
       });
     } catch (err) {
       console.error('Inline leader creation error:', err);
@@ -832,6 +1096,19 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
             </div>
           </div>
 
+          {#if leaderAddSuccess}
+            <div class="leader-add-success-banner" class:leader-add-success-banner--warn={leaderAddSuccess.emailFailed} role="status">
+              <span>
+                {#if leaderAddSuccess.emailFailed}
+                  Leader added. Email could not be sent to {leaderAddSuccess.email}. Please contact them manually.
+                {:else}
+                  Email sent to {leaderAddSuccess.email} for {leaderAddSuccess.domainName}.
+                {/if}
+              </span>
+              <button type="button" class="leader-add-success-dismiss" on:click={() => { leaderAddSuccess = null; if (leaderAddSuccessTimeout) clearTimeout(leaderAddSuccessTimeout); leaderAddSuccessTimeout = null; }} aria-label="Dismiss">×</button>
+            </div>
+          {/if}
+
           {#if $domains.length === 0}
             <div class="empty-state">No domains configured yet.</div>
           {:else}
@@ -840,10 +1117,8 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
                 <thead>
                   <tr>
                     <th>Domain</th>
-                    <th>Description</th>
                     <th>Leader</th>
                     <th>Contact</th>
-                    <th>Roles</th>
                     <th></th>
                   </tr>
                 </thead>
@@ -860,9 +1135,6 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
                     <tr>
                       <td>
                         <strong>{domain.name}</strong>
-                      </td>
-                      <td class="domain-description">
-                        {domain.description || '—'}
                       </td>
                       <td>
                         {#if domain.leader}
@@ -888,6 +1160,25 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
                               disabled={isCreating}
                             />
                           </div>
+                          {#if leaderSuggestionLoading[domain.id]}
+                            <div class="leader-suggestions leader-suggestions--loading">Searching…</div>
+                          {:else if leaderSuggestions[domain.id]?.length}
+                            <div class="leader-suggestions">
+                              {#each leaderSuggestions[domain.id] as person (person.id)}
+                                <button
+                                  type="button"
+                                  class="leader-suggestion-chip"
+                                  on:click={() => applyLeaderSuggestion(domain.id, person)}
+                                >
+                                  <span class="name">{person.first_name || ''} {person.last_name || ''}</span>
+                                  <span class="email">{person.email}</span>
+                                  {#if person.source === 'contact'}
+                                    <span class="badge">Past volunteer</span>
+                                  {/if}
+                                </button>
+                              {/each}
+                            </div>
+                          {/if}
                         {/if}
                       </td>
                       <td>
@@ -912,9 +1203,6 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
                           </div>
                         {/if}
                       </td>
-                      <td class="roles-count">
-                        {domain.role_count || 0}
-                      </td>
                       <td class="leader-actions">
                         {#if domain.leader}
                           <button
@@ -932,7 +1220,7 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
                               on:click={() => handleInlineLeaderSubmit(domain)}
                               disabled={isCreating}
                             >
-                              {isCreating ? 'Creating…' : 'Create & notify'}
+                              {isCreating ? 'Adding…' : 'Add'}
                             </button>
                             {#if form.error}
                               <div class="form-error-text">{form.error}</div>
@@ -1145,6 +1433,7 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
               id="new-leader-first-name"
               type="text"
               bind:value={addVolunteerForm.first_name}
+              on:input={scheduleAddVolunteerSuggestions}
               placeholder="Jane"
               required
             />
@@ -1155,6 +1444,7 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
               id="new-leader-last-name"
               type="text"
               bind:value={addVolunteerForm.last_name}
+              on:input={scheduleAddVolunteerSuggestions}
               placeholder="Doe"
               required
             />
@@ -1166,6 +1456,7 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
             <label for="new-leader-email">Email</label>
             <input
               id="new-leader-email"
+              on:input={scheduleAddVolunteerSuggestions}
               type="email"
               bind:value={addVolunteerForm.email}
               placeholder="leader@example.com"
@@ -1183,8 +1474,27 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
           </div>
         </div>
 
+        {#if addVolunteerSuggestionLoading}
+          <div class="add-volunteer-suggestions add-volunteer-suggestions--loading">Searching…</div>
+        {:else if addVolunteerSuggestions.length}
+          <div class="add-volunteer-suggestions">
+            <span class="add-volunteer-suggestions-intro">Select to fill form:</span>
+            <div class="add-volunteer-suggestions-list">
+              {#each addVolunteerSuggestions as person (person.id)}
+                <button type="button" class="add-volunteer-suggestion-chip" on:click={() => applyAddVolunteerSuggestion(person)}>
+                  <span class="name">{person.first_name || ''} {person.last_name || ''}</span>
+                  <span class="email">{person.email}</span>
+                  {#if person.source === 'contact'}
+                    <span class="badge">Past volunteer</span>
+                  {/if}
+                </button>
+              {/each}
+            </div>
+          </div>
+        {/if}
+
         <p class="helper-text">
-          We’ll email the volunteer a link to set their password. They’ll be added as a volunteer leader and assigned to this domain automatically.
+          We’ll email them a sign-in link. They’ll be added as volunteer leader for this domain automatically.
         </p>
       </div>
       <div class="modal-footer">
@@ -1318,11 +1628,6 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
     background: #f8f9fa;
   }
 
-  .domain-description {
-    color: #495057;
-    max-width: 360px;
-  }
-
   .leader-contact {
     display: flex;
     flex-direction: column;
@@ -1333,6 +1638,45 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
     display: flex;
     gap: 0.5rem;
     flex-wrap: wrap;
+  }
+
+  .leader-suggestions {
+    margin-top: 0.5rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+  .leader-suggestions--loading {
+    color: #6c757d;
+    font-size: 0.85rem;
+  }
+  .leader-suggestion-chip {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 0.4rem 0.6rem;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    background: #f8f9fa;
+    cursor: pointer;
+    font-size: 0.85rem;
+    text-align: left;
+  }
+  .leader-suggestion-chip:hover {
+    border-color: #0d6efd;
+    background: #e7f1ff;
+  }
+  .leader-suggestion-chip .name {
+    font-weight: 600;
+  }
+  .leader-suggestion-chip .email {
+    color: #0d6efd;
+    font-size: 0.8rem;
+  }
+  .leader-suggestion-chip .badge {
+    font-size: 0.65rem;
+    color: #6c757d;
+    margin-top: 2px;
   }
 
   .inline-email-input {
@@ -1378,13 +1722,43 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
     color: #6c757d;
   }
 
-  .roles-count {
-    font-weight: 600;
-    text-align: center;
-  }
-
   .leader-actions {
     white-space: nowrap;
+  }
+
+  .leader-add-success-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    background: #d4edda;
+    border: 1px solid #c3e6cb;
+    border-radius: 8px;
+    color: #155724;
+    font-size: 0.95rem;
+  }
+  .leader-add-success-dismiss {
+    background: none;
+    border: none;
+    color: #155724;
+    font-size: 1.25rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 0.25rem;
+    opacity: 0.8;
+  }
+  .leader-add-success-dismiss:hover {
+    opacity: 1;
+  }
+  .leader-add-success-banner--warn {
+    background: #fff3cd;
+    border-color: #ffeaa7;
+    color: #856404;
+  }
+  .leader-add-success-banner--warn .leader-add-success-dismiss {
+    color: #856404;
   }
 
   .leaders-summary .empty-state {
@@ -1802,6 +2176,53 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
     gap: 1rem;
+  }
+
+  .add-volunteer-suggestions {
+    margin-bottom: 1rem;
+  }
+  .add-volunteer-suggestions--loading {
+    color: #6c757d;
+    font-size: 0.9rem;
+  }
+  .add-volunteer-suggestions-intro {
+    display: block;
+    font-size: 0.85rem;
+    color: #6c757d;
+    margin-bottom: 0.5rem;
+  }
+  .add-volunteer-suggestions-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .add-volunteer-suggestion-chip {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    background: #f8f9fa;
+    cursor: pointer;
+    font-size: 0.9rem;
+    text-align: left;
+  }
+  .add-volunteer-suggestion-chip:hover {
+    border-color: #0d6efd;
+    background: #e7f1ff;
+  }
+  .add-volunteer-suggestion-chip .name {
+    font-weight: 600;
+  }
+  .add-volunteer-suggestion-chip .email {
+    color: #0d6efd;
+    font-size: 0.85rem;
+  }
+  .add-volunteer-suggestion-chip .badge {
+    font-size: 0.7rem;
+    color: #6c757d;
+    margin-top: 2px;
   }
 
   .helper-text {

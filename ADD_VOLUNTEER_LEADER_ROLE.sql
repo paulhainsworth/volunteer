@@ -14,6 +14,7 @@ ALTER TABLE profiles ADD CONSTRAINT profiles_role_check
   CHECK (role IN ('admin', 'volunteer', 'volunteer_leader'));
 
 -- Step 4: Add RLS policy for volunteer leaders to view their assigned roles
+DROP POLICY IF EXISTS "Volunteer leaders can view their assigned roles" ON volunteer_roles;
 CREATE POLICY "Volunteer leaders can view their assigned roles"
   ON volunteer_roles FOR SELECT
   USING (
@@ -26,6 +27,7 @@ CREATE POLICY "Volunteer leaders can view their assigned roles"
   );
 
 -- Step 5: Add RLS policy for volunteer leaders to update their assigned roles
+DROP POLICY IF EXISTS "Volunteer leaders can update their assigned roles" ON volunteer_roles;
 CREATE POLICY "Volunteer leaders can update their assigned roles"
   ON volunteer_roles FOR UPDATE
   USING (
@@ -38,6 +40,7 @@ CREATE POLICY "Volunteer leaders can update their assigned roles"
   );
 
 -- Step 6: Allow volunteer leaders to view signups for their roles
+DROP POLICY IF EXISTS "Volunteer leaders can view signups for their roles" ON signups;
 CREATE POLICY "Volunteer leaders can view signups for their roles"
   ON signups FOR SELECT
   USING (

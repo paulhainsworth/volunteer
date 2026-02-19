@@ -2,17 +2,22 @@
   import { onMount } from 'svelte';
   import { roles } from '../../lib/stores/roles';
   import { auth } from '../../lib/stores/auth';
-  import { format } from 'date-fns';
   import { push } from 'svelte-spa-router';
-  import { formatTimeRange, calculateDuration, isFlexibleTime } from '../../lib/utils/timeDisplay';
+  import { formatTimeRange, calculateDuration, isFlexibleTime, formatEstimateDuration, formatEventDateInPacific, parseEventDate } from '../../lib/utils/timeDisplay';
+  import {
+    createVolunteerAndSignup,
+    sendRoleConfirmationEmail,
+    sendWelcomeEmail
+  } from '../../lib/volunteerSignup';
+  import { signups } from '../../lib/stores/signups';
 
   let loading = true;
   let error = '';
   let searchQuery = '';
   let sortBy = 'date';
-  let filterDate = '';
   let filterStatus = 'all';
   let raceDayFilter = 'all'; // 'all', 'bhrr', 'bsc', 'pre-race', 'post-race'
+  let filterDuration = 'all'; // 'all', '1-or-less', '2-3', '4-5', '6-8', 'full-day'
   let selectedRole = null; // For modal
   let expandedDomains = new Set(); // Track which domains are expanded
   let domainsInitialized = false; // Track if we've initialized domains
@@ -23,19 +28,63 @@
   let copyMessage = '';
   let copyMessageTimeout = null;
 
+  // PII modal for new volunteer signup (unauthenticated)
+  let showPiiModal = false;
+  let piiRole = null;
+  let piiForm = {
+    first_name: '',
+    last_name: '',
+    email: '',
+    phone: '',
+    emergency_contact_name: '',
+    emergency_contact_phone: ''
+  };
+  let piiSubmitting = false;
+  let piiError = '';
+
   onMount(async () => {
     // Redirect to onboarding if no emergency contact
     if ($auth.user && !$auth.profile?.emergency_contact_name) {
+      loading = false;
       push('/onboarding');
       return;
     }
 
+    let rolesData = [];
     try {
-      await roles.fetchRoles();
+      rolesData = await roles.fetchRoles() || [];
     } catch (err) {
-      error = err.message;
+      error = err?.message || 'Failed to load opportunities.';
     } finally {
       loading = false;
+    }
+
+    // If arrived with ?signup=ROLE_ID (e.g. from shared link or confirmation email)
+    const hash = typeof window !== 'undefined' ? window.location.hash || '' : '';
+    const queryIndex = hash.indexOf('?');
+    if (queryIndex !== -1) {
+      const queryParams = new URLSearchParams(hash.slice(queryIndex));
+      const signupId = queryParams.get('signup');
+      if (signupId && rolesData.length) {
+        const r = rolesData.find((x) => x.id === signupId);
+        if (r) {
+          // If user is logged in and already signed up for this role, go to signup page instead of PII modal
+          if ($auth.user) {
+            try {
+              const mySignups = (await signups.fetchMySignups($auth.user.id)) ?? [];
+              const alreadySignedUp = mySignups.some((s) => s.role_id === signupId || s.role?.id === signupId);
+              if (alreadySignedUp) {
+                push(`/signup/${signupId}`);
+                return;
+              }
+            } catch (_) {
+              /* fall through to PII modal */
+            }
+          }
+          piiRole = r;
+          showPiiModal = true;
+        }
+      }
     }
   });
 
@@ -45,6 +94,29 @@
     if (percentage >= 75) return { label: 'Almost Full', class: 'almost-full' };
     if (percentage >= 50) return { label: 'Filling Up', class: 'filling' };
     return { label: 'Available', class: 'available' };
+  }
+
+  /** Duration in hours: estimate_duration_hours if set, else from start/end time. Null if unknown. */
+  function getRoleDurationHours(role) {
+    if (role.estimate_duration_hours != null && role.estimate_duration_hours > 0) {
+      return Number(role.estimate_duration_hours);
+    }
+    return calculateDuration(role.start_time, role.end_time);
+  }
+
+  /** True if role's duration falls in the given bucket. */
+  function roleMatchesDurationFilter(role, bucket) {
+    if (bucket === 'all') return true;
+    const hours = getRoleDurationHours(role);
+    if (hours == null) return false;
+    switch (bucket) {
+      case '1-or-less': return hours <= 1;
+      case '2-3': return hours > 1 && hours <= 3;
+      case '4-5': return hours > 3 && hours <= 5;
+      case '6-8': return hours > 5 && hours <= 8;
+      case 'full-day': return hours > 8;
+      default: return true;
+    }
   }
 
   function getDomainMeta(role) {
@@ -95,21 +167,13 @@
     return null;
   }
 
-  // Format date for display - parse as local date to avoid timezone issues
+  // Format date in Pacific (America/Los_Angeles); blank → TBD
   function formatDateForDisplay(dateString) {
-    if (!dateString) return '';
-    // Parse YYYY-MM-DD as local date (not UTC) to avoid timezone shifting
-    const [year, month, day] = dateString.split('-').map(Number);
-    const localDate = new Date(year, month - 1, day);
-    return format(localDate, 'EEEE, MMMM d, yyyy');
+    return formatEventDateInPacific(dateString, 'long');
   }
 
-  // Format date for compact display
   function formatDateCompact(dateString) {
-    if (!dateString) return '';
-    const [year, month, day] = dateString.split('-').map(Number);
-    const localDate = new Date(year, month - 1, day);
-    return format(localDate, 'EEE, MMM d, yyyy');
+    return formatEventDateInPacific(dateString, 'short');
   }
 
   // Toggle domain expansion
@@ -169,24 +233,28 @@
           // Show dates after April 19, 2026
           if (roleDateStr <= BSC_DATE) return false;
         }
-      } else {
-        // Manual date filter (only applies when race day filter is 'all')
-        if (filterDate && role.event_date !== filterDate) return false;
       }
 
       // Status filter
       if (filterStatus === 'available' && role.positions_filled >= role.positions_total) return false;
       if (filterStatus === 'urgent') {
         const percentage = (role.positions_filled / role.positions_total) * 100;
-        const daysUntil = Math.ceil((new Date(role.event_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+        const daysUntil = role.event_date
+          ? Math.ceil((parseEventDate(role.event_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+          : Infinity;
         if (percentage >= 50 || daysUntil > 7) return false;
       }
+
+      // Duration filter
+      if (!roleMatchesDurationFilter(role, filterDuration)) return false;
 
       return true;
     })
     .sort((a, b) => {
       if (sortBy === 'date') {
-        const dateCompare = new Date(a.event_date).getTime() - new Date(b.event_date).getTime();
+        const timeA = parseEventDate(a.event_date)?.getTime() ?? Infinity;
+        const timeB = parseEventDate(b.event_date)?.getTime() ?? Infinity;
+        const dateCompare = timeA - timeB;
         if (dateCompare !== 0) return dateCompare;
         if (isFlexibleTime(a) && !isFlexibleTime(b)) return 1;
         if (!isFlexibleTime(a) && isFlexibleTime(b)) return -1;
@@ -231,7 +299,9 @@
     return Array.from(map.values()).sort((a, b) => {
       const firstRoleA = a.roles[0];
       const firstRoleB = b.roles[0];
-      const dateCompare = new Date(firstRoleA.event_date).getTime() - new Date(firstRoleB.event_date).getTime();
+      const timeA = parseEventDate(firstRoleA.event_date)?.getTime() ?? Infinity;
+      const timeB = parseEventDate(firstRoleB.event_date)?.getTime() ?? Infinity;
+      const dateCompare = timeA - timeB;
       if (dateCompare !== 0) return dateCompare;
       if (isFlexibleTime(firstRoleA) && !isFlexibleTime(firstRoleB)) return 1;
       if (!isFlexibleTime(firstRoleA) && isFlexibleTime(firstRoleB)) return -1;
@@ -239,12 +309,78 @@
     });
   })();
 
-  function handleSignup(roleId) {
+  function handleSignup(roleOrId) {
+    const role = typeof roleOrId === 'object' ? roleOrId : $roles.find((r) => r.id === roleOrId);
     if (!$auth.user) {
-      push('/auth/login');
+      piiRole = role;
+      piiForm = {
+        first_name: '',
+        last_name: '',
+        email: '',
+        phone: '',
+        emergency_contact_name: '',
+        emergency_contact_phone: ''
+      };
+      piiError = '';
+      showPiiModal = true;
       return;
     }
-    push(`/signup/${roleId}`);
+    push(`/signup/${role?.id || roleOrId}`);
+  }
+
+  function closePiiModal() {
+    showPiiModal = false;
+    piiRole = null;
+    piiError = '';
+    piiSubmitting = false;
+  }
+
+  async function submitPiiModal() {
+    const f = piiForm;
+    if (!f.first_name?.trim() || !f.last_name?.trim() || !f.email?.trim()) {
+      piiError = 'First name, last name, and email are required.';
+      return;
+    }
+    if (!piiRole) {
+      piiError = 'No role selected.';
+      return;
+    }
+
+    piiSubmitting = true;
+    piiError = '';
+
+    try {
+      const result = await createVolunteerAndSignup(
+        {
+          first_name: f.first_name.trim(),
+          last_name: f.last_name.trim(),
+          email: f.email.trim(),
+          phone: f.phone?.trim() || null,
+          emergency_contact_name: f.emergency_contact_name?.trim() || null,
+          emergency_contact_phone: f.emergency_contact_phone?.trim() || null
+        },
+        piiRole.id
+      );
+
+      sendRoleConfirmationEmail({
+        to: result.email,
+        first_name: result.first_name,
+        role: piiRole,
+        roleId: piiRole.id
+      }).catch((err) => console.error('Role confirmation email failed:', err));
+
+      sendWelcomeEmail({
+        to: result.email,
+        first_name: result.first_name
+      }).catch((err) => console.error('Welcome email failed:', err));
+
+      closePiiModal();
+      push('/my-signups');
+    } catch (err) {
+      piiError = err.message || 'Signup failed. Please try again.';
+    } finally {
+      piiSubmitting = false;
+    }
   }
 
   function handleShare(role) {
@@ -321,8 +457,9 @@
   }
 
   function handleKeydown(event) {
-    if (event.key === 'Escape' && selectedRole) {
-      closeModal();
+    if (event.key === 'Escape') {
+      if (showPiiModal) closePiiModal();
+      else if (selectedRole) closeModal();
     }
   }
 </script>
@@ -363,12 +500,14 @@
       <option value="urgent">Urgent Need</option>
     </select>
 
-    <input
-      type="date"
-      bind:value={filterDate}
-      class="filter-select"
-      placeholder="Filter by date"
-    />
+    <select bind:value={filterDuration} class="filter-select">
+      <option value="all">Any duration</option>
+      <option value="1-or-less">1 hr or less</option>
+      <option value="2-3">2–3 hrs</option>
+      <option value="4-5">4–5 hrs</option>
+      <option value="6-8">6–8 hrs</option>
+      <option value="full-day">Full day</option>
+    </select>
   </div>
 
   {#if loading}
@@ -433,6 +572,11 @@
                         <span>{formatTimeRange(role)}{#if duration != null} (~{duration}h){/if}</span>
                       </div>
 
+                      <div class="detail-inline">
+                        <span class="icon">⏱</span>
+                        <span>Est. {formatEstimateDuration(role.estimate_duration_hours)}</span>
+                      </div>
+
                       {#if role.location}
                         <div class="detail-inline">
                           <span class="icon">📍</span>
@@ -450,7 +594,7 @@
                   <div class="role-actions-compact">
                     <button
                       class="btn btn-primary btn-compact"
-                      on:click={() => handleSignup(role.id)}
+                      on:click={() => handleSignup(role)}
                       disabled={isFull}
                     >
                       {isFull ? 'Full' : 'Sign Up'}
@@ -510,6 +654,14 @@
             </div>
           </div>
 
+          <div class="detail-row">
+            <span class="icon">⏱</span>
+            <div>
+              <strong>Est. duration</strong>
+              <p>{formatEstimateDuration(selectedRole.estimate_duration_hours)}</p>
+            </div>
+          </div>
+
           {#if selectedRole.location}
             <div class="detail-row">
               <span class="icon">📍</span>
@@ -548,7 +700,7 @@
       <div class="modal-actions">
         <button
           class="btn btn-primary btn-large"
-          on:click={() => handleSignup(selectedRole.id)}
+          on:click={() => handleSignup(selectedRole)}
           disabled={isFull}
         >
           {isFull ? 'This role is full' : 'Sign Up for This Role'}
@@ -574,6 +726,57 @@
           {copyMessage}
         </div>
       {/if}
+    </div>
+  </div>
+{/if}
+
+{#if showPiiModal && piiRole}
+  <div class="modal-overlay" on:click={closePiiModal}>
+    <div class="modal-content pii-modal" on:click|stopPropagation>
+      <button class="modal-close" on:click={closePiiModal} aria-label="Close">×</button>
+      <div class="modal-header">
+        <h2>Sign Up for {piiRole.name}</h2>
+        <p class="modal-subtitle">Enter your information to complete your signup</p>
+      </div>
+      <div class="modal-body">
+        {#if piiError}
+          <div class="alert alert-error">{piiError}</div>
+        {/if}
+        <div class="form-row">
+          <div class="form-group">
+            <label for="pii-first">First Name *</label>
+            <input id="pii-first" type="text" bind:value={piiForm.first_name} placeholder="First name" disabled={piiSubmitting} />
+          </div>
+          <div class="form-group">
+            <label for="pii-last">Last Name *</label>
+            <input id="pii-last" type="text" bind:value={piiForm.last_name} placeholder="Last name" disabled={piiSubmitting} />
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="pii-email">Email Address *</label>
+          <input id="pii-email" type="email" bind:value={piiForm.email} placeholder="you@example.com" disabled={piiSubmitting} />
+        </div>
+        <div class="form-group">
+          <label for="pii-phone">Phone Number (optional)</label>
+          <input id="pii-phone" type="tel" bind:value={piiForm.phone} placeholder="(555) 123-4567" disabled={piiSubmitting} />
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="pii-emergency-name">Emergency Contact Name *</label>
+            <input id="pii-emergency-name" type="text" bind:value={piiForm.emergency_contact_name} placeholder="Full name" disabled={piiSubmitting} />
+          </div>
+          <div class="form-group">
+            <label for="pii-emergency-phone">Emergency Contact Phone *</label>
+            <input id="pii-emergency-phone" type="tel" bind:value={piiForm.emergency_contact_phone} placeholder="(555) 123-4567" disabled={piiSubmitting} />
+          </div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary" on:click={closePiiModal} disabled={piiSubmitting}>Cancel</button>
+        <button type="button" class="btn btn-primary" on:click={submitPiiModal} disabled={piiSubmitting}>
+          {piiSubmitting ? 'Signing up...' : 'Complete Signup'}
+        </button>
+      </div>
     </div>
   </div>
 {/if}
@@ -1064,6 +1267,60 @@
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
+  }
+
+  .pii-modal .modal-header {
+    flex-direction: column;
+  }
+
+  .pii-modal .modal-subtitle {
+    margin: 0.5rem 0 0;
+    color: #6c757d;
+    font-size: 0.95rem;
+  }
+
+  .pii-modal .form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+
+  .pii-modal .form-group {
+    margin-bottom: 1rem;
+  }
+
+  .pii-modal .form-group label {
+    display: block;
+    margin-bottom: 0.35rem;
+    font-weight: 600;
+    color: #1a1a1a;
+    font-size: 0.9rem;
+  }
+
+  .pii-modal .form-group input {
+    width: 100%;
+    padding: 0.6rem 0.75rem;
+    border: 1px solid #ced4da;
+    border-radius: 6px;
+    font-size: 1rem;
+  }
+
+  .pii-modal .alert {
+    padding: 0.75rem 1rem;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+  }
+
+  .pii-modal .alert-error {
+    background: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+  }
+
+  .pii-modal .modal-actions {
+    flex-direction: row;
+    justify-content: flex-end;
   }
 
   .btn-large {

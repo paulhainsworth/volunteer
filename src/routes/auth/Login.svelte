@@ -3,34 +3,21 @@
   import { push } from 'svelte-spa-router';
 
   let email = '';
-  let password = '';
   let error = '';
   let loading = false;
+  let emailSent = false;
 
+  // We never check emergency contact here so magic links are always sent (e.g. for
+  // admin-created leaders who will complete emergency contact after clicking the link).
   async function handleLogin() {
     error = '';
     loading = true;
 
     try {
-      await auth.signIn(email, password);
-      const { profile } = await auth.refreshSession();
-      
-      // Check if needs onboarding (no emergency contact)
-      if (!profile?.emergency_contact_name) {
-        push('/onboarding');
-        return;
-      }
-
-      // Redirect based on role
-      if (profile?.role === 'admin') {
-        push('/admin');
-      } else if (profile?.role === 'volunteer_leader') {
-        push('/leader');
-      } else {
-        push('/volunteer');
-      }
+      await auth.signInWithMagicLink(email);
+      emailSent = true;
     } catch (err) {
-      error = err.message || 'Failed to sign in';
+      error = err.message || 'Failed to send sign-in link';
     } finally {
       loading = false;
     }
@@ -40,49 +27,39 @@
 <div class="auth-page">
   <div class="auth-card">
     <h1>Sign In</h1>
-    <p class="subtitle">Welcome back to Race Volunteer Manager</p>
+    <p class="subtitle">Enter your email and we'll send you a verification link. No password needed.</p>
 
-    {#if error}
-      <div class="alert alert-error">
-        {error}
+    {#if emailSent}
+      <div class="success-message">
+        <p><strong>Check your email</strong></p>
+        <p>We've sent a sign-in link to <strong>{email}</strong>. Click the link to sign in.</p>
+        <p class="hint">Didn't receive it? Check your spam folder or <button type="button" class="btn-link" on:click={() => (emailSent = false)}>try again</button>.</p>
       </div>
+    {:else}
+      {#if error}
+        <div class="alert alert-error">
+          {error}
+        </div>
+      {/if}
+
+      <form on:submit|preventDefault={handleLogin}>
+        <div class="form-group">
+          <label for="email">Email</label>
+          <input
+            type="email"
+            id="email"
+            bind:value={email}
+            required
+            placeholder="you@example.com"
+            disabled={loading}
+          />
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-full" disabled={loading}>
+          {loading ? 'Sending link...' : 'Send sign-in link'}
+        </button>
+      </form>
     {/if}
-
-    <form on:submit|preventDefault={handleLogin}>
-      <div class="form-group">
-        <label for="email">Email</label>
-        <input
-          type="email"
-          id="email"
-          bind:value={email}
-          required
-          placeholder="you@example.com"
-          disabled={loading}
-        />
-      </div>
-
-      <div class="form-group">
-        <label for="password">Password</label>
-        <input
-          type="password"
-          id="password"
-          bind:value={password}
-          required
-          placeholder="Enter your password"
-          disabled={loading}
-        />
-      </div>
-
-      <button type="submit" class="btn btn-primary btn-full" disabled={loading}>
-        {loading ? 'Signing in...' : 'Sign In'}
-      </button>
-    </form>
-
-    <div class="auth-links">
-      <a href="#/auth/reset-password">Forgot password?</a>
-      <span>·</span>
-      <a href="#/auth/signup">Create account</a>
-    </div>
   </div>
 </div>
 
@@ -113,6 +90,7 @@
   .subtitle {
     color: #6c757d;
     margin-bottom: 2rem;
+    line-height: 1.5;
   }
 
   .alert {
@@ -144,13 +122,11 @@
     border: 1px solid #ced4da;
     border-radius: 6px;
     font-size: 1rem;
-    transition: border-color 0.2s;
   }
 
   input:focus {
     outline: none;
     border-color: #007bff;
-    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
   }
 
   input:disabled {
@@ -165,7 +141,6 @@
     font-size: 1rem;
     font-weight: 600;
     cursor: pointer;
-    transition: background 0.2s;
   }
 
   .btn-primary {
@@ -186,23 +161,27 @@
     width: 100%;
   }
 
-  .auth-links {
-    margin-top: 1.5rem;
-    text-align: center;
+  .success-message {
+    padding: 1rem 0;
+  }
+
+  .success-message p {
+    margin: 0 0 0.75rem;
+    color: #1a1a1a;
+  }
+
+  .success-message .hint {
     color: #6c757d;
+    font-size: 0.9rem;
   }
 
-  .auth-links a {
+  .btn-link {
+    background: none;
+    border: none;
     color: #007bff;
-    text-decoration: none;
-  }
-
-  .auth-links a:hover {
+    cursor: pointer;
     text-decoration: underline;
-  }
-
-  .auth-links span {
-    margin: 0 0.5rem;
+    padding: 0;
+    font-size: inherit;
   }
 </style>
-

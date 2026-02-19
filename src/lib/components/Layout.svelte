@@ -83,8 +83,7 @@
             </button>
           </div>
         {:else}
-          <a href="#/auth/login" class="nav-link" on:click={handleNavClick}>Login</a>
-          <a href="#/auth/signup" class="nav-link btn-primary" on:click={handleNavClick}>Sign Up</a>
+          <a href="#/auth/login" class="nav-link" on:click={handleNavClick}>Sign In</a>
           
           <button class="theme-toggle" on:click={() => theme.toggle()} title="Toggle {$theme === 'light' ? 'dark' : 'light'} mode">
             {#if $theme === 'light'}

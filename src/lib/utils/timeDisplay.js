@@ -1,9 +1,36 @@
 /**
  * Time display helpers for volunteer roles.
  * Roles with flexible times are stored as start_time "00:00", end_time "00:00" in the DB.
+ * Event dates (YYYY-MM-DD) are displayed in Pacific (America/Los_Angeles) throughout the app.
  */
 
 const FLEXIBLE_START = '00:00';
+const PACIFIC_TZ = 'America/Los_Angeles';
+
+/**
+ * Parse a date-only string (YYYY-MM-DD) without timezone shift.
+ * Returns a Date at noon UTC so the calendar day is correct in all timezones.
+ */
+export function parseEventDate(dateString) {
+  if (!dateString || typeof dateString !== 'string') return null;
+  const trimmed = dateString.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return null;
+  return new Date(trimmed + 'T12:00:00.000Z');
+}
+
+/**
+ * Format an event_date (YYYY-MM-DD) in Pacific time for display.
+ * style: 'short' => "Sun, Apr 19"  |  'long' => "Sunday, April 19, 2026"
+ */
+export function formatEventDateInPacific(dateString, style = 'short') {
+  const d = parseEventDate(dateString);
+  if (!d) return 'TBD';
+  const opts = style === 'long'
+    ? { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', timeZone: PACIFIC_TZ }
+    : { weekday: 'short', month: 'short', day: 'numeric', timeZone: PACIFIC_TZ };
+  return new Intl.DateTimeFormat('en-US', opts).format(d);
+}
+
 const FLEXIBLE_END = '00:00';
 
 function normalizeTime(t) {
@@ -35,13 +62,14 @@ export function formatTime(time) {
   return `${displayHour}:${mins} ${ampm}`;
 }
 
-/** "Flexible" or "7:00 AM - 9:00 AM". Use for display in UI. */
+/** "TBD" when no times set, "Flexible" for 00:00/00:00, or "7:00 AM – 9:00 AM". Use for display in UI. */
 export function formatTimeRange(role) {
   if (!role) return '';
+  const s = role.start_time ?? '';
+  const e = role.end_time ?? '';
+  if (!s && !e) return 'TBD';
   if (isFlexibleTime(role)) return 'Flexible';
-  const s = role.start_time || '';
-  const e = role.end_time || '';
-  if (!s || !e) return 'Flexible';
+  if (!s || !e) return 'TBD';
   return `${formatTime(s)} – ${formatTime(e)}`;
 }
 
@@ -59,4 +87,12 @@ export function calculateDuration(startTime, endTime) {
 /** Values to store in DB for "flexible" times. */
 export function flexibleSentinel() {
   return { start_time: FLEXIBLE_START, end_time: FLEXIBLE_END };
+}
+
+/** Display estimate_duration_hours: "—" when null or 0, otherwise e.g. "2.5h". */
+export function formatEstimateDuration(hours) {
+  if (hours == null || hours === 0) return '—';
+  const h = Number(hours);
+  if (isNaN(h)) return '—';
+  return h % 1 === 0 ? `${h}h` : `${h}h`;
 }

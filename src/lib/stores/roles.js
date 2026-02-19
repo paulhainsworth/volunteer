@@ -55,27 +55,19 @@ function createRolesStore() {
             leader:profiles!leader_id(id, first_name, last_name)
           )
         `)
-        .order('event_date', { ascending: true })
-        .order('start_time', { ascending: true });
+        .order('event_date', { ascending: true, nullsFirst: false })
+        .order('start_time', { ascending: true, nullsFirst: false });
 
-      // Apply filters
-      if (filters.startDate) {
-        query = query.gte('event_date', filters.startDate);
-      }
-      if (filters.endDate) {
-        query = query.lte('event_date', filters.endDate);
-      }
+      if (filters.startDate) query = query.gte('event_date', filters.startDate);
+      if (filters.endDate) query = query.lte('event_date', filters.endDate);
 
       const { data, error } = await query;
-
       if (error) throw error;
 
-      // Transform data to include filled count
       const rolesWithCounts = data.map(role => ({
         ...role,
         positions_filled: role.signups?.[0]?.count || 0
       }));
-
       set(rolesWithCounts);
       return rolesWithCounts;
     },
