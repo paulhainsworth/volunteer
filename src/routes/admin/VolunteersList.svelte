@@ -22,6 +22,7 @@
     last_name: '',
     phone: '',
     role: 'volunteer',
+    team_club_affiliation_id: '',
     emergency_contact_name: '',
     emergency_contact_phone: '',
     emergency_contact_relationship: ''
@@ -44,6 +45,7 @@
   let addVolunteerSuggestions = [];
   let addVolunteerSuggestionLoading = false;
   let addVolunteerSuggestionTimer = null;
+  let selectedAffiliationId = '';
 
   onMount(async () => {
     if (!$auth.isAdmin) {
@@ -109,18 +111,20 @@
     }
   }
 
-  // Make sorting reactive to sort column and direction changes  
+  // Make sorting reactive to sort column, direction, and affiliation filter
   $: filteredVolunteers = (() => {
-    // This function depends on: $volunteers, searchQuery, sortColumn, sortDirection
-    const filtered = $volunteers.filter(volunteer => {
-      if (!searchQuery) return true;
+    let filtered = $volunteers;
+    if (selectedAffiliationId) {
+      filtered = filtered.filter(v => (v.team_club_affiliation_id || '') === selectedAffiliationId);
+    }
+    if (searchQuery) {
       const query = searchQuery.toLowerCase();
-      const name = `${volunteer.first_name || ''} ${volunteer.last_name || ''}`.toLowerCase();
-      const email = volunteer.email.toLowerCase();
-      return name.includes(query) || email.includes(query);
-    });
-    
-    // Sort the filtered results - includes sortColumn and sortDirection in scope
+      filtered = filtered.filter(volunteer => {
+        const name = `${volunteer.first_name || ''} ${volunteer.last_name || ''}`.toLowerCase();
+        const email = volunteer.email.toLowerCase();
+        return name.includes(query) || email.includes(query);
+      });
+    }
     return sortVolunteers(filtered);
   })();
 
@@ -157,6 +161,7 @@
       last_name: user.last_name || '',
       phone: user.phone || '',
       role: user.role,
+      team_club_affiliation_id: user.team_club_affiliation_id || '',
       emergency_contact_name: user.emergency_contact_name || '',
       emergency_contact_phone: user.emergency_contact_phone || '',
       emergency_contact_relationship: user.emergency_contact_relationship || ''
@@ -319,6 +324,7 @@
           last_name: editForm.last_name.trim(),
           phone: editForm.phone.trim() || null,
           role: editForm.role,
+          team_club_affiliation_id: editForm.team_club_affiliation_id?.trim() || null,
           emergency_contact_name: editForm.emergency_contact_name.trim() || null,
           emergency_contact_phone: editForm.emergency_contact_phone.trim() || null,
           emergency_contact_relationship: editForm.emergency_contact_relationship.trim() || null
@@ -719,6 +725,20 @@
           bind:value={searchQuery}
         />
       </div>
+
+      <div class="filter-affiliation">
+        <label for="filter-affiliation" class="filter-label">Affiliation</label>
+        <select
+          id="filter-affiliation"
+          bind:value={selectedAffiliationId}
+          title="Filter by team or club"
+        >
+          <option value="">All affiliations</option>
+          {#each $affiliations as aff (aff.id)}
+            <option value={aff.id}>{aff.name}</option>
+          {/each}
+        </select>
+      </div>
       
       <div class="view-toggle">
         <button
@@ -998,7 +1018,13 @@
 
     {#if filteredVolunteers.length === 0}
       <div class="empty">
-        <p>No volunteers found matching "{searchQuery}"</p>
+        {#if selectedAffiliationId}
+          <p>No volunteers with this affiliation.</p>
+        {:else if searchQuery}
+          <p>No volunteers found matching "{searchQuery}"</p>
+        {:else}
+          <p>No volunteers found.</p>
+        {/if}
       </div>
     {/if}
   {/if}
@@ -1066,6 +1092,20 @@
             <option value="volunteer">👤 Volunteer</option>
             <option value="volunteer_leader">⭐ Volunteer Leader</option>
             <option value="admin">👑 Admin</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="edit-affiliation">Team / Club Affiliation</label>
+          <select
+            id="edit-affiliation"
+            bind:value={editForm.team_club_affiliation_id}
+            disabled={saving}
+          >
+            <option value="">— None selected —</option>
+            {#each $affiliations as aff (aff.id)}
+              <option value={aff.id}>{aff.name}</option>
+            {/each}
           </select>
         </div>
 
@@ -1424,6 +1464,37 @@
   }
 
   .search-box input:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+  }
+
+  .filter-affiliation {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .filter-affiliation .filter-label {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #495057;
+    white-space: nowrap;
+  }
+
+  .filter-affiliation select {
+    min-width: 200px;
+    padding: 0.75rem;
+    border: 1px solid #ced4da;
+    border-radius: 6px;
+    font-size: 1rem;
+    background: white;
+    height: 2.75rem;
+    box-sizing: border-box;
+  }
+
+  .filter-affiliation select:focus {
     outline: none;
     border-color: #007bff;
     box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
