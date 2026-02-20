@@ -65,19 +65,16 @@ function createRolesStore() {
         const { data, error } = await query;
         if (error) throw error;
 
-        // Count only confirmed signups (signups(count) above counts all including cancelled)
+        // Use RPC for counts so unauthenticated users get correct fill (RLS blocks direct signups read)
         const roleIds = (data || []).map((r) => r.id);
         let confirmedCountByRole = {};
         if (roleIds.length > 0) {
-          const { data: signupRows } = await supabase
-            .from('signups')
-            .select('role_id')
-            .eq('status', 'confirmed')
-            .in('role_id', roleIds);
-          confirmedCountByRole = (signupRows || []).reduce((acc, row) => {
-            acc[row.role_id] = (acc[row.role_id] || 0) + 1;
-            return acc;
-          }, {});
+          const { data: countRows } = await supabase.rpc('get_confirmed_signup_counts', {
+            role_ids: roleIds
+          });
+          (countRows || []).forEach((row) => {
+            confirmedCountByRole[row.role_id] = Number(row.cnt) || 0;
+          });
         }
 
         const rolesWithCounts = (data || []).map(role => ({
@@ -110,15 +107,12 @@ function createRolesStore() {
       const roleIds = (data || []).map((r) => r.id);
       let confirmedCountByRole = {};
       if (roleIds.length > 0) {
-        const { data: signupRows } = await supabase
-          .from('signups')
-          .select('role_id')
-          .eq('status', 'confirmed')
-          .in('role_id', roleIds);
-        confirmedCountByRole = (signupRows || []).reduce((acc, row) => {
-          acc[row.role_id] = (acc[row.role_id] || 0) + 1;
-          return acc;
-        }, {});
+        const { data: countRows } = await supabase.rpc('get_confirmed_signup_counts', {
+          role_ids: roleIds
+        });
+        (countRows || []).forEach((row) => {
+          confirmedCountByRole[row.role_id] = Number(row.cnt) || 0;
+        });
       }
       return (data || []).map(role => ({
         ...role,
