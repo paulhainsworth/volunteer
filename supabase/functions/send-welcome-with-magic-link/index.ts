@@ -19,7 +19,7 @@ function escapeHref(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;')
 }
 
-const OMNIUM_SITE_URL = 'https://www.berkeleyomnium.com'
+const OMNIUM_SITE_URL = 'https://berkeleybikeclub.org/2026-berkeley-omnium'
 
 /** Lower-risk template: solid colors, no gradients/emoji. See docs/magic-link-email-revised.html */
 function buildMagicLinkHtml(actionLink: string): string {
