@@ -12,7 +12,7 @@
   let loading = true;
   let error = '';
   let searchQuery = '';
-  let viewMode = 'cards'; // 'cards' or 'table'
+  let viewMode = 'table'; // 'cards' or 'table'
   let sortColumn = 'last_name';
   let sortDirection = 'asc';
   let showEditModal = false;
