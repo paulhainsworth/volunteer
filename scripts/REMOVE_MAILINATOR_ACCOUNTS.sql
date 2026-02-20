@@ -1,4 +1,4 @@
--- Remove all profiles (and auth users) whose email contains "mailinator".
+-- Remove all profiles (and auth users) whose email contains "mailinator.com".
 -- Run in Supabase SQL Editor.
 --
 -- Same dependency behavior as other profile removals:
@@ -9,12 +9,12 @@
 --   2. If correct, uncomment the DELETE block and run again to remove.
 
 -- =============================================================================
--- PREVIEW: profiles with "mailinator" in email
+-- PREVIEW: profiles with "mailinator.com" in email
 -- =============================================================================
 WITH targets AS (
   SELECT p.id, p.email, p.first_name, p.last_name, p.role
   FROM profiles p
-  WHERE p.email ILIKE '%mailinator%'
+  WHERE p.email ILIKE '%mailinator.com%'
 ),
 preview AS (
   SELECT
@@ -42,7 +42,7 @@ BEGIN
   SELECT ARRAY_AGG(id)
   INTO target_ids
   FROM profiles
-  WHERE email ILIKE '%mailinator%';
+  WHERE email ILIKE '%mailinator.com%';
 
   IF target_ids IS NULL OR array_length(target_ids, 1) IS NULL THEN
     RAISE NOTICE 'No matching profiles; nothing deleted.';
@@ -54,6 +54,6 @@ BEGIN
   DELETE FROM profiles WHERE id = ANY(target_ids);
   DELETE FROM auth.users WHERE id = ANY(target_ids);
 
-  RAISE NOTICE 'Removed % user(s) with mailinator in email.', n;
+  RAISE NOTICE 'Removed % user(s) with mailinator.com in email.', n;
 END $$;
 */

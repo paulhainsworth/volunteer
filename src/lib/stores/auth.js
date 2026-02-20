@@ -107,7 +107,14 @@ function createAuthStore() {
         supabase.functions.invoke('send-magic-link', { body: { to: email, redirectTo } }),
         timeoutPromise
       ]);
-      if (error) throw error;
+      if (error) {
+        if (data?.error) throw new Error(data.error);
+        const msg = error.message || '';
+        if (msg.includes('429') || msg.includes('non-2xx') || msg.includes('Too many')) {
+          throw new Error('Too many sign-in attempts. Please wait a few minutes and try again.');
+        }
+        throw error;
+      }
       if (data?.error) throw new Error(data.error);
     },
 

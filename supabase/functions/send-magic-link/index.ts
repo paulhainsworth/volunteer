@@ -157,9 +157,14 @@ serve(async (req) => {
     if (!res.ok) {
       const errText = await res.text()
       console.error('Resend API error:', errText)
+      const status = res.status
+      const message =
+        status === 429
+          ? 'Too many sign-in attempts. Please wait a few minutes and try again.'
+          : `Failed to send email: ${errText}`
       return new Response(
-        JSON.stringify({ error: 'Failed to send email', details: errText }),
-        { status: res.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: message, details: errText }),
+        { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
