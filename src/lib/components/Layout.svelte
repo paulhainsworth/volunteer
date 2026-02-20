@@ -162,7 +162,7 @@
   }
 
   .nav-title {
-    font-size: 3rem;
+    font-size: 2rem;
     font-weight: 600;
     color: var(--text-primary);
     white-space: nowrap;
@@ -302,7 +302,7 @@
     }
 
     .nav-title {
-      font-size: 2rem;
+      font-size: 1.5rem;
       white-space: normal;
       line-height: 1.2;
     }

@@ -110,8 +110,9 @@ export async function sendRoleConfirmationEmail({ to, first_name, role, roleId }
  * That URL must be in Supabase Dashboard → Auth → URL Configuration → Redirect URLs, or Supabase will use Site URL (often production).
  */
 export async function sendWelcomeEmail({ to, first_name }) {
+  // Use site root so Supabase appends "#access_token=..."; if we used "#/volunteer" we'd get "#/volunteer#access_token=..." and the client can't parse the hash.
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
-  const redirectTo = origin ? `${origin}/#/volunteer` : '';
+  const redirectTo = origin ? `${origin}/` : '';
 
   await supabase.functions.invoke('send-welcome-with-magic-link', {
     body: { to, first_name: first_name || '', redirectTo }

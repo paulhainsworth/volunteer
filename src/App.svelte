@@ -63,16 +63,16 @@
       for (let i = 0; i < 20; i++) {
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
-          const { push } = await import('svelte-spa-router');
-          // Ensure profile is loaded, then send to onboarding if emergency contact missing
+          const { replace } = await import('svelte-spa-router');
           const { profile } = await auth.refreshSession();
           const needsOnboarding = !profile?.emergency_contact_name;
+          const fromMagicLink = hash.includes('type=magiclink');
           if (needsOnboarding) {
-            push('/onboarding');
-            window.history.replaceState(null, '', '#/onboarding');
+            await replace('/onboarding');
+          } else if (fromMagicLink) {
+            await replace('/my-signups');
           } else {
-            push('/');
-            window.history.replaceState(null, '', '#/');
+            await replace('/');
           }
           break;
         }

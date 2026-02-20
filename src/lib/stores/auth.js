@@ -97,14 +97,17 @@ function createAuthStore() {
     },
 
     signInWithMagicLink: async (email) => {
-      const { error } = await supabase.auth.signInWithOtp({
-        email,
-        options: {
-          // Use base URL only - Supabase appends tokens to hash; nested #/volunteer#access_token breaks parsing
-          emailRedirectTo: typeof window !== 'undefined' ? window.location.origin + '/' : ''
-        }
-      });
+      const redirectTo = typeof window !== 'undefined' ? window.location.origin + '/' : '';
+      const INVOKE_TIMEOUT_MS = 25000;
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Request timed out. Check your connection or try again.')), INVOKE_TIMEOUT_MS)
+      );
+      const { data, error } = await Promise.race([
+        supabase.functions.invoke('send-magic-link', { body: { to: email, redirectTo } }),
+        timeoutPromise
+      ]);
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
     },
 
     signOut: async () => {
