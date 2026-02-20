@@ -636,85 +636,61 @@ const shareTimers = {};
 
           if (updateProfileError) throw updateProfileError;
         }
+
+        const { data: existingSignup, error: existingSignupError } = await supabase
+          .from('signups')
+          .select('id, status')
+          .eq('volunteer_id', volunteerId)
+          .eq('role_id', roleId)
+          .maybeSingle();
+
+        if (existingSignupError) throw existingSignupError;
+
+        if (existingSignup) {
+          if (existingSignup.status === 'cancelled') {
+            const { error: reactivateError } = await supabase
+              .from('signups')
+              .update({
+                status: 'confirmed',
+                phone: phone || null,
+                waiver_signed: false
+              })
+              .eq('id', existingSignup.id);
+
+            if (reactivateError) throw reactivateError;
+          } else {
+            throw new Error('This volunteer is already signed up for this role.');
+          }
+        } else {
+          const { error: signupError } = await supabase.from('signups').insert({
+            role_id: roleId,
+            volunteer_id: volunteerId,
+            status: 'confirmed',
+            phone: phone || null,
+            waiver_signed: false
+          });
+
+          if (signupError) throw signupError;
+        }
       } else {
-        const tempPassword =
-          Math.random().toString(36).slice(-12) + Math.random().toString(36).slice(-12);
-
-        const { data: sessionData } = await supabase.auth.getSession();
-        const leaderSession = sessionData?.session;
-
-        const { data: authData, error: authError } = await supabase.auth.signUp({
-          email,
-          password: tempPassword,
-          options: {
-            data: {
+        const { data: fnData, error: fnError } = await supabase.functions.invoke(
+          'create-volunteer-and-signup',
+          {
+            body: {
+              role_id: roleId,
+              email,
               first_name: firstName,
               last_name: lastName,
-              team_club_affiliation_id: affiliationId
-            },
-            emailRedirectTo: `${window.location.origin}/#/volunteer`
-          }
-        });
-
-        if (authError) throw authError;
-        if (!authData.user) throw new Error('User creation failed.');
-
-        volunteerId = authData.user.id;
-
-        const { error: profileError } = await supabase.from('profiles').upsert({
-          id: volunteerId,
-          email,
-          first_name: firstName,
-          last_name: lastName,
-          phone: phone || null,
-          role: 'volunteer',
-          team_club_affiliation_id: affiliationId || null
-        });
-
-        if (profileError) throw profileError;
-
-        if (leaderSession?.access_token && leaderSession?.refresh_token) {
-          await supabase.auth.setSession({
-            access_token: leaderSession.access_token,
-            refresh_token: leaderSession.refresh_token
-          });
-        }
-      }
-
-      const { data: existingSignup, error: existingSignupError } = await supabase
-        .from('signups')
-        .select('id, status')
-        .eq('volunteer_id', volunteerId)
-        .eq('role_id', roleId)
-        .maybeSingle();
-
-      if (existingSignupError) throw existingSignupError;
-
-      if (existingSignup) {
-        if (existingSignup.status === 'cancelled') {
-          const { error: reactivateError } = await supabase
-            .from('signups')
-            .update({
-              status: 'confirmed',
               phone: phone || null,
-              waiver_signed: false
-            })
-            .eq('id', existingSignup.id);
+              team_club_affiliation_id: affiliationId || null
+            }
+          }
+        );
 
-          if (reactivateError) throw reactivateError;
-        } else {
-          throw new Error('This volunteer is already signed up for this role.');
-        }
-      } else {
-        const { error: signupError } = await supabase.from('signups').insert({
-          role_id: roleId,
-          volunteer_id: volunteerId,
-          status: 'confirmed',
-          phone: phone || null,
-          waiver_signed: false
-        });
-
-        if (signupError) throw signupError;
+        if (fnError) throw fnError;
+        if (fnData?.error) throw new Error(typeof fnData.error === 'string' ? fnData.error : fnData.error?.message || 'Failed to create volunteer');
+        volunteerId = fnData?.volunteerId;
+        if (!volunteerId) throw new Error('No volunteer ID returned');
       }
 
       try {
