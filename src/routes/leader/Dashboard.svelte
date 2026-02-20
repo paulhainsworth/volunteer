@@ -640,6 +640,9 @@ const shareTimers = {};
         const tempPassword =
           Math.random().toString(36).slice(-12) + Math.random().toString(36).slice(-12);
 
+        const { data: sessionData } = await supabase.auth.getSession();
+        const leaderSession = sessionData?.session;
+
         const { data: authData, error: authError } = await supabase.auth.signUp({
           email,
           password: tempPassword,
@@ -669,6 +672,13 @@ const shareTimers = {};
         });
 
         if (profileError) throw profileError;
+
+        if (leaderSession?.access_token && leaderSession?.refresh_token) {
+          await supabase.auth.setSession({
+            access_token: leaderSession.access_token,
+            refresh_token: leaderSession.refresh_token
+          });
+        }
       }
 
       const { data: existingSignup, error: existingSignupError } = await supabase
