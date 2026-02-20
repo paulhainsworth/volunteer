@@ -71,12 +71,26 @@ function createDomainsStore() {
 
       if (error) throw error;
 
+      const roles = data.roles || [];
+      let confirmedCountByRole = {};
+      if (roles.length > 0) {
+        const roleIds = roles.map((r) => r.id);
+        const { data: signupRows } = await supabase
+          .from('signups')
+          .select('role_id')
+          .eq('status', 'confirmed')
+          .in('role_id', roleIds);
+        confirmedCountByRole = (signupRows || []).reduce((acc, row) => {
+          acc[row.role_id] = (acc[row.role_id] || 0) + 1;
+          return acc;
+        }, {});
+      }
       return {
         ...data,
-        roles: data.roles?.map(role => ({
+        roles: roles.map(role => ({
           ...role,
-          positions_filled: role.signups?.[0]?.count || 0
-        })) || []
+          positions_filled: confirmedCountByRole[role.id] ?? 0
+        }))
       };
     },
 

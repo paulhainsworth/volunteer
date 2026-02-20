@@ -1,6 +1,7 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
   import { auth } from '../../lib/stores/auth';
+  import { affiliations } from '../../lib/stores/affiliations';
   import { supabase } from '../../lib/supabaseClient';
   import { push } from 'svelte-spa-router';
   import { formatTimeRange, isFlexibleTime, formatEventDateInPacific, parseEventDate } from '../../lib/utils/timeDisplay';
@@ -53,6 +54,7 @@ const shareTimers = {};
       return;
     }
 
+    affiliations.fetchAffiliations().catch(() => {});
     await loadRolesWithRetry();
 
     const handleNavigation = () => {
@@ -226,7 +228,8 @@ const shareTimers = {};
         first_name: '',
         last_name: '',
         email: '',
-        phone: ''
+        phone: '',
+        team_club_affiliation_id: ''
       };
 
       states[role.id] = addStates[role.id] || {
@@ -254,7 +257,8 @@ const shareTimers = {};
       first_name: '',
       last_name: '',
       email: '',
-      phone: ''
+      phone: '',
+      team_club_affiliation_id: ''
     };
 
     volunteerForms = {
@@ -585,6 +589,15 @@ const shareTimers = {};
       return;
     }
 
+    const affiliationId = (form.team_club_affiliation_id || '').trim();
+    if (!affiliationId) {
+      addStates = {
+        ...addStates,
+        [roleId]: { loading: false, error: 'Please select a team or club affiliation.', success: '' }
+      };
+      return;
+    }
+
     addStates = {
       ...addStates,
       [roleId]: { loading: true, error: '', success: '' }
@@ -594,7 +607,7 @@ const shareTimers = {};
       let volunteerId;
       const { data: existingProfile, error: profileLookupError } = await supabase
         .from('profiles')
-        .select('id, first_name, last_name, email, phone')
+        .select('id, first_name, last_name, email, phone, team_club_affiliation_id')
         .ilike('email', email)
         .maybeSingle();
 
@@ -607,6 +620,9 @@ const shareTimers = {};
         if (!existingProfile.last_name && lastName) updates.last_name = lastName;
         if (phone && phone !== existingProfile.phone) updates.phone = phone;
 
+        if (affiliationId && existingProfile.team_club_affiliation_id !== affiliationId) {
+          updates.team_club_affiliation_id = affiliationId;
+        }
         if (Object.keys(updates).length > 0) {
           const { error: updateProfileError } = await supabase
             .from('profiles')
@@ -625,7 +641,8 @@ const shareTimers = {};
           options: {
             data: {
               first_name: firstName,
-              last_name: lastName
+              last_name: lastName,
+              team_club_affiliation_id: affiliationId
             },
             emailRedirectTo: `${window.location.origin}/#/volunteer`
           }
@@ -642,7 +659,8 @@ const shareTimers = {};
           first_name: firstName,
           last_name: lastName,
           phone: phone || null,
-          role: 'volunteer'
+          role: 'volunteer',
+          team_club_affiliation_id: affiliationId || null
         });
 
         if (profileError) throw profileError;
@@ -711,7 +729,8 @@ const shareTimers = {};
           first_name: '',
           last_name: '',
           email: '',
-          phone: ''
+          phone: '',
+          team_club_affiliation_id: ''
         }
       };
 
@@ -1125,7 +1144,7 @@ Examples:
       {#each sortedRoles as role (role.id)}
         {@const shiftText = formatShift(role)}
         {@const totalSlots = role.positions_total ?? '—'}
-        {@const addForm = volunteerForms[role.id] || { first_name: '', last_name: '', email: '', phone: '' }}
+        {@const addForm = volunteerForms[role.id] || { first_name: '', last_name: '', email: '', phone: '', team_club_affiliation_id: '' }}
         {@const addState = addStates[role.id] || { loading: false, error: '', success: '' }}
         <section class="role-card">
           <header class="role-card__header">
@@ -1307,6 +1326,19 @@ Examples:
                   on:keydown={(event) => handleAddKeydown(event, role)}
                   aria-label={`Phone for ${role.name}`}
                 />
+                <select
+                  class="input"
+                  value={addForm.team_club_affiliation_id}
+                  on:change={(event) => updateVolunteerForm(role.id, 'team_club_affiliation_id', event.target.value)}
+                  disabled={addState.loading}
+                  aria-label={`Team/club for ${role.name}`}
+                  title="Team / Club Affiliation"
+                >
+                  <option value="">Team/Club *</option>
+                  {#each $affiliations as aff (aff.id)}
+                    <option value={aff.id}>{aff.name}</option>
+                  {/each}
+                </select>
                 <button
                   class="btn btn-primary add-btn"
                   on:click={() => addVolunteerToRole(role)}

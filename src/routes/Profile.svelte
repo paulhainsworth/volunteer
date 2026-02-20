@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { auth } from '../lib/stores/auth';
+  import { affiliations } from '../lib/stores/affiliations';
   import { supabase } from '../lib/supabaseClient';
   import { push } from 'svelte-spa-router';
 
@@ -14,6 +15,7 @@
     last_name: '',
     email: '',
     phone: '',
+    team_club_affiliation_id: '',
     emergency_contact_name: '',
     emergency_contact_phone: '',
     emergency_contact_relationship: ''
@@ -26,6 +28,8 @@
     }
 
     try {
+      await affiliations.fetchAffiliations();
+
       // Fetch current profile
       const { data, error: fetchError } = await supabase
         .from('profiles')
@@ -40,6 +44,7 @@
         last_name: data.last_name || '',
         email: data.email || '',
         phone: data.phone || '',
+        team_club_affiliation_id: data.team_club_affiliation_id || '',
         emergency_contact_name: data.emergency_contact_name || '',
         emergency_contact_phone: data.emergency_contact_phone || '',
         emergency_contact_relationship: data.emergency_contact_relationship || ''
@@ -64,6 +69,7 @@
           first_name: formData.first_name,
           last_name: formData.last_name,
           phone: formData.phone,
+          team_club_affiliation_id: formData.team_club_affiliation_id || null,
           emergency_contact_name: formData.emergency_contact_name,
           emergency_contact_phone: formData.emergency_contact_phone,
           emergency_contact_relationship: formData.emergency_contact_relationship
@@ -174,6 +180,21 @@
               disabled={saving}
             />
             <small>Optional - used for event day communications</small>
+          </div>
+
+          <div class="form-group">
+            <label for="team_club_affiliation">Team / Club Affiliation</label>
+            <select
+              id="team_club_affiliation"
+              bind:value={formData.team_club_affiliation_id}
+              disabled={saving}
+            >
+              <option value="">— None selected —</option>
+              {#each $affiliations as aff (aff.id)}
+                <option value={aff.id}>{aff.name}</option>
+              {/each}
+            </select>
+            <small>Optional - your team or club</small>
           </div>
 
           <div class="role-display">

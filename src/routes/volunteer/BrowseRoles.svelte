@@ -10,6 +10,7 @@
     sendWelcomeEmail
   } from '../../lib/volunteerSignup';
   import { signups } from '../../lib/stores/signups';
+  import { affiliations } from '../../lib/stores/affiliations';
 
   let loading = true;
   let error = '';
@@ -37,7 +38,8 @@
     email: '',
     phone: '',
     emergency_contact_name: '',
-    emergency_contact_phone: ''
+    emergency_contact_phone: '',
+    team_club_affiliation_id: ''
   };
   let piiSubmitting = false;
   let piiError = '';
@@ -330,10 +332,12 @@
         email: '',
         phone: '',
         emergency_contact_name: '',
-        emergency_contact_phone: ''
+        emergency_contact_phone: '',
+        team_club_affiliation_id: ''
       };
       piiError = '';
       showPiiModal = true;
+      affiliations.fetchAffiliations().catch(() => {});
       return;
     }
     push(`/signup/${role?.id || roleOrId}`);
@@ -352,6 +356,10 @@
       piiError = 'First name, last name, and email are required.';
       return;
     }
+    if (!f.team_club_affiliation_id?.trim()) {
+      piiError = 'Please select a team or club affiliation.';
+      return;
+    }
     if (!piiRole) {
       piiError = 'No role selected.';
       return;
@@ -368,7 +376,8 @@
           email: f.email.trim(),
           phone: f.phone?.trim() || null,
           emergency_contact_name: f.emergency_contact_name?.trim() || null,
-          emergency_contact_phone: f.emergency_contact_phone?.trim() || null
+          emergency_contact_phone: f.emergency_contact_phone?.trim() || null,
+          team_club_affiliation_id: f.team_club_affiliation_id?.trim() || null
         },
         piiRole.id
       );
@@ -780,6 +789,15 @@
             <label for="pii-emergency-phone">Emergency Contact Phone *</label>
             <input id="pii-emergency-phone" type="tel" bind:value={piiForm.emergency_contact_phone} placeholder="(555) 123-4567" disabled={piiSubmitting} />
           </div>
+        </div>
+        <div class="form-group">
+          <label for="pii-affiliation">Team / Club Affiliation *</label>
+          <select id="pii-affiliation" bind:value={piiForm.team_club_affiliation_id} disabled={piiSubmitting} required>
+            <option value="">-- Select team or club --</option>
+            {#each $affiliations as aff (aff.id)}
+              <option value={aff.id}>{aff.name}</option>
+            {/each}
+          </select>
         </div>
       </div>
       <div class="modal-actions">

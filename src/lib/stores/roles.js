@@ -65,9 +65,24 @@ function createRolesStore() {
         const { data, error } = await query;
         if (error) throw error;
 
+        // Count only confirmed signups (signups(count) above counts all including cancelled)
+        const roleIds = (data || []).map((r) => r.id);
+        let confirmedCountByRole = {};
+        if (roleIds.length > 0) {
+          const { data: signupRows } = await supabase
+            .from('signups')
+            .select('role_id')
+            .eq('status', 'confirmed')
+            .in('role_id', roleIds);
+          confirmedCountByRole = (signupRows || []).reduce((acc, row) => {
+            acc[row.role_id] = (acc[row.role_id] || 0) + 1;
+            return acc;
+          }, {});
+        }
+
         const rolesWithCounts = (data || []).map(role => ({
           ...role,
-          positions_filled: role.signups?.[0]?.count ?? 0
+          positions_filled: confirmedCountByRole[role.id] ?? 0
         }));
         set(rolesWithCounts);
         return rolesWithCounts;
@@ -92,9 +107,22 @@ function createRolesStore() {
         .order('start_time', { ascending: true, nullsFirst: false })
         .limit(6);
       if (error) throw error;
+      const roleIds = (data || []).map((r) => r.id);
+      let confirmedCountByRole = {};
+      if (roleIds.length > 0) {
+        const { data: signupRows } = await supabase
+          .from('signups')
+          .select('role_id')
+          .eq('status', 'confirmed')
+          .in('role_id', roleIds);
+        confirmedCountByRole = (signupRows || []).reduce((acc, row) => {
+          acc[row.role_id] = (acc[row.role_id] || 0) + 1;
+          return acc;
+        }, {});
+      }
       return (data || []).map(role => ({
         ...role,
-        positions_filled: role.signups?.[0]?.count ?? 0
+        positions_filled: confirmedCountByRole[role.id] ?? 0
       }));
     },
 

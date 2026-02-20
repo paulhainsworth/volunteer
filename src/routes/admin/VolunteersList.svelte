@@ -2,7 +2,9 @@
   import { onMount } from 'svelte';
   import { volunteers } from '../../lib/stores/volunteers';
   import { auth } from '../../lib/stores/auth';
+  import { affiliations } from '../../lib/stores/affiliations';
   import { supabase } from '../../lib/supabaseClient';
+  import { sendWelcomeEmail } from '../../lib/volunteerSignup';
   import { push } from 'svelte-spa-router';
   import { format } from 'date-fns';
   import { formatTimeRange, isFlexibleTime } from '../../lib/utils/timeDisplay';
@@ -35,6 +37,7 @@
     first_name: '',
     last_name: '',
     phone: '',
+    team_club_affiliation_id: '',
     role_id: ''
   };
   let addingVolunteer = false;
@@ -50,6 +53,7 @@
 
     try {
       await volunteers.fetchVolunteers();
+      affiliations.fetchAffiliations().catch(() => {});
     } catch (err) {
       error = err.message;
     } finally {
@@ -168,24 +172,33 @@
     loadingRoles = true;
     
     try {
-      // Fetch all upcoming roles with signup counts
+      // Fetch all upcoming roles; count only confirmed signups
       const { data: rolesData, error: rolesError } = await supabase
         .from('volunteer_roles')
-        .select(`
-          *,
-          signups:signups(count)
-        `)
+        .select('*')
         .gte('event_date', new Date().toISOString().split('T')[0])
         .order('event_date', { ascending: true })
         .order('start_time', { ascending: true });
 
       if (rolesError) throw rolesError;
 
-      // Transform roles data
-      const rolesWithCounts = rolesData?.map(role => ({
+      const roleIds = (rolesData || []).map((r) => r.id);
+      let confirmedCountByRole = {};
+      if (roleIds.length > 0) {
+        const { data: signupRows } = await supabase
+          .from('signups')
+          .select('role_id')
+          .eq('status', 'confirmed')
+          .in('role_id', roleIds);
+        confirmedCountByRole = (signupRows || []).reduce((acc, row) => {
+          acc[row.role_id] = (acc[row.role_id] || 0) + 1;
+          return acc;
+        }, {});
+      }
+      const rolesWithCounts = (rolesData || []).map(role => ({
         ...role,
-        positions_filled: role.signups?.[0]?.count || 0
-      })) || [];
+        positions_filled: confirmedCountByRole[role.id] ?? 0
+      }));
 
       // Fetch user's current signups
       const { data: signupsData, error: signupsError } = await supabase
@@ -352,25 +365,31 @@
     showAddVolunteerModal = true;
     error = '';
     
-    // Load available roles with signup counts
+    // Load available roles; count only confirmed signups
     const { data: rolesData, error: rolesError } = await supabase
       .from('volunteer_roles')
-      .select(`
-        *,
-        signups:signups(count)
-      `)
+      .select('*')
       .gte('event_date', new Date().toISOString().split('T')[0])
       .order('event_date', { ascending: true })
       .order('start_time', { ascending: true });
 
-    if (!rolesError && rolesData) {
-      // Transform data to include filled count
+    if (!rolesError && rolesData && rolesData.length > 0) {
+      const roleIds = rolesData.map((r) => r.id);
+      const { data: signupRows } = await supabase
+        .from('signups')
+        .select('role_id')
+        .eq('status', 'confirmed')
+        .in('role_id', roleIds);
+      const confirmedCountByRole = (signupRows || []).reduce((acc, row) => {
+        acc[row.role_id] = (acc[row.role_id] || 0) + 1;
+        return acc;
+      }, {});
       availableRoles = rolesData.map(role => ({
         ...role,
-        positions_filled: role.signups?.[0]?.count || 0
+        positions_filled: confirmedCountByRole[role.id] ?? 0
       }));
     } else {
-      availableRoles = [];
+      availableRoles = rolesError ? [] : (rolesData || []).map(r => ({ ...r, positions_filled: 0 }));
     }
   }
 
@@ -381,6 +400,7 @@
       first_name: '',
       last_name: '',
       phone: '',
+      team_club_affiliation_id: '',
       role_id: ''
     };
     error = '';
@@ -495,6 +515,10 @@
       error = 'Email, first name, and last name are required';
       return;
     }
+    if (!(addVolunteerForm.team_club_affiliation_id || '').trim()) {
+      error = 'Please select a team or club affiliation.';
+      return;
+    }
 
     addingVolunteer = true;
     error = '';
@@ -510,7 +534,8 @@
         options: {
           data: {
             first_name: addVolunteerForm.first_name,
-            last_name: addVolunteerForm.last_name
+            last_name: addVolunteerForm.last_name,
+            team_club_affiliation_id: (addVolunteerForm.team_club_affiliation_id || '').trim() || undefined
           },
           emailRedirectTo: `${window.location.origin}/#/volunteer`
         }
@@ -531,7 +556,8 @@
           first_name: addVolunteerForm.first_name,
           last_name: addVolunteerForm.last_name,
           phone: addVolunteerForm.phone || null,
-          role: 'volunteer'
+          role: 'volunteer',
+          team_club_affiliation_id: addVolunteerForm.team_club_affiliation_id || null
         });
 
       if (profileError) throw profileError;
@@ -550,11 +576,17 @@
         if (signupError) throw signupError;
       }
 
+      // Send same welcome email with magic link as PII signup flow
+      await sendWelcomeEmail({
+        to: addVolunteerForm.email,
+        first_name: addVolunteerForm.first_name
+      });
+
       // Refresh volunteers list
       await volunteers.fetchVolunteers();
       
       closeAddVolunteerModal();
-      alert(`✅ Volunteer created successfully! A sign-in link has been sent to ${addVolunteerForm.email}.`);
+      alert(`✅ Volunteer created successfully! A welcome email with sign-in link has been sent to ${addVolunteerForm.email}.`);
     } catch (err) {
       console.error('Create volunteer error:', err);
       error = 'Failed to create volunteer: ' + err.message;
@@ -1255,6 +1287,21 @@
             placeholder="(555) 123-4567"
             disabled={addingVolunteer}
           />
+        </div>
+
+        <div class="form-group">
+          <label for="add-affiliation">Team / Club Affiliation *</label>
+          <select
+            id="add-affiliation"
+            bind:value={addVolunteerForm.team_club_affiliation_id}
+            disabled={addingVolunteer}
+            required
+          >
+            <option value="">-- Select team or club --</option>
+            {#each $affiliations as aff (aff.id)}
+              <option value={aff.id}>{aff.name}</option>
+            {/each}
+          </select>
         </div>
 
         <div class="section-header">

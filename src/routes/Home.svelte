@@ -10,13 +10,15 @@
   let rolesLoadFailed = false;
 
   onMount(() => {
+    let cancelled = false;
     const run = async () => {
       // Wait for auth to settle so we don't fetch then redirect
       let waited = 0;
-      while ($auth.loading && waited < 5000) {
+      while ($auth.loading && waited < 5000 && !cancelled) {
         await new Promise((r) => setTimeout(r, 100));
         waited += 100;
       }
+      if (cancelled) return;
       if ($auth.user) {
         if (!$auth.profile?.emergency_contact_name) {
           push('/onboarding');
@@ -33,30 +35,34 @@
         return;
       }
 
-      const timeoutMs = 12000;
+      const timeoutMs = 20000;
       const timeoutPromise = new Promise((_, reject) =>
         setTimeout(() => reject(new Error('timeout')), timeoutMs)
       );
       try {
         const featured = await Promise.race([roles.fetchFeaturedRoles(), timeoutPromise]) || [];
+        if (cancelled) return;
         if (featured.length > 0) {
           homeRoles = featured;
         } else {
           const all = await Promise.race([roles.fetchRoles(), timeoutPromise]) || [];
+          if (cancelled) return;
           homeRoles = Array.isArray(all) ? all.slice(0, 6) : [];
         }
         rolesLoadFailed = false;
       } catch (e) {
+        if (cancelled) return;
         homeRoles = [];
         rolesLoadFailed = true;
         if (e?.message === 'timeout') {
-          console.warn('[Omnium] Home roles fetch timed out after 12s. Check Network tab for supabase.co requests.');
+          console.warn('[Omnium] Home roles fetch timed out. If this happens on production, check Supabase Dashboard — the project may be paused (free tier).');
         }
       } finally {
-        rolesLoading = false;
+        if (!cancelled) rolesLoading = false;
       }
     };
     run();
+    return () => { cancelled = true; };
   });
 </script>
 

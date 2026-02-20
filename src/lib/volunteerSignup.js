@@ -17,7 +17,7 @@ function isSignupFkError(err) {
 }
 
 export async function createVolunteerAndSignup(pii, roleId) {
-  const { first_name, last_name, email, phone, emergency_contact_name, emergency_contact_phone } = pii;
+  const { first_name, last_name, email, phone, emergency_contact_name, emergency_contact_phone, team_club_affiliation_id } = pii;
 
   // Create auth user (passwordless - they'll use magic link to sign in later)
   const tempPassword = Math.random().toString(36).slice(-12) + Math.random().toString(36).slice(-12);
@@ -31,7 +31,8 @@ export async function createVolunteerAndSignup(pii, roleId) {
         role: 'volunteer',
         phone: phone || '',
         emergency_contact_name: emergency_contact_name || '',
-        emergency_contact_phone: emergency_contact_phone || ''
+        emergency_contact_phone: emergency_contact_phone || '',
+        team_club_affiliation_id: team_club_affiliation_id || ''
       },
       emailRedirectTo: `${window.location.origin}/#/volunteer`
     }

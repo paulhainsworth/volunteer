@@ -98,9 +98,10 @@ function createAuthStore() {
 
     signInWithMagicLink: async (email) => {
       const redirectTo = typeof window !== 'undefined' ? window.location.origin + '/' : '';
-      const INVOKE_TIMEOUT_MS = 25000;
+      // 45s to allow Edge Function cold start on production
+      const INVOKE_TIMEOUT_MS = 45000;
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Request timed out. Check your connection or try again.')), INVOKE_TIMEOUT_MS)
+        setTimeout(() => reject(new Error('Request timed out. The server may be waking up — please try again in a moment.')), INVOKE_TIMEOUT_MS)
       );
       const { data, error } = await Promise.race([
         supabase.functions.invoke('send-magic-link', { body: { to: email, redirectTo } }),
