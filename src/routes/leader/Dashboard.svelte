@@ -9,7 +9,7 @@
   let loading = true;
   let error = '';
   let myRoles = [];
-let sortedRoles = [];
+  let sortedRoles = [];
 let volunteerForms = {};
 let addStates = {};
 let volunteerSuggestions = {};
@@ -44,8 +44,13 @@ const shareTimers = {};
   onMount(async () => {
     const authState = await waitForAuthReady();
 
-    if (!authState.user || authState.profile?.role !== 'volunteer_leader') {
-      push('/volunteer');
+    const isLeader = authState.profile?.role === 'volunteer_leader';
+    if (!authState.user || !isLeader) {
+      if (authState.profile?.role === 'admin') {
+        push('/admin/roles');
+      } else {
+        push('/volunteer');
+      }
       return;
     }
 
@@ -863,8 +868,8 @@ const shareTimers = {};
               ${emailBody.split('\n').map(line => `<p>${line}</p>`).join('')}
               <hr style="margin: 2rem 0; border: none; border-top: 1px solid #dee2e6;">
               <p style="color: #6c757d; font-size: 0.9rem;">
-                This message was sent by your volunteer leader: ${$auth.profile.first_name} ${$auth.profile.last_name}
-                ${$auth.profile.email ? ` (${$auth.profile.email})` : ''}
+                This message was sent by your volunteer leader: ${$auth.profile?.first_name || ''} ${$auth.profile?.last_name || ''}
+                ${$auth.profile?.email ? ` (${$auth.profile.email})` : ''}
               </p>
             `
           }

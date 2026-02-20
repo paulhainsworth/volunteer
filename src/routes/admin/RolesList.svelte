@@ -53,6 +53,14 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
   let defaultDomainId = null;
   let returnToPath = '';
   let returnDomainId = '';
+  let emailModalGroup = null;
+  let emailSubject = '';
+  let emailBody = '';
+  let sendingEmail = false;
+  let emailError = '';
+  let emailSuccess = '';
+  let domainVolunteers = [];
+  let loadingDomainVolunteers = false;
 
   onMount(async () => {
     if (!$auth.isAdmin) {
@@ -152,6 +160,96 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
     } catch (err) {
       console.error('Error fetching volunteers:', err);
       error = 'Failed to load volunteers: ' + err.message;
+    }
+  }
+
+  async function fetchVolunteersForRoleIds(roleIds) {
+    if (!roleIds?.length) return [];
+    const { data, error: fetchError } = await supabase
+      .from('signups')
+      .select(`
+        volunteer:profiles!volunteer_id(id, first_name, last_name, email)
+      `)
+      .in('role_id', roleIds)
+      .eq('status', 'confirmed');
+    if (fetchError) throw fetchError;
+    const byId = new Map();
+    (data || []).forEach((row) => {
+      const v = Array.isArray(row.volunteer) ? row.volunteer[0] : row.volunteer;
+      if (v && v.id && !byId.has(v.id)) byId.set(v.id, v);
+    });
+    return Array.from(byId.values());
+  }
+
+  async function openEmailModal(group) {
+    emailModalGroup = group;
+    emailSubject = '';
+    emailBody = '';
+    emailError = '';
+    emailSuccess = '';
+    domainVolunteers = [];
+    loadingDomainVolunteers = true;
+    try {
+      const roleIds = (group.roles || []).map((r) => r.id);
+      domainVolunteers = await fetchVolunteersForRoleIds(roleIds);
+    } catch (err) {
+      console.error('Failed to load domain volunteers:', err);
+      emailError = err.message || 'Failed to load volunteers.';
+    } finally {
+      loadingDomainVolunteers = false;
+    }
+  }
+
+  function closeEmailModal() {
+    emailModalGroup = null;
+    emailSubject = '';
+    emailBody = '';
+    emailError = '';
+    emailSuccess = '';
+    domainVolunteers = [];
+  }
+
+  async function sendEmailToDomainVolunteers() {
+    if (!emailSubject.trim() || !emailBody.trim()) {
+      emailError = 'Please enter both subject and message';
+      return;
+    }
+    if (domainVolunteers.length === 0) {
+      emailError = 'No volunteers to email in this domain.';
+      return;
+    }
+    sendingEmail = true;
+    emailError = '';
+    emailSuccess = '';
+    try {
+      const emailPromises = domainVolunteers.map((volunteer) =>
+        supabase.functions.invoke('send-email', {
+          body: {
+            to: volunteer.email,
+            subject: emailSubject,
+            html: `
+              <h2>${emailSubject}</h2>
+              <p>Hello ${volunteer.first_name || 'there'},</p>
+              ${emailBody.split('\n').map((line) => `<p>${line}</p>`).join('')}
+              <hr style="margin: 2rem 0; border: none; border-top: 1px solid #dee2e6;">
+              <p style="color: #6c757d; font-size: 0.9rem;">
+                This message was sent by an administrator: ${$auth.profile?.first_name || ''} ${$auth.profile?.last_name || ''}
+                ${$auth.profile?.email ? ` (${$auth.profile.email})` : ''}
+              </p>
+            `
+          }
+        })
+      );
+      await Promise.all(emailPromises);
+      emailSuccess = `Email sent to ${domainVolunteers.length} volunteer${domainVolunteers.length !== 1 ? 's' : ''}.`;
+      setTimeout(() => {
+        closeEmailModal();
+      }, 2500);
+    } catch (err) {
+      console.error('Email error:', err);
+      emailError = err.message || 'Failed to send email.';
+    } finally {
+      sendingEmail = false;
     }
   }
 
@@ -346,6 +444,11 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
 
     try {
       await roles.deleteRole(roleId);
+      if (editingRole?.id === roleId) {
+        editingRole = null;
+        showForm = false;
+        push('/admin/roles');
+      }
     } catch (err) {
       error = err.message;
     }
@@ -353,7 +456,11 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
 
   async function handleDuplicate(roleId) {
     try {
-      await roles.duplicateRole(roleId);
+      const newRole = await roles.duplicateRole(roleId);
+      if (editingRole?.id === roleId) {
+        editingRole = newRole;
+        push(`/admin/roles/${newRole.id}`);
+      }
     } catch (err) {
       error = err.message;
     }
@@ -1053,13 +1160,35 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
         <div class="alert alert-error">{error}</div>
       {/if}
 
-      <RoleForm
-        role={editingRole}
-        loading={submitting}
-        on:submit={handleSubmit}
-        on:cancel={handleCancel}
-        defaultDomainId={defaultDomainId}
-      />
+      {#key editingRole?.id}
+        <RoleForm
+          role={editingRole}
+          loading={submitting}
+          on:submit={handleSubmit}
+          on:cancel={handleCancel}
+          defaultDomainId={defaultDomainId}
+        />
+      {/key}
+      {#if editingRole}
+        <div class="form-actions form-actions--edit-footer">
+          <button
+            type="button"
+            class="btn btn-secondary"
+            on:click={() => handleDuplicate(editingRole.id)}
+            disabled={submitting}
+          >
+            Duplicate role
+          </button>
+          <button
+            type="button"
+            class="btn btn-danger"
+            on:click={() => handleDelete(editingRole.id)}
+            disabled={submitting}
+          >
+            Delete role
+          </button>
+        </div>
+      {/if}
     </div>
   {:else}
     <div class="header">
@@ -1268,6 +1397,16 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
                   <div class="domain-leader-text no-leader">No domain leader</div>
                 {/if}
               </div>
+              <div class="domain-header-actions">
+                <button
+                  type="button"
+                  class="btn btn-sm btn-primary"
+                  on:click={() => openEmailModal(group)}
+                  title="Send email to all volunteers in this domain"
+                >
+                  Email this domain's volunteers
+                </button>
+              </div>
             </div>
 
             <div class="roles-group-table">
@@ -1329,8 +1468,6 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
                       <td>
                         <div class="action-buttons">
                           <a href="#/admin/roles/{role.id}" class="btn btn-sm btn-secondary">Edit</a>
-                          <button class="btn btn-sm btn-link" on:click={() => handleDuplicate(role.id)}>Duplicate</button>
-                          <button class="btn btn-sm btn-danger" on:click={() => handleDelete(role.id)}>Delete</button>
                         </div>
                       </td>
                     </tr>
@@ -1422,6 +1559,65 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
           {assigningLeader ? 'Saving...' : 'Save'}
         </button>
       </div>
+    </div>
+  </div>
+{/if}
+
+{#if emailModalGroup}
+  <div class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="email-domain-modal-title">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="email-domain-modal-title">Send Email to This Domain's Volunteers</h2>
+        <button class="modal-close" on:click={closeEmailModal} aria-label="Close" disabled={sendingEmail}>×</button>
+      </div>
+      <div class="modal-body">
+        {#if loadingDomainVolunteers}
+          <p>Loading volunteers…</p>
+        {:else}
+          <p class="email-domain-info">
+            This will send an email to {domainVolunteers.length} volunteer{domainVolunteers.length !== 1 ? 's' : ''} across the selected domain's roles.
+          </p>
+          {#if emailError}
+            <div class="alert alert-error">{emailError}</div>
+          {/if}
+          {#if emailSuccess}
+            <div class="alert alert-success">{emailSuccess}</div>
+          {:else}
+            <div class="form-group">
+              <label for="email-domain-subject">Subject *</label>
+              <input
+                id="email-domain-subject"
+                type="text"
+                bind:value={emailSubject}
+                placeholder="e.g., Important Update About Your Volunteer Shift"
+                disabled={sendingEmail}
+              />
+            </div>
+            <div class="form-group">
+              <label for="email-domain-body">Message *</label>
+              <textarea
+                id="email-domain-body"
+                bind:value={emailBody}
+                rows="6"
+                placeholder="Enter your message here..."
+                disabled={sendingEmail}
+              ></textarea>
+            </div>
+          {/if}
+        {/if}
+      </div>
+      {#if !loadingDomainVolunteers && !emailSuccess}
+        <div class="modal-footer">
+          <button class="btn btn-secondary" on:click={closeEmailModal} disabled={sendingEmail}>Cancel</button>
+          <button
+            class="btn btn-primary"
+            on:click={sendEmailToDomainVolunteers}
+            disabled={sendingEmail || !emailSubject.trim() || !emailBody.trim() || domainVolunteers.length === 0}
+          >
+            {sendingEmail ? 'Sending…' : `Send Email to ${domainVolunteers.length} Volunteer${domainVolunteers.length !== 1 ? 's' : ''}`}
+          </button>
+        </div>
+      {/if}
     </div>
   </div>
 {/if}
@@ -1793,9 +1989,17 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
   }
 
   .domain-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
     padding: 1.25rem 1.5rem;
     border-bottom: 1px solid #dee2e6;
     background: #f8f9fa;
+  }
+
+  .domain-header-actions {
+    flex-shrink: 0;
   }
 
   .domain-header-info {
@@ -2091,6 +2295,14 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
     color: white;
   }
 
+  .form-actions--edit-footer {
+    margin-top: 2rem;
+    padding-top: 1rem;
+    border-top: 1px solid #dee2e6;
+    display: flex;
+    gap: 0.75rem;
+  }
+
   .btn-link {
     background: none;
     color: #007bff;
@@ -2158,6 +2370,11 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
 
   .modal-close:hover {
     color: #1a1a1a;
+  }
+
+  .email-domain-info {
+    color: #6c757d;
+    margin-bottom: 1rem;
   }
 
   .modal-body {
