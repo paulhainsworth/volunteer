@@ -1,0 +1,21 @@
+# Supabase project config (used by CLI for migrations, etc.).
+# Edge Functions: disable gateway JWT verification so requests reach the function.
+# (Gateway rejects valid ES256 JWTs; see https://github.com/supabase/supabase/issues/42244)
+#
+# create-leader, create-volunteer-and-signup: validate token via Auth API inside the function.
+# send-email: does not validate caller (see docs/SECURITY_REVIEW.md C1).
+# send-magic-link, send-welcome-with-magic-link: called from client (login / post-signup); no user auth required.
+[functions.create-leader]
+verify_jwt = false
+
+[functions.create-volunteer-and-signup]
+verify_jwt = false
+
+[functions.send-email]
+verify_jwt = false
+
+[functions.send-magic-link]
+verify_jwt = false
+
+[functions.send-welcome-with-magic-link]
+verify_jwt = false

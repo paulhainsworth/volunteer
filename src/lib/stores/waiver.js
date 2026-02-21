@@ -40,11 +40,9 @@ function createWaiverStore() {
         .select('*')
         .eq('volunteer_id', volunteerId)
         .gte('waiver_version', currentWaiver.version)
-        .single();
+        .maybeSingle();
 
-      if (error && error.code !== 'PGRST116') { // PGRST116 is "not found"
-        throw error;
-      }
+      if (error) throw error;
 
       return {
         hasSigned: !!data,

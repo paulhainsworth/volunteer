@@ -69,7 +69,7 @@
 <div class="home">
   <div class="hero">
     <h1>🚴 Race Volunteer Management</h1>
-    <p class="tagline">Organize, track, and communicate with race volunteers</p>
+    <p class="tagline">Welcome to the hub for finding and signing up for volunteer roles at 2026 Berkeley Omnium. <a href="https://berkeleybikeclub.org/2026-berkeley-omnium" target="_blank" rel="noopener noreferrer">Learn more</a> about the Omnium.</p>
     
     <div class="cta-buttons">
       {#if $auth.user}

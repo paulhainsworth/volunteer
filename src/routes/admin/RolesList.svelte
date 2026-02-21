@@ -53,6 +53,7 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
   let defaultDomainId = null;
   let returnToPath = '';
   let returnDomainId = '';
+  let showVolunteerLeadersSection = true;
   let emailModalGroup = null;
   let emailSubject = '';
   let emailBody = '';
@@ -1079,10 +1080,43 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
     setLeaderForm(domain.id, { error: '', success: '' });
 
     try {
-      const { data, error } = await supabase.functions.invoke('create-leader', {
-        body: { domainId: domain.id, first_name: firstName, last_name: lastName, email, phone }
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      if (!accessToken) {
+        setLeaderForm(domain.id, { error: 'No session. Please sign out and sign in again, then try Add leader.' });
+        creatingLeaderFor = null;
+        return;
+      }
+
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const res = await fetch(`${supabaseUrl}/functions/v1/create-leader`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({
+          domainId: domain.id,
+          first_name: firstName,
+          last_name: lastName,
+          email,
+          phone: phone || null,
+        }),
       });
-      if (error || data?.error) throw new Error(await getEdgeInvokeErrorMessage(data, error, 'Failed to create leader'));
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const msg = data?.error || `Request failed (${res.status})`;
+        if (res.status === 401) {
+          throw new Error(
+            msg + ' Sign out, request a new magic link from the login page on this URL, then sign in and try again.'
+          );
+        }
+        throw new Error(data?.details ? `${msg}: ${data.details}` : msg);
+      }
+      if (data?.error) throw new Error(data.details ? `${data.error}: ${data.details}` : data.error);
+
       const userId = data?.userId;
       if (!userId) throw new Error('No user ID returned');
 
@@ -1226,13 +1260,21 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
     {:else}
       <div class="roles-table">
         <section class="leaders-summary">
-          <div class="leaders-summary-header">
+          <button
+            type="button"
+            class="leaders-summary-header"
+            on:click={() => (showVolunteerLeadersSection = !showVolunteerLeadersSection)}
+            aria-expanded={showVolunteerLeadersSection}
+          >
+            <span class="leaders-summary-caret" aria-hidden="true">{showVolunteerLeadersSection ? '▼' : '▶'}</span>
             <div>
               <h2>Volunteer Leaders</h2>
               <p>Review domain assignments and contact information</p>
             </div>
-          </div>
+          </button>
 
+          {#if showVolunteerLeadersSection}
+          <div class="leaders-summary-body">
           {#if leaderAddSuccess}
             <div class="leader-add-success-banner" class:leader-add-success-banner--warn={leaderAddSuccess.emailFailed} role="status">
               <span>
@@ -1370,6 +1412,8 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
                 </tbody>
               </table>
             </div>
+          {/if}
+          </div>
           {/if}
         </section>
 
@@ -1801,10 +1845,32 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
 
   .leaders-summary-header {
     display: flex;
-    justify-content: space-between;
     align-items: flex-start;
-    gap: 1rem;
-    margin-bottom: 1rem;
+    gap: 0.75rem;
+    margin-bottom: 0;
+    padding: 0;
+    width: 100%;
+    border: none;
+    background: none;
+    cursor: pointer;
+    text-align: left;
+    font: inherit;
+    color: inherit;
+  }
+
+  .leaders-summary-header:focus {
+    outline: 2px solid #007bff;
+    outline-offset: 2px;
+  }
+
+  .leaders-summary-caret {
+    flex-shrink: 0;
+    font-size: 0.75rem;
+    color: #6c757d;
+  }
+
+  .leaders-summary-body {
+    margin-top: 1rem;
   }
 
   .leaders-summary h2 {

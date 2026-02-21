@@ -34,7 +34,7 @@
 
       if (needsWaiver) {
         const currentWaiver = await waiverStore.fetchCurrentWaiver();
-        waiverText = currentWaiver.text;
+        waiverText = currentWaiver.waiver_text ?? '';
       } else {
         waiverText = '';
       }

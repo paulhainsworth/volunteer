@@ -514,11 +514,13 @@
       <option value="post-race">Post-race</option>
     </select>
 
+    <!-- Status filter commented out
     <select bind:value={filterStatus} class="filter-select">
       <option value="all">All Status</option>
       <option value="available">Available Only</option>
       <option value="urgent">Urgent Need</option>
     </select>
+    -->
 
     <select bind:value={filterDuration} class="filter-select">
       <option value="all">Any duration</option>
