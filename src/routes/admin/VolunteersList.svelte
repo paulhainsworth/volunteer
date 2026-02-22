@@ -8,6 +8,7 @@
   import { push } from 'svelte-spa-router';
   import { format } from 'date-fns';
   import { formatTimeRange, isFlexibleTime } from '../../lib/utils/timeDisplay';
+  import { notifySlackSignup } from '../../lib/notifySlackSignup';
 
   let loading = true;
   let error = '';
@@ -258,6 +259,14 @@
         .select();
 
       if (signupError) throw signupError;
+
+      notifySlackSignup({
+        role_id: roleId,
+        role_name: availableRoles.find((r) => r.id === roleId)?.name,
+        volunteer_id: editingUser.id,
+        volunteer_name: [editingUser.first_name, editingUser.last_name].filter(Boolean).join(' ').trim() || undefined,
+        volunteer_email: editingUser.email,
+      }).catch(() => {});
 
       // Refresh signups
       await loadRolesAndSignups(editingUser.id);
@@ -580,6 +589,13 @@
           });
 
         if (signupError) throw signupError;
+
+        notifySlackSignup({
+          role_id: addVolunteerForm.role_id,
+          volunteer_id: authData.user.id,
+          volunteer_name: [addVolunteerForm.first_name, addVolunteerForm.last_name].filter(Boolean).join(' ').trim() || undefined,
+          volunteer_email: addVolunteerForm.email,
+        }).catch(() => {});
       }
 
       // Send same welcome email with magic link as PII signup flow

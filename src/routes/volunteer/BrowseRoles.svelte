@@ -9,6 +9,7 @@
     sendRoleConfirmationEmail,
     sendWelcomeEmail
   } from '../../lib/volunteerSignup';
+  import { notifySlackSignup } from '../../lib/notifySlackSignup';
   import { signups } from '../../lib/stores/signups';
   import { affiliations } from '../../lib/stores/affiliations';
 
@@ -381,6 +382,14 @@
         },
         piiRole.id
       );
+
+      notifySlackSignup({
+        role_id: piiRole.id,
+        role_name: piiRole.name,
+        volunteer_id: result.userId,
+        volunteer_name: [result.first_name, result.last_name].filter(Boolean).join(' ').trim() || result.email,
+        volunteer_email: result.email
+      }).catch(() => {});
 
       sendRoleConfirmationEmail({
         to: result.email,

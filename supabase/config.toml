@@ -19,3 +19,10 @@ verify_jwt = false
 
 [functions.send-welcome-with-magic-link]
 verify_jwt = false
+
+[functions.notify-slack-signup]
+verify_jwt = false
+
+# PII signup flow: create signup for user who just registered (no JWT yet if email confirm on)
+[functions.create-signup-for-new-user]
+verify_jwt = false

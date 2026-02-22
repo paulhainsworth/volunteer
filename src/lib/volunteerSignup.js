@@ -42,31 +42,58 @@ export async function createVolunteerAndSignup(pii, roleId) {
   if (!authData?.user) throw new Error('User creation failed.');
 
   const userId = authData.user.id;
+  const hasSession = !!authData.session;
   // Profile is created by handle_new_user trigger; it may be a moment before it's visible. Retry signup on FK.
 
-  // Sign waiver
-  try {
-    await waiverStore.signWaiver(userId, `${first_name} ${last_name}`.trim());
-  } catch (waiverErr) {
-    console.warn('Waiver sign failed (may already be signed):', waiverErr);
+  // Sign waiver (only works when we have a session; otherwise they'll sign on first login)
+  if (hasSession) {
+    try {
+      await waiverStore.signWaiver(userId, `${first_name} ${last_name}`.trim());
+    } catch (waiverErr) {
+      console.warn('Waiver sign failed (may already be signed):', waiverErr);
+    }
   }
 
-  // Create signup for role (retry on volunteer_id FK — profile may not exist yet)
-  const maxAttempts = 10;
-  const delayMs = 500;
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    try {
-      await signups.createSignup(userId, roleId, phone || null);
-      break;
-    } catch (err) {
+  if (hasSession) {
+    // Create signup via client (RLS allows volunteer_id = auth.uid())
+    const maxAttempts = 10;
+    const delayMs = 500;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        await signups.createSignup(userId, roleId, phone || null);
+        break;
+      } catch (err) {
+        const isLast = attempt === maxAttempts - 1;
+        if (isLast || !isSignupFkError(err)) {
+          if (isLast && isSignupFkError(err)) {
+            throw new Error(
+              'Your account was created but signup didn\'t complete. Please sign in and try signing up for this role again.'
+            );
+          }
+          throw err;
+        }
+        await new Promise((r) => setTimeout(r, delayMs));
+      }
+    }
+  } else {
+    // No session (e.g. "Confirm email" is on). Create signup via Edge Function (service role).
+    const maxAttempts = 8;
+    const delayMs = 500;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const { data, error } = await supabase.functions.invoke('create-signup-for-new-user', {
+        body: { user_id: userId, role_id: roleId, phone: phone || null }
+      });
+      if (!error && data?.ok) break;
+      const msg = data?.error ?? error?.message ?? 'Create signup failed';
+      const isFk = String(msg).toLowerCase().includes('foreign key') || String(msg).toLowerCase().includes('violates');
       const isLast = attempt === maxAttempts - 1;
-      if (isLast || !isSignupFkError(err)) {
-        if (isLast && isSignupFkError(err)) {
+      if (isLast || !isFk) {
+        if (isLast && isFk) {
           throw new Error(
             'Your account was created but signup didn\'t complete. Please sign in and try signing up for this role again.'
           );
         }
-        throw err;
+        throw new Error(typeof msg === 'string' ? msg : data?.details ?? 'Signup failed');
       }
       await new Promise((r) => setTimeout(r, delayMs));
     }

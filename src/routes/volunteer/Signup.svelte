@@ -7,6 +7,7 @@
   import { push } from 'svelte-spa-router';
   import { formatTimeRange, calculateDuration, formatEventDateInPacific } from '../../lib/utils/timeDisplay';
   import { sendRoleConfirmationEmail } from '../../lib/volunteerSignup';
+  import { notifySlackSignup } from '../../lib/notifySlackSignup';
 
   export let params = {};
 
@@ -118,7 +119,16 @@
       }
 
       // Create signup
-      await signups.createSignup($auth.user.id, params.id, phone || null);
+      const signupData = await signups.createSignup($auth.user.id, params.id, phone || null);
+
+      // Notify Slack (fire-and-forget)
+      notifySlackSignup({
+        role_id: params.id,
+        role_name: signupData?.role?.name,
+        volunteer_id: $auth.user.id,
+        volunteer_name: [$auth.profile?.first_name, $auth.profile?.last_name].filter(Boolean).join(' ').trim() || undefined,
+        volunteer_email: $auth.profile?.email || $auth.user?.email,
+      }).catch(() => {});
 
       // Send confirmation email
       sendRoleConfirmationEmail({
