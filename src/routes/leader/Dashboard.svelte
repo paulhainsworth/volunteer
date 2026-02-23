@@ -3,6 +3,7 @@
   import { auth } from '../../lib/stores/auth';
   import { affiliations } from '../../lib/stores/affiliations';
   import { supabase } from '../../lib/supabaseClient';
+  import { notifySlackSignup } from '../../lib/notifySlackSignup';
   import { push } from 'svelte-spa-router';
   import { formatTimeRange, isFlexibleTime, formatEventDateInPacific, parseEventDate } from '../../lib/utils/timeDisplay';
 
@@ -713,6 +714,14 @@ const shareTimers = {};
           }
         };
       }
+
+      notifySlackSignup({
+        role_id: roleId,
+        role_name: role?.name,
+        volunteer_id: volunteerId,
+        volunteer_name: [firstName, lastName].filter(Boolean).join(' ').trim() || undefined,
+        volunteer_email: email,
+      }).catch(() => {});
 
       volunteerForms = {
         ...volunteerForms,

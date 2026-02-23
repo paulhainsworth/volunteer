@@ -1,0 +1,4 @@
+# Supabase project config. Used by CLI for Edge Function deploy.
+# notify-slack-signup: no JWT required (client sends session for audit).
+[functions.notify-slack-signup]
+verify_jwt = false

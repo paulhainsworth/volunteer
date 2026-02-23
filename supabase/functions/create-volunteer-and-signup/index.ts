@@ -63,7 +63,7 @@ serve(async (req) => {
 
     const { data: roleRow, error: roleError } = await supabaseAdmin
       .from('volunteer_roles')
-      .select('id, leader_id, domain_id')
+      .select('id, name, positions_total, leader_id, domain_id')
       .eq('id', role_id)
       .single()
 
@@ -225,6 +225,46 @@ serve(async (req) => {
           JSON.stringify({ error: 'Failed to create signup', details: signupInsertError.message }),
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
+      }
+    }
+
+    const roleName = roleRow?.name ?? 'Unknown role'
+    const rolePositionsTotal = Number(roleRow?.positions_total) || 0
+    const volunteerName = [first_name, last_name].filter(Boolean).join(' ').trim() || email
+    const slackToken = Deno.env.get('SLACK_BOT_TOKEN')
+    const slackChannel = Deno.env.get('SLACK_SIGNUP_CHANNEL_ID')
+    if (slackToken && slackChannel) {
+      try {
+        const { count: roleSignups } = await supabaseAdmin
+          .from('signups')
+          .select('*', { count: 'exact', head: true })
+          .eq('role_id', role_id)
+          .eq('status', 'confirmed')
+        const { count: totalSignups } = await supabaseAdmin
+          .from('signups')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'confirmed')
+        const { data: totalPositionsRows } = await supabaseAdmin
+          .from('volunteer_roles')
+          .select('positions_total')
+        const totalPositions = (totalPositionsRows ?? []).reduce((sum, r) => sum + (Number(r.positions_total) || 0), 0)
+        const roleFilled = `${roleSignups ?? 0}/${rolePositionsTotal || 1} of ${roleName} filled`
+        const allFilled = `${totalSignups ?? 0}/${totalPositions || 1} of all volunteer roles filled!`
+        const text = `:raising_hand: New volunteer signup: *${volunteerName}* (${email}) signed up for *${roleName}*.\n\n${roleFilled}\n${allFilled}`
+        const slackRes = await fetch('https://slack.com/api/chat.postMessage', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${slackToken}`,
+          },
+          body: JSON.stringify({ channel: slackChannel, text }),
+        })
+        if (!slackRes.ok) {
+          const err = await slackRes.json().catch(() => ({}))
+          console.error('Slack notify error:', slackRes.status, err)
+        }
+      } catch (slackErr) {
+        console.error('Slack notify error:', slackErr)
       }
     }
 
