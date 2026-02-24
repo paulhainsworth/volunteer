@@ -2,26 +2,26 @@
   // @ts-nocheck
   import { createEventDispatcher } from 'svelte';
   import { onMount } from 'svelte';
+  import { get } from 'svelte/store';
   import { supabase } from '../supabaseClient';
+  import { domains } from '../stores/domains';
 
   export let role = null;
   export let loading = false;
   export let defaultDomainId = null;
 
   let volunteerLeaders = [];
-  let domains = [];
 
   const dispatch = createEventDispatcher();
 
   onMount(async () => {
-    // Fetch domains for assignment dropdown
-    const { data: domainsData } = await supabase
-      .from('volunteer_leader_domains')
-      .select('id, name, leader:profiles!leader_id(first_name, last_name)')
-      .order('name', { ascending: true});
-    
-    if (domainsData) {
-      domains = domainsData;
+    // Use domains store (same as RolesList/Domains page). Fetch if empty (e.g. direct nav to /admin/roles/new).
+    if (get(domains).length === 0) {
+      try {
+        await domains.fetchDomains();
+      } catch (e) {
+        console.warn('RoleForm: could not load domains', e);
+      }
     }
 
     // Fetch volunteer leaders for legacy direct assignment
@@ -167,7 +167,7 @@
       disabled={loading}
     >
       <option value={null}>No domain</option>
-      {#each domains as domain}
+      {#each $domains as domain}
         <option value={domain.id}>
           {domain.name}
           {#if domain.leader}
