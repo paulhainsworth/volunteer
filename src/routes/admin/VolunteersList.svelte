@@ -5,6 +5,7 @@
   import { affiliations } from '../../lib/stores/affiliations';
   import { supabase } from '../../lib/supabaseClient';
   import { sendWelcomeEmail } from '../../lib/volunteerSignup';
+  import { notifySlackSignup } from '../../lib/notifySlackSignup';
   import { push } from 'svelte-spa-router';
   import { format } from 'date-fns';
   import { formatTimeRange, isFlexibleTime } from '../../lib/utils/timeDisplay';
