@@ -52,27 +52,14 @@ serve(async (req) => {
       team_club_affiliation_id,
     } = body
 
-    if (!role_id || !email?.trim() || !first_name?.trim() || !last_name?.trim()) {
+    if (!email?.trim() || !first_name?.trim() || !last_name?.trim()) {
       return new Response(
-        JSON.stringify({ error: 'Missing required fields: role_id, email, first_name, last_name' }),
+        JSON.stringify({ error: 'Missing required fields: email, first_name, last_name' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
     const emailNorm = email.trim().toLowerCase()
-
-    const { data: roleRow, error: roleError } = await supabaseAdmin
-      .from('volunteer_roles')
-      .select('id, leader_id, domain_id')
-      .eq('id', role_id)
-      .single()
-
-    if (roleError || !roleRow) {
-      return new Response(
-        JSON.stringify({ error: 'Role not found' }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
 
     const { data: callerProfile } = await supabaseAdmin
       .from('profiles')
@@ -81,22 +68,45 @@ serve(async (req) => {
       .single()
 
     const isAdmin = callerProfile?.role === 'admin'
-    const isLeaderOfRole = roleRow.leader_id === authUser.id
-    let isLeaderOfDomain = false
-    if (!isAdmin && roleRow.domain_id) {
-      const { data: domainRow } = await supabaseAdmin
-        .from('volunteer_leader_domains')
-        .select('leader_id')
-        .eq('id', roleRow.domain_id)
-        .single()
-      isLeaderOfDomain = domainRow?.leader_id === authUser.id
-    }
 
-    if (!isAdmin && !isLeaderOfRole && !isLeaderOfDomain) {
-      return new Response(
-        JSON.stringify({ error: 'You are not allowed to add volunteers to this role' }),
-        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+    if (role_id) {
+      const { data: roleRow, error: roleError } = await supabaseAdmin
+        .from('volunteer_roles')
+        .select('id, name, positions_total, leader_id, domain_id')
+        .eq('id', role_id)
+        .single()
+
+      if (roleError || !roleRow) {
+        return new Response(
+          JSON.stringify({ error: 'Role not found' }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      const isLeaderOfRole = roleRow.leader_id === authUser.id
+      let isLeaderOfDomain = false
+      if (!isAdmin && roleRow.domain_id) {
+        const { data: domainRow } = await supabaseAdmin
+          .from('volunteer_leader_domains')
+          .select('leader_id')
+          .eq('id', roleRow.domain_id)
+          .single()
+        isLeaderOfDomain = domainRow?.leader_id === authUser.id
+      }
+
+      if (!isAdmin && !isLeaderOfRole && !isLeaderOfDomain) {
+        return new Response(
+          JSON.stringify({ error: 'You are not allowed to add volunteers to this role' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+    } else {
+      if (!isAdmin) {
+        return new Response(
+          JSON.stringify({ error: 'Only admins can create a volunteer without assigning a role' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
     }
 
     let volunteerId: string
@@ -182,49 +192,99 @@ serve(async (req) => {
       }
     }
 
-    const { data: existingSignup, error: signupLookupError } = await supabaseAdmin
-      .from('signups')
-      .select('id, status')
-      .eq('volunteer_id', volunteerId)
-      .eq('role_id', role_id)
-      .maybeSingle()
+    let roleRow: { id: string; name: string; positions_total?: number } | null = null
+    if (role_id) {
+      const { data: roleRowData } = await supabaseAdmin
+        .from('volunteer_roles')
+        .select('id, name, positions_total')
+        .eq('id', role_id)
+        .single()
+      roleRow = roleRowData
 
-    if (signupLookupError) {
-      return new Response(
-        JSON.stringify({ error: 'Failed to check signup', details: signupLookupError.message }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
+      const { data: existingSignup, error: signupLookupError } = await supabaseAdmin
+        .from('signups')
+        .select('id, status')
+        .eq('volunteer_id', volunteerId)
+        .eq('role_id', role_id)
+        .maybeSingle()
 
-    if (existingSignup) {
-      if (existingSignup.status === 'cancelled') {
-        await supabaseAdmin
-          .from('signups')
-          .update({
-            status: 'confirmed',
-            phone: phone?.trim() || null,
-            waiver_signed: false,
-          })
-          .eq('id', existingSignup.id)
-      } else {
+      if (signupLookupError) {
         return new Response(
-          JSON.stringify({ error: 'This volunteer is already signed up for this role.' }),
-          { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
-      }
-    } else {
-      const { error: signupInsertError } = await supabaseAdmin.from('signups').insert({
-        role_id,
-        volunteer_id: volunteerId,
-        status: 'confirmed',
-        phone: phone?.trim() || null,
-        waiver_signed: false,
-      })
-      if (signupInsertError) {
-        return new Response(
-          JSON.stringify({ error: 'Failed to create signup', details: signupInsertError.message }),
+          JSON.stringify({ error: 'Failed to check signup', details: signupLookupError.message }),
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
+      }
+
+      if (existingSignup) {
+        if (existingSignup.status === 'cancelled') {
+          await supabaseAdmin
+            .from('signups')
+            .update({
+              status: 'confirmed',
+              phone: phone?.trim() || null,
+              waiver_signed: false,
+            })
+            .eq('id', existingSignup.id)
+        } else {
+          return new Response(
+            JSON.stringify({ error: 'This volunteer is already signed up for this role.' }),
+            { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          )
+        }
+      } else {
+        const { error: signupInsertError } = await supabaseAdmin.from('signups').insert({
+          role_id,
+          volunteer_id: volunteerId,
+          status: 'confirmed',
+          phone: phone?.trim() || null,
+          waiver_signed: false,
+        })
+        if (signupInsertError) {
+          return new Response(
+            JSON.stringify({ error: 'Failed to create signup', details: signupInsertError.message }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+    }
+    }
+
+    const roleName = roleRow?.name ?? 'Unknown role'
+    const rolePositionsTotal = Number(roleRow?.positions_total) || 0
+    const volunteerName = [first_name, last_name].filter(Boolean).join(' ').trim() || email
+    const slackToken = Deno.env.get('SLACK_BOT_TOKEN')
+    const slackChannel = Deno.env.get('SLACK_SIGNUP_CHANNEL_ID')
+    if (role_id && slackToken && slackChannel) {
+      try {
+        const { count: roleSignups } = await supabaseAdmin
+          .from('signups')
+          .select('*', { count: 'exact', head: true })
+          .eq('role_id', role_id)
+          .eq('status', 'confirmed')
+        const { count: totalSignups } = await supabaseAdmin
+          .from('signups')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'confirmed')
+        const { data: totalPositionsRows } = await supabaseAdmin
+          .from('volunteer_roles')
+          .select('positions_total')
+        const totalPositions = (totalPositionsRows ?? []).reduce((sum, r) => sum + (Number(r.positions_total) || 0), 0)
+        const roleFilled = `${roleSignups ?? 0}/${rolePositionsTotal || 1} of ${roleName} filled`
+        const allFilled = `${totalSignups ?? 0}/${totalPositions || 1} of all volunteer roles filled!`
+        const text = `:raising_hand: New volunteer signup: *${volunteerName}* (${email}) signed up for *${roleName}*.\n\n${roleFilled}\n${allFilled}`
+        const slackRes = await fetch('https://slack.com/api/chat.postMessage', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${slackToken}`,
+          },
+          body: JSON.stringify({ channel: slackChannel, text }),
+        })
+        if (!slackRes.ok) {
+          const err = await slackRes.json().catch(() => ({}))
+          console.error('Slack notify error:', slackRes.status, err)
+        }
+      } catch (slackErr) {
+        console.error('Slack notify error:', slackErr)
       }
     }
 

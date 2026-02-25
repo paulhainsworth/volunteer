@@ -13,6 +13,7 @@
   // Volunteer routes
   import BrowseRoles from './routes/volunteer/BrowseRoles.svelte';
   import VolunteerSignup from './routes/volunteer/Signup.svelte';
+  import SignWaiver from './routes/volunteer/SignWaiver.svelte';
   import MySignups from './routes/volunteer/MySignups.svelte';
   
   // Admin routes
@@ -37,6 +38,7 @@
     '/': Home,
     '/auth/login': Login,
     '/volunteer': BrowseRoles,
+    '/volunteer/waiver': SignWaiver,
     '/signup/:id': VolunteerSignup,
     '/my-signups': MySignups,
     '/profile': Profile,

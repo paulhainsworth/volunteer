@@ -52,18 +52,31 @@ function createWaiverStore() {
       };
     },
 
-    signWaiver: async (volunteerId, signatureName, ipAddress = null) => {
+    /**
+     * @param {string} volunteerId
+     * @param {string} signatureName - volunteer's name (or minor's name for assent)
+     * @param {string|null} [ipAddress]
+     * @param {{ parent_guardian_name?: string, parent_guardian_email?: string, parent_guardian_phone?: string, parent_signature_name?: string }} [parent] - for minors
+     */
+    signWaiver: async (volunteerId, signatureName, ipAddress = null, parent = null) => {
       const currentWaiver = await fetchCurrentWaiver();
+
+      const row = {
+        volunteer_id: volunteerId,
+        signature_name: signatureName,
+        ip_address: ipAddress,
+        waiver_version: currentWaiver.version,
+        waiver_text: currentWaiver.waiver_text
+      };
+      if (parent?.parent_guardian_name != null) row.parent_guardian_name = parent.parent_guardian_name;
+      if (parent?.parent_guardian_email != null) row.parent_guardian_email = parent.parent_guardian_email;
+      if (parent?.parent_guardian_phone != null) row.parent_guardian_phone = parent.parent_guardian_phone;
+      if (parent?.parent_signature_name != null) row.parent_signature_name = parent.parent_signature_name;
+      if (parent?.parent_guardian_name != null) row.parent_signed_at = new Date().toISOString();
 
       const { data, error } = await supabase
         .from('waivers')
-        .insert({
-          volunteer_id: volunteerId,
-          signature_name: signatureName,
-          ip_address: ipAddress,
-          waiver_version: currentWaiver.version,
-          waiver_text: currentWaiver.waiver_text
-        })
+        .insert(row)
         .select()
         .single();
 

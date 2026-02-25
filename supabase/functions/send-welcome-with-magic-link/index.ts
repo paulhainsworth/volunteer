@@ -94,9 +94,14 @@ function buildMagicLinkHtml(actionLink: string): string {
 }
 
 /** Welcome email: one-time first message with welcome copy + magic link. */
-function buildWelcomeHtml(actionLink: string): string {
+function buildWelcomeHtml(actionLink: string, promptWaiverAndEmergencyContact?: boolean): string {
   const href = escapeHref(actionLink)
   const siteHref = escapeHref(OMNIUM_SITE_URL)
+  const waiverPromptBlock = promptWaiverAndEmergencyContact
+    ? `<p style="margin:0 0 24px;font-size:15px;color:#4b5563;line-height:1.6;">
+        When you sign in, you'll be asked to sign the liability waiver and provide emergency contact information if you haven't already.
+      </p>`
+    : ''
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -126,6 +131,7 @@ function buildWelcomeHtml(actionLink: string): string {
               <p style="margin:0 0 24px;font-size:15px;color:#4b5563;line-height:1.6;">
                 To learn more about the event, check out the <a href="${siteHref}" style="color:#1a56b0;text-decoration:underline;">Omnium site here</a>.
               </p>
+              ${waiverPromptBlock}
               <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:#111827;">Your login link</p>
               <p style="margin:0 0 24px;font-size:15px;color:#4b5563;line-height:1.5;">
                 Click the button below to sign in — no password needed.
@@ -178,6 +184,8 @@ interface RequestBody {
   first_name: string
   /** Full URL to redirect after sign-in (e.g. https://example.com/#/volunteer). Must be in Supabase redirect allow list. */
   redirectTo: string
+  /** When true, include verbiage asking the volunteer to sign in to sign the waiver and provide emergency contact (e.g. when added by admin/leader). */
+  promptWaiverAndEmergencyContact?: boolean
 }
 
 serve(async (req) => {
@@ -186,7 +194,7 @@ serve(async (req) => {
   }
 
   try {
-    const { to, first_name, redirectTo }: RequestBody = await req.json()
+    const { to, first_name, redirectTo, promptWaiverAndEmergencyContact }: RequestBody = await req.json()
 
     if (!to || !redirectTo) {
       return new Response(
@@ -224,7 +232,7 @@ serve(async (req) => {
       )
     }
 
-    const html = buildWelcomeHtml(actionLink)
+    const html = buildWelcomeHtml(actionLink, !!promptWaiverAndEmergencyContact)
 
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',

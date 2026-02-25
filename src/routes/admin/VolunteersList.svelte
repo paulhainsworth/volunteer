@@ -530,67 +530,42 @@
     error = '';
 
     try {
-      // Generate a temporary password (user will reset via email)
-      const tempPassword = Math.random().toString(36).slice(-12) + Math.random().toString(36).slice(-12);
-      
-      // Create user in Supabase Auth
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: addVolunteerForm.email,
-        password: tempPassword,
-        options: {
-          data: {
-            first_name: addVolunteerForm.first_name,
-            last_name: addVolunteerForm.last_name,
-            team_club_affiliation_id: (addVolunteerForm.team_club_affiliation_id || '').trim() || undefined
-          },
-          emailRedirectTo: `${window.location.origin}/#/volunteer`
-        }
-      });
+      // Create user via edge function (service role) so the admin stays logged in; client signUp() would switch session to the new user.
+      const body = {
+        email: addVolunteerForm.email.trim(),
+        first_name: addVolunteerForm.first_name.trim(),
+        last_name: addVolunteerForm.last_name.trim(),
+        phone: (addVolunteerForm.phone || '').trim() || null,
+        team_club_affiliation_id: (addVolunteerForm.team_club_affiliation_id || '').trim() || null
+      };
+      if (addVolunteerForm.role_id) body.role_id = addVolunteerForm.role_id;
 
-      if (authError) throw authError;
+      const { data: fnData, error: fnError } = await supabase.functions.invoke('create-volunteer-and-signup', { body });
 
-      if (!authData.user) {
-        throw new Error('User creation failed');
-      }
+      if (fnError) throw fnError;
+      if (fnData?.error) throw new Error(typeof fnData.error === 'string' ? fnData.error : fnData.error?.message || 'Failed to create volunteer');
+      const volunteerId = fnData?.volunteerId;
+      if (!volunteerId) throw new Error('User creation failed');
 
-      // Create/update profile (trigger should handle this, but be explicit)
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .upsert({
-          id: authData.user.id,
-          email: addVolunteerForm.email,
-          first_name: addVolunteerForm.first_name,
-          last_name: addVolunteerForm.last_name,
-          phone: addVolunteerForm.phone || null,
-          role: 'volunteer',
-          team_club_affiliation_id: addVolunteerForm.team_club_affiliation_id || null
-        });
-
-      if (profileError) throw profileError;
-
-      // If a role was selected, sign them up
       if (addVolunteerForm.role_id) {
-        const { error: signupError } = await supabase
-          .from('signups')
-          .insert({
-            role_id: addVolunteerForm.role_id,
-            volunteer_id: authData.user.id,
-            status: 'confirmed',
-            phone: addVolunteerForm.phone || null
-          });
-
-        if (signupError) throw signupError;
+        notifySlackSignup({
+          role_id: addVolunteerForm.role_id,
+          volunteer_id: volunteerId,
+          volunteer_name: [addVolunteerForm.first_name, addVolunteerForm.last_name].filter(Boolean).join(' ').trim() || undefined,
+          volunteer_email: addVolunteerForm.email
+        }).catch(() => {});
       }
 
-      // Send same welcome email with magic link as PII signup flow
+      // Send welcome email with magic link; prompt waiver + emergency contact since admin added them (they didn't use PII modal).
       await sendWelcomeEmail({
         to: addVolunteerForm.email,
-        first_name: addVolunteerForm.first_name
+        first_name: addVolunteerForm.first_name,
+        promptWaiverAndEmergencyContact: true
       });
 
       // Refresh volunteers list
       await volunteers.fetchVolunteers();
-      
+
       closeAddVolunteerModal();
       alert(`✅ Volunteer created successfully! A welcome email with sign-in link has been sent to ${addVolunteerForm.email}.`);
     } catch (err) {

@@ -2,6 +2,16 @@
 
 Sends the post–PII signup welcome email with a **one-click magic link** so the user doesn’t have to go to the login page and request another link.
 
+## Deploy
+
+After changing this function (e.g. template or `promptWaiverAndEmergencyContact`), deploy to each Supabase project that sends welcome emails:
+
+```bash
+supabase functions deploy send-welcome-with-magic-link
+```
+
+Use `--project-ref <ref>` if you're not linked. When the client sends `promptWaiverAndEmergencyContact: true` (admin-added volunteer), the email includes the waiver/emergency-contact prompt.
+
 ## Env
 
 - `RESEND_API_KEY` – same as `send-email`

@@ -3,6 +3,8 @@
   import { auth } from '../../lib/stores/auth';
   import { roles } from '../../lib/stores/roles';
   import { volunteers } from '../../lib/stores/volunteers';
+  import { waiver as waiverStore } from '../../lib/stores/waiver';
+  import { supabase } from '../../lib/supabaseClient';
   import { push } from 'svelte-spa-router';
 
   let loading = true;
@@ -15,6 +17,21 @@
   let selectedRoleId = '';
   let selectedDate = '';
   let sending = false;
+  let currentWaiverVersion = null;
+
+  const WAIVER_REMINDER_SUBJECT = 'Action required: Sign the volunteer waiver for 2026 Berkeley Omnium';
+  const WAIVER_REMINDER_BODY = `Hi {volunteer_name},
+
+You're signed up to volunteer at the 2026 Berkeley Omnium — thank you! We need you to sign our liability waiver before the event.
+
+Please log in to the volunteer hub and sign the waiver (you'll see it when you view your signups or sign up for another role):
+
+https://www.berkeleyomnium.com/#/volunteer
+
+If you have any questions, reply to this email.
+
+Thanks,
+Berkeley Omnium Volunteer Team`;
 
   onMount(async () => {
     if (!$auth.isAdmin) {
@@ -27,6 +44,8 @@
         roles.fetchRoles(),
         volunteers.fetchVolunteers()
       ]);
+      const waiverSettings = await waiverStore.fetchCurrentWaiver();
+      currentWaiverVersion = waiverSettings?.version ?? 1;
     } catch (err) {
       error = err.message;
     } finally {
@@ -50,23 +69,48 @@
     }
   }
 
-  function getRecipientCount() {
+  function getUnsignedVolunteers() {
+    if (currentWaiverVersion == null) return [];
+    return $volunteers.filter((v) => {
+      const waivers = v.waivers || [];
+      const hasSignedCurrent = waivers.some((w) => (w.waiver_version ?? 0) >= currentWaiverVersion);
+      return !hasSignedCurrent;
+    });
+  }
+
+  function getRecipients() {
     if (recipientType === 'all') {
-      return $volunteers.length;
+      return $volunteers;
+    }
+    if (recipientType === 'waiver_unsigned') {
+      return getUnsignedVolunteers();
     }
     if (recipientType === 'role' && selectedRoleId) {
-      const role = $roles.find(r => r.id === selectedRoleId);
-      return role?.signups?.length || 0;
+      const role = $roles.find((r) => r.id === selectedRoleId);
+      const signups = role?.signups?.filter((s) => s.status === 'confirmed') || [];
+      return signups.map((s) => s.volunteer).filter(Boolean);
     }
     if (recipientType === 'date' && selectedDate) {
-      const dateRoles = $roles.filter(r => r.event_date === selectedDate);
-      const uniqueVolunteers = new Set();
-      dateRoles.forEach(role => {
-        role.signups?.forEach(signup => uniqueVolunteers.add(signup.volunteer.id));
+      const dateRoles = $roles.filter((r) => r.event_date === selectedDate);
+      const byId = new Map();
+      dateRoles.forEach((role) => {
+        role.signups?.forEach((signup) => {
+          if (signup.volunteer) byId.set(signup.volunteer.id, signup.volunteer);
+        });
       });
-      return uniqueVolunteers.size;
+      return Array.from(byId.values());
     }
-    return 0;
+    return [];
+  }
+
+  function getRecipientCount() {
+    return getRecipients().length;
+  }
+
+  function fillWaiverReminderTemplate() {
+    recipientType = 'waiver_unsigned';
+    subject = WAIVER_REMINDER_SUBJECT;
+    body = WAIVER_REMINDER_BODY;
   }
 
   async function handleSend() {
@@ -78,30 +122,52 @@
       return;
     }
 
+    const recipients = getRecipients();
+    if (recipients.length === 0) {
+      error = 'No recipients selected.';
+      return;
+    }
+
     sending = true;
 
-    // This is a placeholder - in a real implementation, you would call your email service API
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      success = `Email sent successfully to ${getRecipientCount()} recipients!`;
-      
-      // Clear form
+      const sendPromises = recipients.map((volunteer) => {
+        const name = [volunteer.first_name, volunteer.last_name].filter(Boolean).join(' ').trim() || 'there';
+        const bodyHtml = body
+          .replace(/\{volunteer_name\}/g, name)
+          .split('\n')
+          .map((line) => `<p>${line || ' '}</p>`)
+          .join('');
+        const html = `
+          <h2>${subject}</h2>
+          ${bodyHtml}
+          <hr style="margin: 2rem 0; border: none; border-top: 1px solid #dee2e6;">
+          <p style="color: #6c757d; font-size: 0.9rem;">
+            Sent via Berkeley Omnium Volunteer Hub
+          </p>
+        `;
+        return supabase.functions.invoke('send-email', {
+          body: { to: volunteer.email, subject, html }
+        });
+      });
+      await Promise.all(sendPromises);
+      success = `Email sent to ${recipients.length} recipient${recipients.length === 1 ? '' : 's'}.`;
+
       subject = '';
       body = '';
       recipientType = 'all';
       selectedRoleId = '';
       selectedDate = '';
     } catch (err) {
-      error = 'Failed to send email: ' + err.message;
+      error = 'Failed to send email: ' + (err?.message || err);
     } finally {
       sending = false;
     }
   }
 
   $: recipientCount = getRecipientCount();
-  $: eventDates = [...new Set($roles.map(r => r.event_date))].sort();
+  $: unsignedVolunteers = getUnsignedVolunteers();
+  $: eventDates = [...new Set($roles.map((r) => r.event_date))].sort();
 </script>
 
 <div class="communications-page">
@@ -178,6 +244,22 @@
           {/if}
         </div>
 
+        <div class="form-group">
+          <label>
+            <input
+              type="radio"
+              bind:group={recipientType}
+              value="waiver_unsigned"
+            />
+            Volunteers who haven't signed the waiver ({unsignedVolunteers.length})
+          </label>
+          {#if recipientType === 'waiver_unsigned'}
+            <button type="button" class="btn btn-secondary btn-template" on:click={fillWaiverReminderTemplate}>
+              Use waiver reminder template
+            </button>
+          {/if}
+        </div>
+
         <div class="recipient-count">
           Will send to <strong>{recipientCount}</strong> {recipientCount === 1 ? 'recipient' : 'recipients'}
         </div>
@@ -244,16 +326,13 @@
       <h3>💡 Tips</h3>
       <ul>
         <li>Use merge fields like <code>{'{volunteer_name}'}</code> to personalize emails</li>
-        <li>Send test emails to yourself first by selecting a specific volunteer</li>
+        <li><strong>Waiver reminder:</strong> Choose "Volunteers who haven't signed the waiver", then "Use waiver reminder template" to pre-fill a message asking them to log in and sign. Only unsigned volunteers receive it.</li>
+        <li>Send test emails to yourself first by selecting a specific role or date with few recipients</li>
         <li>Schedule reminder emails 7 days and 1 day before events</li>
         <li>Keep subject lines clear and concise</li>
       </ul>
     </div>
 
-    <div class="info-note">
-      <strong>Note:</strong> This is a simplified email interface. In production, this would integrate with
-      an email service like SendGrid, Resend, or AWS SES to actually send emails.
-    </div>
   {/if}
 </div>
 
@@ -433,6 +512,20 @@
     cursor: not-allowed;
   }
 
+  .btn-secondary {
+    background: #6c757d;
+    color: white;
+    margin-top: 0.5rem;
+  }
+
+  .btn-secondary:hover {
+    background: #5a6268;
+  }
+
+  .btn-template {
+    font-size: 0.9rem;
+  }
+
   .help-section {
     background: #fff3cd;
     border: 1px solid #ffeeba;
@@ -461,14 +554,6 @@
     padding: 0.125rem 0.375rem;
     border-radius: 3px;
     font-size: 0.9em;
-  }
-
-  .info-note {
-    padding: 1rem;
-    background: #e7f3ff;
-    border-left: 4px solid #007bff;
-    border-radius: 4px;
-    color: #004085;
   }
 </style>
 

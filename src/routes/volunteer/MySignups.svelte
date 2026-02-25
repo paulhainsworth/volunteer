@@ -4,6 +4,7 @@
   import { auth } from '../../lib/stores/auth';
   import { supabase } from '../../lib/supabaseClient';
   import { push } from 'svelte-spa-router';
+  import { waiver as waiverStore } from '../../lib/stores/waiver';
   import ContactLeader from '../../lib/components/ContactLeader.svelte';
   import { formatTimeRange, calculateDuration, formatEventDateInPacific } from '../../lib/utils/timeDisplay';
 
@@ -26,6 +27,19 @@
     if (!$auth.profile?.emergency_contact_name) {
       push('/onboarding');
       return;
+    }
+
+    // Redirect to sign waiver if they haven't signed the current waiver (e.g. admin-added volunteer)
+    if ($auth.profile?.role === 'volunteer') {
+      try {
+        const status = await waiverStore.checkWaiverStatus($auth.user.id);
+        if (status.needsToSign) {
+          push('/volunteer/waiver?return=' + encodeURIComponent('/my-signups'));
+          return;
+        }
+      } catch (_) {
+        // continue to load signups; waiver check will show error on waiver page if needed
+      }
     }
 
     try {

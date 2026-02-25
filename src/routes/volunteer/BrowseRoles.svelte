@@ -7,10 +7,12 @@
   import {
     createVolunteerAndSignup,
     sendRoleConfirmationEmail,
-    sendWelcomeEmail
+    sendWelcomeEmail,
+    sendParentGuardianConfirmationEmail
   } from '../../lib/volunteerSignup';
   import { signups } from '../../lib/stores/signups';
   import { affiliations } from '../../lib/stores/affiliations';
+  import { waiver as waiverStore } from '../../lib/stores/waiver';
 
   let loading = true;
   let error = '';
@@ -43,6 +45,15 @@
   };
   let piiSubmitting = false;
   let piiError = '';
+  let piiWaiverText = '';
+  let piiWaiverAgreed = false;
+  let piiWaiverLoading = false;
+  // Minor / parent consent (Option 1)
+  let piiIsMinor = false;
+  let piiParentGuardianName = '';
+  let piiParentGuardianEmail = '';
+  let piiParentGuardianPhone = '';
+  let piiParentSignatureName = '';
 
   onMount(async () => {
     // Redirect to onboarding if no emergency contact
@@ -50,6 +61,19 @@
       loading = false;
       push('/onboarding');
       return;
+    }
+
+    // Redirect to sign waiver if volunteer hasn't signed current waiver (e.g. admin-added volunteer)
+    if ($auth.user && $auth.profile?.emergency_contact_name && $auth.profile?.role === 'volunteer') {
+      try {
+        const status = await waiverStore.checkWaiverStatus($auth.user.id);
+        if (status.needsToSign) {
+          push('/volunteer/waiver?return=' + encodeURIComponent('/volunteer'));
+          return;
+        }
+      } catch (_) {
+        // continue to load roles
+      }
     }
 
     let rolesData = [];
@@ -93,7 +117,19 @@
             }
           }
           piiRole = r;
+          piiWaiverText = '';
+          piiWaiverAgreed = false;
+          piiIsMinor = false;
+          piiParentGuardianName = '';
+          piiParentGuardianEmail = '';
+          piiParentGuardianPhone = '';
+          piiParentSignatureName = '';
           showPiiModal = true;
+          piiWaiverLoading = true;
+          waiverStore.fetchCurrentWaiver()
+            .then((d) => { piiWaiverText = d.waiver_text ?? d.text ?? ''; })
+            .catch(() => { piiWaiverText = ''; })
+            .finally(() => { piiWaiverLoading = false; });
         }
       }
     }
@@ -336,8 +372,20 @@
         team_club_affiliation_id: ''
       };
       piiError = '';
+      piiWaiverText = '';
+      piiWaiverAgreed = false;
+      piiIsMinor = false;
+      piiParentGuardianName = '';
+      piiParentGuardianEmail = '';
+      piiParentGuardianPhone = '';
+      piiParentSignatureName = '';
       showPiiModal = true;
       affiliations.fetchAffiliations().catch(() => {});
+      piiWaiverLoading = true;
+      waiverStore.fetchCurrentWaiver()
+        .then((d) => { piiWaiverText = d.waiver_text ?? d.text ?? ''; })
+        .catch(() => { piiWaiverText = ''; })
+        .finally(() => { piiWaiverLoading = false; });
       return;
     }
     push(`/signup/${role?.id || roleOrId}`);
@@ -346,6 +394,13 @@
   function closePiiModal() {
     showPiiModal = false;
     piiRole = null;
+    piiWaiverText = '';
+    piiWaiverAgreed = false;
+    piiIsMinor = false;
+    piiParentGuardianName = '';
+    piiParentGuardianEmail = '';
+    piiParentGuardianPhone = '';
+    piiParentSignatureName = '';
     piiError = '';
     piiSubmitting = false;
   }
@@ -364,6 +419,24 @@
       piiError = 'No role selected.';
       return;
     }
+    if (!piiWaiverAgreed) {
+      piiError = 'You must agree to the liability waiver to complete signup.';
+      return;
+    }
+    if (piiIsMinor) {
+      if (!piiParentGuardianName?.trim()) {
+        piiError = 'Parent/guardian full name is required for volunteers under 18.';
+        return;
+      }
+      if (!piiParentGuardianEmail?.trim()) {
+        piiError = 'Parent/guardian email is required for volunteers under 18.';
+        return;
+      }
+      if (!piiParentSignatureName?.trim()) {
+        piiError = 'Parent/guardian must sign (enter their full name) for volunteers under 18.';
+        return;
+      }
+    }
 
     piiSubmitting = true;
     piiError = '';
@@ -377,7 +450,12 @@
           phone: f.phone?.trim() || null,
           emergency_contact_name: f.emergency_contact_name?.trim() || null,
           emergency_contact_phone: f.emergency_contact_phone?.trim() || null,
-          team_club_affiliation_id: f.team_club_affiliation_id?.trim() || null
+          team_club_affiliation_id: f.team_club_affiliation_id?.trim() || null,
+          is_minor: piiIsMinor,
+          parent_guardian_name: piiIsMinor ? piiParentGuardianName?.trim() || null : null,
+          parent_guardian_email: piiIsMinor ? piiParentGuardianEmail?.trim() || null : null,
+          parent_guardian_phone: piiIsMinor ? (piiParentGuardianPhone?.trim() || null) : null,
+          parent_signature_name: piiIsMinor ? piiParentSignatureName?.trim() || null : null
         },
         piiRole.id
       );
@@ -393,6 +471,17 @@
         to: result.email,
         first_name: result.first_name
       }).catch((err) => console.error('Welcome email failed:', err));
+
+      if (piiIsMinor && piiParentGuardianEmail?.trim()) {
+        sendParentGuardianConfirmationEmail({
+          to: piiParentGuardianEmail.trim(),
+          parent_guardian_name: piiParentGuardianName?.trim() || null,
+          volunteer_first_name: result.first_name,
+          volunteer_last_name: result.last_name,
+          role: piiRole,
+          roleId: piiRole.id
+        }).catch((err) => console.error('Parent/guardian confirmation email failed:', err));
+      }
 
       closePiiModal();
       push('/my-signups');
@@ -799,10 +888,98 @@
             {/each}
           </select>
         </div>
+
+        <div class="pii-waiver-section">
+          <h4>Liability Waiver</h4>
+          {#if piiWaiverLoading}
+            <p class="waiver-loading">Loading waiver...</p>
+          {:else if piiWaiverText}
+            <div class="pii-waiver-text">{piiWaiverText}</div>
+            <div class="checkbox-group minor-toggle">
+              <input
+                type="checkbox"
+                id="pii-under-18"
+                bind:checked={piiIsMinor}
+                disabled={piiSubmitting}
+              />
+              <label for="pii-under-18">
+                I will be under 18 on the day of the event
+              </label>
+            </div>
+            {#if piiIsMinor}
+              <div class="pii-parent-consent-section">
+                <h4>Parent / Legal Guardian Consent</h4>
+                <p class="parent-consent-intro">
+                  For volunteers under 18, a parent or legal guardian must sign the waiver on your behalf.
+                </p>
+                <div class="form-group">
+                  <label for="pii-parent-name">Parent/Guardian Full Name *</label>
+                  <input
+                    type="text"
+                    id="pii-parent-name"
+                    bind:value={piiParentGuardianName}
+                    placeholder="Full legal name"
+                    disabled={piiSubmitting}
+                  />
+                </div>
+                <div class="form-group">
+                  <label for="pii-parent-email">Parent/Guardian Email *</label>
+                  <input
+                    type="email"
+                    id="pii-parent-email"
+                    bind:value={piiParentGuardianEmail}
+                    placeholder="email@example.com"
+                    disabled={piiSubmitting}
+                  />
+                </div>
+                <div class="form-group">
+                  <label for="pii-parent-phone">Parent/Guardian Phone (optional)</label>
+                  <input
+                    type="tel"
+                    id="pii-parent-phone"
+                    bind:value={piiParentGuardianPhone}
+                    placeholder="(555) 123-4567"
+                    disabled={piiSubmitting}
+                  />
+                </div>
+                <p class="parent-attestation">
+                  I am the parent or legal guardian of <strong>{[piiForm.first_name, piiForm.last_name].filter(Boolean).join(' ') || 'the volunteer'}</strong> and I have read and agree to the waiver above on their behalf.
+                </p>
+                <div class="form-group">
+                  <label for="pii-parent-signature">Parent/Guardian Digital Signature (Full Name) *</label>
+                  <input
+                    type="text"
+                    id="pii-parent-signature"
+                    bind:value={piiParentSignatureName}
+                    placeholder="Parent/guardian full name"
+                    disabled={piiSubmitting}
+                  />
+                </div>
+              </div>
+            {/if}
+            <div class="checkbox-group">
+              <input
+                type="checkbox"
+                id="pii-waiver-agree"
+                bind:checked={piiWaiverAgreed}
+                disabled={piiSubmitting}
+              />
+              <label for="pii-waiver-agree">
+                {#if piiIsMinor}
+                  I have read the waiver above and agree to it on behalf of {[piiForm.first_name, piiForm.last_name].filter(Boolean).join(' ') || 'the volunteer'}.
+                {:else}
+                  I have read and agree to the waiver above
+                {/if}
+              </label>
+            </div>
+          {:else}
+            <p class="waiver-error">Waiver could not be loaded. Please try again or contact support.</p>
+          {/if}
+        </div>
       </div>
       <div class="modal-actions">
         <button type="button" class="btn btn-secondary" on:click={closePiiModal} disabled={piiSubmitting}>Cancel</button>
-        <button type="button" class="btn btn-primary" on:click={submitPiiModal} disabled={piiSubmitting}>
+        <button type="button" class="btn btn-primary" on:click={submitPiiModal} disabled={piiSubmitting || !piiWaiverAgreed || piiWaiverLoading || (piiIsMinor && (!piiParentGuardianName?.trim() || !piiParentGuardianEmail?.trim() || !piiParentSignatureName?.trim()))}>
           {piiSubmitting ? 'Signing up...' : 'Complete Signup'}
         </button>
       </div>
@@ -1350,6 +1527,90 @@
   .pii-modal .modal-actions {
     flex-direction: row;
     justify-content: flex-end;
+  }
+
+  .pii-waiver-section {
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid #dee2e6;
+  }
+
+  .pii-waiver-section h4 {
+    margin: 0 0 0.75rem 0;
+    font-size: 1rem;
+    color: #212529;
+  }
+
+  .pii-waiver-text {
+    max-height: 200px;
+    overflow-y: auto;
+    padding: 0.75rem;
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    margin-bottom: 1rem;
+    white-space: pre-wrap;
+  }
+
+  .pii-modal .checkbox-group {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .pii-modal .checkbox-group.minor-toggle {
+    margin-bottom: 0.75rem;
+  }
+
+  .pii-parent-consent-section {
+    margin: 1rem 0;
+    padding: 1rem;
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+  }
+
+  .pii-parent-consent-section h4 {
+    margin: 0 0 0.5rem 0;
+    font-size: 0.95rem;
+    color: #212529;
+  }
+
+  .parent-consent-intro {
+    margin: 0 0 1rem 0;
+    font-size: 0.9rem;
+    color: #495057;
+    line-height: 1.4;
+  }
+
+  .parent-attestation {
+    margin: 1rem 0 0.5rem 0;
+    font-size: 0.9rem;
+    color: #495057;
+    line-height: 1.4;
+  }
+
+  .pii-modal .checkbox-group input[type="checkbox"] {
+    margin-top: 0.25rem;
+    width: auto;
+  }
+
+  .pii-modal .checkbox-group label {
+    font-weight: normal;
+    margin: 0;
+  }
+
+  .waiver-loading,
+  .waiver-error {
+    color: #6c757d;
+    font-size: 0.95rem;
+    margin: 0;
+  }
+
+  .waiver-error {
+    color: #721c24;
   }
 
   .btn-large {

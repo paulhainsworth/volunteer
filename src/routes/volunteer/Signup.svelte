@@ -25,6 +25,15 @@
   let loadingUserData = false;
   let alreadySignedUp = false;
 
+  // Minor volunteer / parent consent (Option 1 prototype – UI only, no backend)
+  let isMinor = false;
+  let parentGuardianName = '';
+  let parentGuardianEmail = '';
+  let parentGuardianPhone = '';
+  let parentSignatureName = '';
+  const MINOR_PROTOTYPE = true; // when true, minor path does not call backend
+  $: showWaiverForDemo = typeof window !== 'undefined' && new URLSearchParams(window.location.hash.split('?')[1] || '').get('demoWaiver') === '1';
+
   async function loadAuthenticatedData(userId) {
     loadingUserData = true;
 
@@ -99,13 +108,38 @@
       return;
     }
 
-    if (needsWaiver && !waiverAgreed) {
+    if ((needsWaiver || showWaiverForDemo) && !waiverAgreed) {
       error = 'You must agree to the waiver to continue';
       return;
     }
 
-    if (needsWaiver && !signatureName.trim()) {
+    if ((needsWaiver || showWaiverForDemo) && !isMinor && !signatureName.trim()) {
       error = 'Please enter your full name as your digital signature';
+      return;
+    }
+
+    if ((needsWaiver || showWaiverForDemo) && isMinor) {
+      if (!parentGuardianName.trim()) {
+        error = 'Parent/guardian full name is required for volunteers under 18';
+        return;
+      }
+      if (!parentGuardianEmail.trim()) {
+        error = 'Parent/guardian email is required for volunteers under 18';
+        return;
+      }
+      if (!parentSignatureName.trim()) {
+        error = 'Parent/guardian must sign (enter their full name) for volunteers under 18';
+        return;
+      }
+      if (MINOR_PROTOTYPE) {
+        error = '';
+        alert('Prototype: parent consent would be saved here. Backend not connected yet.');
+        return;
+      }
+    }
+
+    if (showWaiverForDemo) {
+      alert('Prototype: waiver/signup form shown for demo only. Backend not called. Remove ?demoWaiver=1 from the URL to use the real flow.');
       return;
     }
 
@@ -262,38 +296,133 @@
             </div>
           </div>
 
-          {#if needsWaiver}
+          {#if needsWaiver || showWaiverForDemo}
             <div class="form-section waiver-section">
               <h3>Liability Waiver</h3>
               
               <div class="waiver-text">
-                {waiverText}
+                {#if waiverText}
+                  {waiverText}
+                {:else if showWaiverForDemo}
+                  <em>Demo mode: the full USA Cycling waiver text would load here. Check "I will be under 18" to see the parent consent section.</em>
+                {/if}
               </div>
 
-              <div class="form-group">
-                <label for="signature">Digital Signature (Full Name)</label>
-                <input
-                  type="text"
-                  id="signature"
-                  bind:value={signatureName}
-                  placeholder="Your Full Name"
-                  required
-                  disabled={submitting}
-                />
-              </div>
-
-              <div class="checkbox-group">
+              <div class="checkbox-group minor-toggle">
                 <input
                   type="checkbox"
-                  id="waiver-agree"
-                  bind:checked={waiverAgreed}
-                  required
+                  id="under-18"
+                  bind:checked={isMinor}
                   disabled={submitting}
                 />
-                <label for="waiver-agree">
-                  I have read and agree to the waiver above
+                <label for="under-18">
+                  I will be under 18 on the day of the event
                 </label>
               </div>
+
+              {#if isMinor}
+                <div class="form-group">
+                  <label for="signature">Your Full Name (volunteer assent)</label>
+                  <input
+                    type="text"
+                    id="signature"
+                    bind:value={signatureName}
+                    placeholder="Your Full Name"
+                    disabled={submitting}
+                  />
+                  <small>You may also sign to acknowledge your participation; the parent/guardian signature below is legally required.</small>
+                </div>
+                <div class="parent-consent-section">
+                  <h4>Parent / Legal Guardian Consent</h4>
+                  <p class="parent-consent-intro">
+                    For volunteers under 18, a parent or legal guardian must sign the waiver on your behalf. 
+                    The USA Cycling waiver states that if you are younger than 18, your parent or legal guardian must execute the waiver below.
+                  </p>
+                  <div class="form-group">
+                    <label for="parent-name">Parent/Guardian Full Name *</label>
+                    <input
+                      type="text"
+                      id="parent-name"
+                      bind:value={parentGuardianName}
+                      placeholder="Full legal name"
+                      disabled={submitting}
+                    />
+                  </div>
+                  <div class="form-group">
+                    <label for="parent-email">Parent/Guardian Email *</label>
+                    <input
+                      type="email"
+                      id="parent-email"
+                      bind:value={parentGuardianEmail}
+                      placeholder="email@example.com"
+                      disabled={submitting}
+                    />
+                  </div>
+                  <div class="form-group">
+                    <label for="parent-phone">Parent/Guardian Phone (optional)</label>
+                    <input
+                      type="tel"
+                      id="parent-phone"
+                      bind:value={parentGuardianPhone}
+                      placeholder="(555) 123-4567"
+                      disabled={submitting}
+                    />
+                  </div>
+                  <p class="parent-attestation">
+                    I am the parent or legal guardian of <strong>{signatureName || 'the volunteer'}</strong> and I have read and agree to the waiver above on their behalf.
+                  </p>
+                  <div class="form-group">
+                    <label for="parent-signature">Parent/Guardian Digital Signature (Full Name) *</label>
+                    <input
+                      type="text"
+                      id="parent-signature"
+                      bind:value={parentSignatureName}
+                      placeholder="Parent/guardian full name"
+                      disabled={submitting}
+                    />
+                  </div>
+                </div>
+              {:else}
+                <div class="form-group">
+                  <label for="signature">Digital Signature (Full Name)</label>
+                  <input
+                    type="text"
+                    id="signature"
+                    bind:value={signatureName}
+                    placeholder="Your Full Name"
+                    required
+                    disabled={submitting}
+                  />
+                </div>
+              {/if}
+
+              {#if !isMinor}
+                <div class="checkbox-group">
+                  <input
+                    type="checkbox"
+                    id="waiver-agree"
+                    bind:checked={waiverAgreed}
+                    required
+                    disabled={submitting}
+                  />
+                  <label for="waiver-agree">
+                    I have read and agree to the waiver above
+                  </label>
+                </div>
+              {:else}
+                <div class="checkbox-group">
+                  <input
+                    type="checkbox"
+                    id="waiver-agree"
+                    bind:checked={waiverAgreed}
+                    required
+                    disabled={submitting}
+                  />
+                  <label for="waiver-agree">
+                    I have read the waiver above and confirm that my parent/guardian will sign on my behalf (or I have entered their consent above).
+                  </label>
+                </div>
+              {/if}
             </div>
           {/if}
 
@@ -310,7 +439,7 @@
             <button
               type="submit"
               class="btn btn-primary"
-              disabled={submitting || (needsWaiver && (!waiverAgreed || !signatureName.trim()))}
+              disabled={submitting || (needsWaiver && (!waiverAgreed || (isMinor ? (!parentGuardianName.trim() || !parentGuardianEmail.trim() || !parentSignatureName.trim()) : !signatureName.trim())))}
             >
               {submitting ? 'Signing up...' : 'Confirm Signup'}
             </button>
@@ -500,6 +629,37 @@
   .checkbox-group label {
     margin: 0;
     font-weight: normal;
+  }
+
+  .checkbox-group.minor-toggle {
+    margin-bottom: 1rem;
+  }
+
+  .parent-consent-section {
+    margin-top: 1.5rem;
+    padding: 1.25rem;
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+  }
+
+  .parent-consent-section h4 {
+    margin: 0 0 0.75rem 0;
+    font-size: 1.1rem;
+    color: #495057;
+  }
+
+  .parent-consent-intro {
+    margin: 0 0 1rem 0;
+    font-size: 0.95rem;
+    color: #6c757d;
+    line-height: 1.5;
+  }
+
+  .parent-attestation {
+    margin: 1rem 0 0.75rem 0;
+    font-size: 0.95rem;
+    color: #212529;
   }
 
   .form-actions {

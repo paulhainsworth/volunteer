@@ -62,7 +62,7 @@
             <a href="#/admin/roles" class="nav-link" on:click={handleNavClick}>Roles</a>
             <a href="#/admin/domains" class="nav-link" on:click={handleNavClick}>Domains</a>
             <a href="#/admin/volunteers" class="nav-link" on:click={handleNavClick}>Users</a>
-            <!-- <a href="#/admin/communications" class="nav-link" on:click={handleNavClick}>Communications</a> -->
+            <a href="#/admin/communications" class="nav-link" on:click={handleNavClick}>Communications</a>
           {:else if $auth.profile?.role === 'volunteer_leader'}
             <a href="#/leader" class="nav-link" on:click={handleNavClick}>My Roles</a>
             <a href="#/volunteer" class="nav-link" on:click={handleNavClick}>Browse Roles</a>
