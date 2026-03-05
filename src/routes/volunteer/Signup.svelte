@@ -34,6 +34,15 @@
   const MINOR_PROTOTYPE = true; // when true, minor path does not call backend
   $: showWaiverForDemo = typeof window !== 'undefined' && new URLSearchParams(window.location.hash.split('?')[1] || '').get('demoWaiver') === '1';
 
+  // Extract UUID from params.id; share dialogs sometimes append text like " Sign up to volunteer: Role Name"
+  // to the URL when copying, which breaks role lookup
+  const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+  $: roleId = (() => {
+    const raw = params.id || '';
+    const match = raw.match(UUID_RE);
+    return match ? match[0] : raw;
+  })();
+
   async function loadAuthenticatedData(userId) {
     loadingUserData = true;
 
@@ -65,7 +74,7 @@
     isAuthenticated = !!$auth.user;
 
     try {
-      role = await roles.fetchRole(params.id);
+      role = await roles.fetchRole(roleId);
 
       // Don't redirect unauthenticated users - show role details + login prompt.
       // (Redirecting to /volunteer?signup=... opened the PII modal for users who already signed up.)
@@ -73,12 +82,19 @@
       if (isAuthenticated && $auth.user) {
         await loadAuthenticatedData($auth.user.id);
         const mySignups = (await signups.fetchMySignups($auth.user.id)) ?? [];
-        alreadySignedUp = mySignups.some((s) => s.role_id === params.id || s.role?.id === params.id);
+        alreadySignedUp = mySignups.some((s) => s.role_id === roleId || s.role?.id === roleId);
       }
     } catch (err) {
       error = err.message || 'Unable to load volunteer role.';
     } finally {
       loading = false;
+      // If URL had extra text appended (e.g. from share dialog), clean it so future shares work
+      if (role && typeof window !== 'undefined' && params.id !== roleId) {
+        const cleanHash = `#/signup/${roleId}`;
+        if (window.location.hash !== cleanHash) {
+          window.history.replaceState(null, '', window.location.pathname + window.location.search + cleanHash);
+        }
+      }
     }
   });
 
@@ -88,7 +104,7 @@
     (async () => {
       await loadAuthenticatedData($auth.user.id);
       const mySignups = (await signups.fetchMySignups($auth.user.id)) ?? [];
-      alreadySignedUp = mySignups.some((s) => s.role_id === params.id || s.role?.id === params.id);
+      alreadySignedUp = mySignups.some((s) => s.role_id === roleId || s.role?.id === roleId);
     })();
   }
 
@@ -152,14 +168,14 @@
       }
 
       // Create signup
-      await signups.createSignup($auth.user.id, params.id, phone || null);
+      await signups.createSignup($auth.user.id, roleId, phone || null);
 
       // Send confirmation email
       sendRoleConfirmationEmail({
         to: $auth.profile?.email || $auth.user?.email,
         first_name: $auth.profile?.first_name || 'there',
         role,
-        roleId: params.id
+        roleId
       }).catch((err) => console.error('Confirmation email failed:', err));
 
       success = true;

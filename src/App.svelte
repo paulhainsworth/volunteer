@@ -40,6 +40,7 @@
     '/volunteer': BrowseRoles,
     '/volunteer/waiver': SignWaiver,
     '/signup/:id': VolunteerSignup,
+    '/signup/:id/*': VolunteerSignup,
     '/my-signups': MySignups,
     '/profile': Profile,
     '/onboarding': Onboarding,
