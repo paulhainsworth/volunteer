@@ -45,7 +45,8 @@
     location: '',
     positions_total: 1,
     domain_id: null,
-    leader_id: null
+    leader_id: null,
+    critical: false
   };
 
   if (role) {
@@ -58,6 +59,7 @@
     formData.positions_total = role.positions_total || 1;
     formData.domain_id = role.domain_id || null;
     formData.leader_id = role.leader_id || null;
+    formData.critical = !!role.critical;
   } else if (defaultDomainId) {
     formData.domain_id = defaultDomainId;
   }
@@ -159,6 +161,18 @@
     />
   </div>
 
+  <div class="form-group checkbox-group">
+    <input
+      type="checkbox"
+      id="critical"
+      bind:checked={formData.critical}
+      disabled={loading}
+    />
+    <label for="critical">
+      Critical role (must be filled for the event to run)
+    </label>
+  </div>
+
   <div class="form-group">
     <label for="domain_id">Domain (Recommended)</label>
     <select
@@ -232,6 +246,21 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 1rem;
+  }
+
+  .checkbox-group {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .checkbox-group input[type="checkbox"] {
+    width: auto;
+  }
+
+  .checkbox-group label {
+    margin: 0;
+    font-weight: 500;
   }
 
   label {

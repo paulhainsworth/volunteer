@@ -298,7 +298,8 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
       ...formData,
       positions_total: Number(formData.positions_total) || 0,
       domain_id: sanitizeSelect(formData.domain_id),
-      leader_id: sanitizeSelect(formData.leader_id)
+      leader_id: sanitizeSelect(formData.leader_id),
+      critical: !!formData.critical
     };
   }
 
@@ -394,18 +395,20 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
             }
           }
 
-          // Remove non-column fields from data
+          // Remove non-column fields from data (leader_email, domain_name are resolved; critical stays)
           const { leader_email, domain_name, ...roleDataClean } = roleData;
           const sentinel = flexibleSentinel();
           const startTime = roleDataClean.start_time === 'flexible' ? sentinel.start_time : roleDataClean.start_time;
           const endTime = roleDataClean.end_time === 'flexible' ? sentinel.end_time : roleDataClean.end_time;
 
+          const { critical = false, ...rest } = roleDataClean;
           await roles.createRole({
-            ...roleDataClean,
+            ...rest,
             start_time: startTime,
             end_time: endTime,
             domain_id: domainId,
             leader_id: leaderId,
+            critical: !!critical,
             created_by: $auth.user.id
           });
           successCount++;
@@ -469,6 +472,14 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
   async function toggleFeatured(role) {
     try {
       await roles.updateRole(role.id, { featured: !role.featured });
+    } catch (err) {
+      error = err.message;
+    }
+  }
+
+  async function toggleCritical(role) {
+    try {
+      await roles.updateRole(role.id, { critical: !role.critical });
     } catch (err) {
       error = err.message;
     }
@@ -1414,6 +1425,7 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
                 <thead>
                   <tr>
                     <th class="th-featured" title="Show on homepage">Featured</th>
+                    <th class="th-critical" title="Must-fill for event">Critical</th>
                     <th>Role Name</th>
                     <th>Volunteer Leader</th>
                     <th>Fill Status</th>
@@ -1435,6 +1447,16 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
                           on:click={() => toggleFeatured(role)}
                         >
                           ★
+                        </button>
+                      </td>
+                      <td class="td-critical">
+                        <button
+                          type="button"
+                          class="critical-toggle {role.critical ? 'critical' : ''}"
+                          title={role.critical ? 'Mark as nice-to-have' : 'Mark as critical (must-fill)'}
+                          on:click={() => toggleCritical(role)}
+                        >
+                          ⚠
                         </button>
                       </td>
                       <td>
@@ -1474,7 +1496,7 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
 
                     {#if isExpanded}
                       <tr class="volunteers-row">
-                        <td colspan="5">
+                        <td colspan="6">
                           <div class="volunteers-container">
                             {#if volunteers.length > 0}
                               <h4>Volunteers ({volunteers.length})</h4>
@@ -2232,6 +2254,32 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
 
   .featured-toggle.featured {
     color: #ffc107;
+  }
+
+  .th-critical,
+  .td-critical {
+    width: 1%;
+    white-space: nowrap;
+    text-align: center;
+    vertical-align: middle;
+  }
+
+  .critical-toggle {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1.25rem;
+    padding: 0.25rem;
+    color: #dee2e6;
+    transition: color 0.15s;
+  }
+
+  .critical-toggle:hover {
+    color: #dc3545;
+  }
+
+  .critical-toggle.critical {
+    color: #dc3545;
   }
 
   .action-buttons {

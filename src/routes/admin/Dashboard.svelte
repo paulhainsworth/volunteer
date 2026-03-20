@@ -45,6 +45,12 @@
     }).sort((a, b) => new Date(a.event_date).getTime() - new Date(b.event_date).getTime());
   }
 
+  function getCriticalFlaggedUnfulfilled() {
+    return $roles
+      .filter(r => r.critical && r.positions_filled < r.positions_total)
+      .sort((a, b) => new Date(a.event_date).getTime() - new Date(b.event_date).getTime());
+  }
+
   function getUpcomingEvents() {
     const eventDates = [...new Set($roles.map(r => r.event_date))];
     return eventDates
@@ -54,6 +60,7 @@
   }
 
   $: criticalRoles = getCriticalRoles();
+  $: criticalFlaggedUnfulfilled = getCriticalFlaggedUnfulfilled();
   $: upcomingEvents = getUpcomingEvents();
 </script>
 
@@ -116,9 +123,95 @@
           </div>
         </div>
       {/if}
+      {#if $dashboardStats.criticalUnfulfilledCount > 0}
+        <div class="stat-card critical-flagged">
+          <div class="stat-icon">🎯</div>
+          <div class="stat-content">
+            <div class="stat-value">{$dashboardStats.criticalUnfulfilledCount}</div>
+            <div class="stat-label">Critical Roles Unfulfilled</div>
+          </div>
+        </div>
+      {/if}
     </div>
 
-    <!-- Critical Roles -->
+    <!-- Critical Roles Overview (admin-flagged) -->
+    {#if $dashboardStats.criticalFlaggedCount > 0}
+      <div class="dashboard-section">
+        <h2>Critical Roles Overview</h2>
+        <p class="section-description">
+          Roles you've marked as critical (must-fill) vs nice-to-have
+        </p>
+        <div class="critical-overview">
+          <div class="critical-summary">
+            <strong>Critical:</strong> {$dashboardStats.criticalFlaggedCount} roles · 
+            {$dashboardStats.criticalFlaggedCount - $dashboardStats.criticalUnfulfilledCount} fully filled · 
+            {$dashboardStats.criticalUnfulfilledCount} need volunteers
+            {#if $dashboardStats.criticalFlaggedCount > 0}
+              <span class="fill-pct">({Math.round($dashboardStats.criticalFillPercentage)}% filled)</span>
+            {/if}
+          </div>
+          <div class="critical-summary">
+            <strong>Nice-to-have:</strong> {$dashboardStats.totalRoles - $dashboardStats.criticalFlaggedCount} roles · 
+            {$dashboardStats.niceToHaveUnfulfilledCount} need volunteers
+          </div>
+        </div>
+      </div>
+    {/if}
+
+    <!-- Critical Roles Needing Volunteers -->
+    {#if criticalFlaggedUnfulfilled.length > 0}
+      <div class="dashboard-section">
+        <h2>Critical Roles Needing Volunteers</h2>
+        <p class="section-description">
+          These roles are marked critical and have open spots
+        </p>
+
+        <div class="roles-table">
+          <table>
+            <thead>
+              <tr>
+                <th>Role</th>
+                <th>Date</th>
+                <th>Time</th>
+                <th>Fill Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {#each criticalFlaggedUnfulfilled as role (role.id)}
+                {@const fillPercent = Math.round((role.positions_filled / role.positions_total) * 100)}
+                {@const daysUntil = Math.ceil((new Date(role.event_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))}
+                
+                <tr>
+                  <td>
+                    <strong>{role.name}</strong>
+                    {#if daysUntil <= 3}
+                      <span class="urgent-tag">Urgent</span>
+                    {/if}
+                  </td>
+                  <td>
+                    {format(new Date(role.event_date), 'MMM d, yyyy')}
+                    <small>({daysUntil} days)</small>
+                  </td>
+                  <td>{formatTimeRange(role)}</td>
+                  <td>
+                    <div class="fill-status {getFillClass(role)}">
+                      {role.positions_filled} / {role.positions_total}
+                      <span class="fill-percent">({fillPercent}%)</span>
+                    </div>
+                  </td>
+                  <td>
+                    <a href="#/admin/roles/{role.id}" class="btn btn-sm btn-secondary">View</a>
+                  </td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    {/if}
+
+    <!-- Roles Needing Attention (time-based) -->
     {#if criticalRoles.length > 0}
       <div class="dashboard-section">
         <h2>Roles Needing Attention</h2>
@@ -284,6 +377,29 @@
   .stat-card.critical {
     border: 2px solid #dc3545;
     background: #fff5f5;
+  }
+
+  .stat-card.critical-flagged {
+    border: 2px solid #dc3545;
+    background: #fff5f5;
+  }
+
+  .critical-overview {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .critical-summary {
+    padding: 0.75rem 1rem;
+    background: #f8f9fa;
+    border-radius: 8px;
+    color: #495057;
+  }
+
+  .critical-summary .fill-pct {
+    color: #6c757d;
+    font-weight: normal;
   }
 
   .stat-icon {

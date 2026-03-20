@@ -202,7 +202,8 @@ export const dashboardStats = derived(roles, $roles => {
     new Date(role.event_date) >= new Date()
   );
   
-  const criticalRoles = upcomingRoles.filter(role => {
+  // Time-based "needs attention" (legacy): <50% filled, within 7 days
+  const needsAttentionRoles = upcomingRoles.filter(role => {
     const fillPercentage = (role.positions_filled / role.positions_total) * 100;
     const daysUntil = Math.ceil(
       (new Date(role.event_date) - new Date()) / (1000 * 60 * 60 * 24)
@@ -210,13 +211,25 @@ export const dashboardStats = derived(roles, $roles => {
     return fillPercentage < 50 && daysUntil <= 7;
   });
 
+  // Admin-flagged critical roles
+  const criticalFlaggedRoles = $roles.filter(r => r.critical);
+  const criticalUnfulfilled = criticalFlaggedRoles.filter(r => r.positions_filled < r.positions_total);
+  const criticalPositionsTotal = criticalFlaggedRoles.reduce((s, r) => s + r.positions_total, 0);
+  const criticalPositionsFilled = criticalFlaggedRoles.reduce((s, r) => s + r.positions_filled, 0);
+  const niceToHaveRoles = $roles.filter(r => !r.critical);
+  const niceToHaveUnfulfilled = niceToHaveRoles.filter(r => r.positions_filled < r.positions_total);
+
   return {
     totalPositions,
     filledPositions,
     fillPercentage: totalPositions > 0 ? (filledPositions / totalPositions) * 100 : 0,
     totalRoles,
     upcomingRoles: upcomingRoles.length,
-    criticalRoles: criticalRoles.length
+    criticalRoles: needsAttentionRoles.length,
+    criticalFlaggedCount: criticalFlaggedRoles.length,
+    criticalUnfulfilledCount: criticalUnfulfilled.length,
+    criticalFillPercentage: criticalPositionsTotal > 0 ? (criticalPositionsFilled / criticalPositionsTotal) * 100 : 0,
+    niceToHaveUnfulfilledCount: niceToHaveUnfulfilled.length
   };
 });
 

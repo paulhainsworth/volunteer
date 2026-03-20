@@ -97,6 +97,7 @@
         <li><code>end_time</code> - Time in HH:MM format, e.g. 09:00. Leave empty for <strong>flexible</strong></li>
         <li><code>description</code> - Role description</li>
         <li><code>location</code> - Meeting point or location</li>
+        <li><code>critical</code> - <code>true</code>, <code>1</code>, or <code>yes</code> for must-fill roles; <code>false</code>/<code>0</code>/<code>no</code> or empty for nice-to-have (default)</li>
         <li><code>domain_name</code> - Domain name (e.g., "Course Marshals", "Registration & Check-in")</li>
         <li><code>leader_email</code> - Direct leader assignment (email address of volunteer leader)</li>
       </ul>
@@ -182,6 +183,7 @@
                   <th>Date</th>
                   <th>Time</th>
                   <th>Positions</th>
+                  <th>Critical</th>
                   <th>Location</th>
                 </tr>
               </thead>
@@ -197,6 +199,7 @@
                     <td>{role.event_date}</td>
                     <td>{formatTimeRange(role)}</td>
                     <td>{role.positions_total}</td>
+                    <td>{role.critical ? 'Yes' : 'No'}</td>
                     <td>{role.location || '-'}</td>
                   </tr>
                 {/each}

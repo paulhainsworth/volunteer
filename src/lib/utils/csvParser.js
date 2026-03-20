@@ -138,16 +138,20 @@ function validateRole(role, rowNumber) {
   role.leader_email = role.leader_email || '';
   role.domain_name = role.domain_name || '';
 
+  // critical: optional. Accept true/false, 1/0, yes/no (case-insensitive)
+  const criticalVal = (role.critical || '').toString().toLowerCase().trim();
+  role.critical = ['true', '1', 'yes'].includes(criticalVal);
+
   return role;
 }
 
 export function generateTemplateCSV() {
-  const headers = ['name', 'description', 'event_date', 'start_time', 'end_time', 'location', 'positions_total', 'domain_name', 'leader_email'];
+  const headers = ['name', 'description', 'event_date', 'start_time', 'end_time', 'location', 'positions_total', 'critical', 'domain_name', 'leader_email'];
   const exampleRows = [
-    ['Registration Table', 'Check in riders and hand out race numbers', '2026-06-15', '07:00', '09:00', 'Main tent near start/finish', '4', 'Registration & Check-in', ''],
-    ['Course Marshal - Corner 1', 'Direct riders at first turn', '2026-06-15', '08:00', '12:00', 'Corner of Main St and Oak Ave', '2', 'Course Marshals', ''],
-    ['Water Station 1', 'Hand out water bottles to riders', '2026-06-15', '08:30', '11:30', 'Mile marker 10', '3', 'Water Stations & Aid', ''],
-    ['Pre-race Setup (flexible)', 'Help with setup; time TBD', '2026-06-14', '', '', 'Event site', '2', 'Loading & Logistics', '']
+    ['Registration Table', 'Check in riders and hand out race numbers', '2026-06-15', '07:00', '09:00', 'Main tent near start/finish', '4', 'true', 'Registration & Check-in', ''],
+    ['Course Marshal - Corner 1', 'Direct riders at first turn', '2026-06-15', '08:00', '12:00', 'Corner of Main St and Oak Ave', '2', 'true', 'Course Marshals', ''],
+    ['Water Station 1', 'Hand out water bottles to riders', '2026-06-15', '08:30', '11:30', 'Mile marker 10', '3', 'false', 'Water Stations & Aid', ''],
+    ['Pre-race Setup (flexible)', 'Help with setup; time TBD', '2026-06-14', '', '', 'Event site', '2', 'false', 'Loading & Logistics', '']
   ];
 
   const csvContent = [
