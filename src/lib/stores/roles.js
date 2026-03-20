@@ -216,8 +216,10 @@ export const dashboardStats = derived(roles, $roles => {
   const criticalUnfulfilled = criticalFlaggedRoles.filter(r => r.positions_filled < r.positions_total);
   const criticalPositionsTotal = criticalFlaggedRoles.reduce((s, r) => s + r.positions_total, 0);
   const criticalPositionsFilled = criticalFlaggedRoles.reduce((s, r) => s + r.positions_filled, 0);
+  const criticalOpenSpots = criticalUnfulfilled.reduce((s, r) => s + (r.positions_total - r.positions_filled), 0);
   const niceToHaveRoles = $roles.filter(r => !r.critical);
   const niceToHaveUnfulfilled = niceToHaveRoles.filter(r => r.positions_filled < r.positions_total);
+  const niceToHaveOpenSpots = niceToHaveUnfulfilled.reduce((s, r) => s + (r.positions_total - r.positions_filled), 0);
 
   return {
     totalPositions,
@@ -228,8 +230,10 @@ export const dashboardStats = derived(roles, $roles => {
     criticalRoles: needsAttentionRoles.length,
     criticalFlaggedCount: criticalFlaggedRoles.length,
     criticalUnfulfilledCount: criticalUnfulfilled.length,
+    criticalOpenSpots,
     criticalFillPercentage: criticalPositionsTotal > 0 ? (criticalPositionsFilled / criticalPositionsTotal) * 100 : 0,
-    niceToHaveUnfulfilledCount: niceToHaveUnfulfilled.length
+    niceToHaveUnfulfilledCount: niceToHaveUnfulfilled.length,
+    niceToHaveOpenSpots
   };
 });
 

@@ -123,47 +123,46 @@
           </div>
         </div>
       {/if}
-      {#if $dashboardStats.criticalUnfulfilledCount > 0}
+      {#if $dashboardStats.criticalOpenSpots > 0}
         <div class="stat-card critical-flagged">
           <div class="stat-icon">🎯</div>
           <div class="stat-content">
-            <div class="stat-value">{$dashboardStats.criticalUnfulfilledCount}</div>
-            <div class="stat-label">Critical Roles Unfulfilled</div>
+            <div class="stat-value">{$dashboardStats.criticalOpenSpots}</div>
+            <div class="stat-label">Critical Spots to Fill</div>
           </div>
         </div>
       {/if}
     </div>
 
-    <!-- Critical Roles Overview (admin-flagged) -->
+    <!-- Critical Spots Overview (admin-flagged) -->
     {#if $dashboardStats.criticalFlaggedCount > 0}
       <div class="dashboard-section">
-        <h2>Critical Roles Overview</h2>
+        <h2>Critical Spots Overview</h2>
         <p class="section-description">
-          Roles you've marked as critical (must-fill) vs nice-to-have
+          Volunteer spots in roles you've marked as critical (must-fill) vs nice-to-have
         </p>
         <div class="critical-overview">
           <div class="critical-summary">
-            <strong>Critical:</strong> {$dashboardStats.criticalFlaggedCount} roles · 
-            {$dashboardStats.criticalFlaggedCount - $dashboardStats.criticalUnfulfilledCount} fully filled · 
-            {$dashboardStats.criticalUnfulfilledCount} need volunteers
+            <strong>Critical:</strong> {$dashboardStats.criticalOpenSpots} spots to fill
+            across {$dashboardStats.criticalUnfulfilledCount} roles
             {#if $dashboardStats.criticalFlaggedCount > 0}
-              <span class="fill-pct">({Math.round($dashboardStats.criticalFillPercentage)}% filled)</span>
+              · <span class="fill-pct">{Math.round($dashboardStats.criticalFillPercentage)}% filled</span>
             {/if}
           </div>
           <div class="critical-summary">
-            <strong>Nice-to-have:</strong> {$dashboardStats.totalRoles - $dashboardStats.criticalFlaggedCount} roles · 
-            {$dashboardStats.niceToHaveUnfulfilledCount} need volunteers
+            <strong>Nice-to-have:</strong> {$dashboardStats.niceToHaveOpenSpots} spots to fill
+            across {$dashboardStats.niceToHaveUnfulfilledCount} roles
           </div>
         </div>
       </div>
     {/if}
 
-    <!-- Critical Roles Needing Volunteers -->
+    <!-- Critical Spots Needing Volunteers -->
     {#if criticalFlaggedUnfulfilled.length > 0}
       <div class="dashboard-section">
-        <h2>Critical Roles Needing Volunteers</h2>
+        <h2>Critical Spots Needing Volunteers</h2>
         <p class="section-description">
-          These roles are marked critical and have open spots
+          Roles marked critical with open spots ({$dashboardStats.criticalOpenSpots} total)
         </p>
 
         <div class="roles-table">
