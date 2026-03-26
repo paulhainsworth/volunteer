@@ -7,6 +7,21 @@
 const FLEXIBLE_START = '00:00';
 const PACIFIC_TZ = 'America/Los_Angeles';
 
+function getPacificDateParts(date = new Date()) {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: PACIFIC_TZ,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  });
+  const parts = formatter.formatToParts(date);
+  return {
+    year: parts.find((part) => part.type === 'year')?.value || '',
+    month: parts.find((part) => part.type === 'month')?.value || '',
+    day: parts.find((part) => part.type === 'day')?.value || ''
+  };
+}
+
 /**
  * Parse a date-only string (YYYY-MM-DD) without timezone shift.
  * Returns a Date at noon UTC so the calendar day is correct in all timezones.
@@ -29,6 +44,13 @@ export function formatEventDateInPacific(dateString, style = 'short') {
     ? { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', timeZone: PACIFIC_TZ }
     : { weekday: 'short', month: 'short', day: 'numeric', timeZone: PACIFIC_TZ };
   return new Intl.DateTimeFormat('en-US', opts).format(d);
+}
+
+/** Return today's date in Pacific as YYYY-MM-DD for DB comparisons. */
+export function getTodayDateInPacific() {
+  const { year, month, day } = getPacificDateParts();
+  if (!year || !month || !day) return '';
+  return `${year}-${month}-${day}`;
 }
 
 const FLEXIBLE_END = '00:00';

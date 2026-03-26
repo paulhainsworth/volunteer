@@ -8,7 +8,7 @@
   import { notifySlackSignup } from '../../lib/notifySlackSignup';
   import { push } from 'svelte-spa-router';
   import { format } from 'date-fns';
-  import { formatTimeRange, isFlexibleTime } from '../../lib/utils/timeDisplay';
+  import { formatEventDateInPacific, formatTimeRange, getTodayDateInPacific, isFlexibleTime } from '../../lib/utils/timeDisplay';
 
   let loading = true;
   let error = '';
@@ -182,7 +182,7 @@
       const { data: rolesData, error: rolesError } = await supabase
         .from('volunteer_roles')
         .select('*')
-        .gte('event_date', new Date().toISOString().split('T')[0])
+        .gte('event_date', getTodayDateInPacific())
         .order('event_date', { ascending: true })
         .order('start_time', { ascending: true });
 
@@ -376,7 +376,7 @@
     const { data: rolesData, error: rolesError } = await supabase
       .from('volunteer_roles')
       .select('*')
-      .gte('event_date', new Date().toISOString().split('T')[0])
+      .gte('event_date', getTodayDateInPacific())
       .order('event_date', { ascending: true })
       .order('start_time', { ascending: true });
 
@@ -637,7 +637,7 @@
           volunteer.email,
           volunteer.phone || signup.phone || '',
           signup.role.name,
-          format(new Date(signup.role.event_date), 'yyyy-MM-dd'),
+          signup.role.event_date || '',
           start,
           end
         ]);
@@ -980,7 +980,7 @@
                   <div class="signup-item">
                     <span class="signup-name">{signup.role.name}</span>
                     <span class="signup-date">
-                      {format(new Date(signup.role.event_date), 'MMM d')}
+                      {formatEventDateInPacific(signup.role.event_date, 'short').replace(/^[A-Za-z]+, /, '')}
                     </span>
                   </div>
                 {/each}
@@ -1141,7 +1141,7 @@
                     <div class="signup-info">
                       <strong>{signup.role.name}</strong>
                       <span class="signup-meta">
-                        {format(new Date(signup.role.event_date), 'MMM d, yyyy')} • 
+                        {formatEventDateInPacific(signup.role.event_date, 'long')} •
                         {formatTimeRange(signup.role)}
                       </span>
                     </div>
@@ -1176,7 +1176,7 @@
                     {#each availableRoles.filter(r => !userSignups.some(s => s.role_id === r.id)) as role (role.id)}
                       {@const isFull = (role.positions_filled || 0) >= role.positions_total}
                       <option value={role.id} disabled={isFull}>
-                        {role.name} ({role.positions_filled || 0}/{role.positions_total} filled) - {format(new Date(role.event_date), 'MMM d')}
+                        {role.name} ({role.positions_filled || 0}/{role.positions_total} filled) - {formatEventDateInPacific(role.event_date, 'short').replace(/^[A-Za-z]+, /, '')}
                       </option>
                     {/each}
                   </select>
@@ -1335,7 +1335,7 @@
             {#each availableRoles as role (role.id)}
               {@const isFull = (role.positions_filled || 0) >= role.positions_total}
               <option value={role.id} disabled={isFull}>
-                {role.name} ({role.positions_filled || 0}/{role.positions_total} filled) - {format(new Date(role.event_date), 'MMM d')}
+                {role.name} ({role.positions_filled || 0}/{role.positions_total} filled) - {formatEventDateInPacific(role.event_date, 'short').replace(/^[A-Za-z]+, /, '')}
               </option>
             {/each}
           </select>
