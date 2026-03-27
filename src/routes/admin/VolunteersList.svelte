@@ -543,6 +543,12 @@
     return refreshResult.data.session;
   }
 
+  function sendWelcomeEmailInBackground(options) {
+    void sendWelcomeEmail(options).catch((err) => {
+      console.warn('Welcome email did not complete:', err);
+    });
+  }
+
   async function createVolunteer() {
     if (!addVolunteerForm.email || !addVolunteerForm.first_name || !addVolunteerForm.last_name) {
       error = 'Email, first name, and last name are required';
@@ -585,8 +591,8 @@
         }).catch(() => {});
       }
 
-      // Send welcome email with magic link; prompt waiver + emergency contact since admin added them (they didn't use PII modal).
-      await sendWelcomeEmail({
+      // Don't block the admin UI on email generation/delivery after the volunteer record already exists.
+      sendWelcomeEmailInBackground({
         to: addVolunteerForm.email,
         first_name: addVolunteerForm.first_name,
         promptWaiverAndEmergencyContact: true
@@ -596,7 +602,7 @@
       await volunteers.fetchVolunteers();
 
       closeAddVolunteerModal();
-      alert(`✅ Volunteer created successfully! A welcome email with sign-in link has been sent to ${addVolunteerForm.email}.`);
+      alert(`✅ Volunteer created successfully! A welcome email with sign-in link is being sent to ${addVolunteerForm.email}.`);
     } catch (err) {
       console.error('Create volunteer error:', err);
       const friendlyMessage = err?.message?.includes('non-2xx')
