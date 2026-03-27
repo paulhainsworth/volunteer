@@ -569,10 +569,11 @@
 
     try {
       const activeSession = await ensureActiveAdminSession();
+      const createdVolunteerEmail = addVolunteerForm.email.trim();
 
       // Create user via edge function (service role) so the admin stays logged in; client signUp() would switch session to the new user.
       const body = {
-        email: addVolunteerForm.email.trim(),
+        email: createdVolunteerEmail,
         first_name: addVolunteerForm.first_name.trim(),
         last_name: addVolunteerForm.last_name.trim(),
         phone: (addVolunteerForm.phone || '').trim() || null,
@@ -603,7 +604,7 @@
 
       // Don't block the admin UI on email generation/delivery after the volunteer record already exists.
       sendWelcomeEmailInBackground({
-        to: addVolunteerForm.email,
+        to: createdVolunteerEmail,
         first_name: addVolunteerForm.first_name,
         promptWaiverAndEmergencyContact: true
       });
@@ -612,7 +613,7 @@
       await volunteers.fetchVolunteers();
 
       closeAddVolunteerModal();
-      alert(`✅ Volunteer created successfully! A welcome email with sign-in link is being sent to ${addVolunteerForm.email}.`);
+      alert(`✅ Volunteer created successfully! A welcome email with sign-in link is being sent to ${createdVolunteerEmail}.`);
     } catch (err) {
       console.error('Create volunteer error:', err);
       const friendlyMessage = err?.message?.includes('non-2xx')
