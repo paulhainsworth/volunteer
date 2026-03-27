@@ -7,14 +7,33 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
+function decodeJwtPayload(token: string) {
+  try {
+    const [, payload] = token.split('.')
+    if (!payload) return null
+    const normalized = payload.replace(/-/g, '+').replace(/_/g, '/')
+    const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4)
+    return JSON.parse(atob(padded))
+  } catch {
+    return null
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
 
   try {
+    const requestId = crypto.randomUUID()
     const authHeader = req.headers.get('Authorization')
+    console.log('[create-volunteer-and-signup] request:start', {
+      requestId,
+      method: req.method,
+      hasAuthorization: !!authHeader,
+    })
     if (!authHeader?.startsWith('Bearer ')) {
+      console.warn('[create-volunteer-and-signup] auth:missing-header', { requestId })
       return new Response(
         JSON.stringify({ error: 'Missing or invalid Authorization header' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -24,23 +43,37 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey)
-
-    const userRes = await fetch(`${supabaseUrl}/auth/v1/user`, {
-      headers: { 'Authorization': authHeader, 'apikey': supabaseServiceKey },
+    const accessToken = authHeader.replace(/^Bearer\s+/i, '').trim()
+    const tokenPayload = decodeJwtPayload(accessToken)
+    console.log('[create-volunteer-and-signup] auth:token-received', {
+      requestId,
+      tokenSub: tokenPayload?.sub ?? null,
+      tokenExp: tokenPayload?.exp ?? null,
+      tokenRole: tokenPayload?.role ?? null,
     })
-    if (!userRes.ok) {
+
+    const {
+      data: { user: authUser },
+      error: authError,
+    } = await supabaseAdmin.auth.getUser(accessToken)
+
+    if (authError || !authUser?.id) {
+      console.warn('[create-volunteer-and-signup] auth:get-user-failed', {
+        requestId,
+        authError: authError?.message ?? null,
+        tokenSub: tokenPayload?.sub ?? null,
+        tokenExp: tokenPayload?.exp ?? null,
+      })
       return new Response(
         JSON.stringify({ error: 'Invalid or expired token' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
-    const authUser = await userRes.json()
-    if (!authUser?.id) {
-      return new Response(
-        JSON.stringify({ error: 'Invalid or expired token' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
+    console.log('[create-volunteer-and-signup] auth:get-user-ok', {
+      requestId,
+      authUserId: authUser.id,
+      authEmail: authUser.email ?? null,
+    })
 
     const body = await req.json()
     const {
@@ -51,8 +84,18 @@ serve(async (req) => {
       phone,
       team_club_affiliation_id,
     } = body
+    console.log('[create-volunteer-and-signup] request:body', {
+      requestId,
+      role_id: role_id ?? null,
+      email: email?.trim()?.toLowerCase?.() ?? null,
+      first_name: first_name?.trim?.() ?? null,
+      last_name: last_name?.trim?.() ?? null,
+      has_phone: !!phone,
+      team_club_affiliation_id: team_club_affiliation_id ?? null,
+    })
 
     if (!email?.trim() || !first_name?.trim() || !last_name?.trim()) {
+      console.warn('[create-volunteer-and-signup] validation:missing-required-fields', { requestId })
       return new Response(
         JSON.stringify({ error: 'Missing required fields: email, first_name, last_name' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -68,6 +111,12 @@ serve(async (req) => {
       .single()
 
     const isAdmin = callerProfile?.role === 'admin'
+    console.log('[create-volunteer-and-signup] auth:caller-role', {
+      requestId,
+      authUserId: authUser.id,
+      callerRole: callerProfile?.role ?? null,
+      isAdmin,
+    })
 
     if (role_id) {
       const { data: roleRow, error: roleError } = await supabaseAdmin
