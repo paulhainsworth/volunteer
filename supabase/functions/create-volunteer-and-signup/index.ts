@@ -113,16 +113,27 @@ serve(async (req) => {
 
     const { data: existingProfile } = await supabaseAdmin
       .from('profiles')
-      .select('id, first_name, last_name, phone, team_club_affiliation_id')
+      .select('id, first_name, last_name, phone, team_club_affiliation_id, role')
       .ilike('email', emailNorm)
       .maybeSingle()
 
     if (existingProfile) {
+      if (existingProfile.role === 'admin' || existingProfile.role === 'volunteer_leader') {
+        const roleLabel = existingProfile.role === 'admin' ? 'admin' : 'volunteer leader'
+        return new Response(
+          JSON.stringify({
+            error: `This email already belongs to an existing ${roleLabel} account. Use that existing account instead of creating a new volunteer.`
+          }),
+          { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
       volunteerId = existingProfile.id
       const updates: Record<string, unknown> = {}
       if (!existingProfile.first_name && first_name) updates.first_name = first_name.trim()
       if (!existingProfile.last_name && last_name) updates.last_name = last_name.trim()
       if (phone !== undefined && phone !== existingProfile.phone) updates.phone = phone?.trim() || null
+      if (!existingProfile.role) updates.role = 'volunteer'
       if (team_club_affiliation_id != null && existingProfile.team_club_affiliation_id !== team_club_affiliation_id) {
         updates.team_club_affiliation_id = team_club_affiliation_id || null
       }

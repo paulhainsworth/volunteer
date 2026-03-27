@@ -394,6 +394,12 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
     return refreshResult.data.session;
   }
 
+  function sendWelcomeEmailInBackground(options) {
+    void sendWelcomeEmail(options).catch((err) => {
+      console.warn('Welcome email did not complete:', err);
+    });
+  }
+
   async function addVolunteerToExpandedRole(role) {
     const roleId = role.id;
     const form = inlineVolunteerForms[roleId] || emptyInlineVolunteerForm();
@@ -469,7 +475,7 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
         volunteer_email: email
       }).catch(() => {});
 
-      await sendWelcomeEmail({
+      sendWelcomeEmailInBackground({
         to: email,
         first_name: firstName,
         promptWaiverAndEmergencyContact: true
@@ -480,7 +486,7 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
         [roleId]: {
           loading: false,
           error: '',
-          success: `Added ${firstName} ${lastName} and sent a welcome email.`
+          success: `Added ${firstName} ${lastName}. A welcome email is being sent.`
         }
       };
 
