@@ -571,7 +571,10 @@
       alert(`✅ Volunteer created successfully! A welcome email with sign-in link has been sent to ${addVolunteerForm.email}.`);
     } catch (err) {
       console.error('Create volunteer error:', err);
-      error = 'Failed to create volunteer: ' + err.message;
+      const friendlyMessage = err?.message?.includes('non-2xx')
+        ? 'Your admin session is not active in this tab. Please refresh this page or sign in again, then retry.'
+        : err.message;
+      error = 'Failed to create volunteer: ' + friendlyMessage;
     } finally {
       addingVolunteer = false;
     }
