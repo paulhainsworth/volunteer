@@ -375,6 +375,13 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
     }
 
     const session = sessionData.session;
+    const expiresAt = session.expires_at || 0;
+    const nowInSeconds = Math.floor(Date.now() / 1000);
+
+    // Avoid a blocking refresh when the current token is still comfortably valid.
+    if (expiresAt > nowInSeconds + 300) {
+      return session;
+    }
 
     const refreshResult = await Promise.race([
       supabase.auth.refreshSession(),
@@ -385,8 +392,6 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
       return refreshResult.data.session;
     }
 
-    const expiresAt = session.expires_at || 0;
-    const nowInSeconds = Math.floor(Date.now() / 1000);
     if (expiresAt > nowInSeconds + 60) {
       return session;
     }
