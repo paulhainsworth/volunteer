@@ -438,11 +438,14 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
       clearInlineRoleMessage(roleId, 'success');
     } catch (err) {
       console.error('Inline add volunteer error:', err);
+      const friendlyMessage = err?.message?.includes('non-2xx')
+        ? 'Your admin session is not active in this tab. Please refresh this page or sign in again, then retry.'
+        : (err.message || 'Failed to add volunteer.');
       inlineAddStates = {
         ...inlineAddStates,
         [roleId]: {
           loading: false,
-          error: err.message || 'Failed to add volunteer.',
+          error: friendlyMessage,
           success: ''
         }
       };
