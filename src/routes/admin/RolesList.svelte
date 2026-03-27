@@ -374,12 +374,24 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
       throw new Error('Your admin session is not active in this tab. Please refresh this page or sign in again, then retry.');
     }
 
-    const { data: refreshedData, error: refreshError } = await supabase.auth.refreshSession();
-    if (refreshError && !sessionData.session.access_token) {
-      throw new Error('Your admin session expired. Please sign in again, then retry.');
+    const session = sessionData.session;
+    const expiresAt = session.expires_at || 0;
+    const nowInSeconds = Math.floor(Date.now() / 1000);
+
+    if (expiresAt > nowInSeconds + 60) {
+      return session;
     }
 
-    return refreshedData?.session || sessionData.session;
+    const refreshResult = await Promise.race([
+      supabase.auth.refreshSession(),
+      new Promise((resolve) => setTimeout(() => resolve({ data: { session: null }, error: new Error('Session refresh timed out') }), 5000))
+    ]);
+
+    if (refreshResult?.error || !refreshResult?.data?.session) {
+      throw new Error('Your admin session expired. Please refresh this page or sign in again, then retry.');
+    }
+
+    return refreshResult.data.session;
   }
 
   async function addVolunteerToExpandedRole(role) {
