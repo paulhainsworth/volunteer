@@ -336,6 +336,20 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
     }
   }
 
+  async function ensureActiveAdminSession() {
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (!sessionData?.session) {
+      throw new Error('Your admin session is not active in this tab. Please refresh this page or sign in again, then retry.');
+    }
+
+    const { data: refreshedData, error: refreshError } = await supabase.auth.refreshSession();
+    if (refreshError && !sessionData.session.access_token) {
+      throw new Error('Your admin session expired. Please sign in again, then retry.');
+    }
+
+    return refreshedData?.session || sessionData.session;
+  }
+
   async function addVolunteerToExpandedRole(role) {
     const roleId = role.id;
     const form = inlineVolunteerForms[roleId] || emptyInlineVolunteerForm();
@@ -384,6 +398,8 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
     };
 
     try {
+      await ensureActiveAdminSession();
+
       const body = {
         role_id: roleId,
         email,
