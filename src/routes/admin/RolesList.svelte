@@ -133,6 +133,7 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
       expandedRoles = new Set(expandedRoles); // Trigger reactivity
     } else {
       // Expand - add to set and fetch volunteers if not already loaded
+      ensureInlineVolunteerState(roleId);
       expandedRoles.add(roleId);
       expandedRoles = new Set(expandedRoles); // Trigger reactivity
       
@@ -190,7 +191,38 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
     };
   }
 
+  function ensureInlineVolunteerState(roleId) {
+    if (!inlineVolunteerForms[roleId]) {
+      inlineVolunteerForms = {
+        ...inlineVolunteerForms,
+        [roleId]: emptyInlineVolunteerForm()
+      };
+    }
+
+    if (!inlineAddStates[roleId]) {
+      inlineAddStates = {
+        ...inlineAddStates,
+        [roleId]: emptyInlineAddState()
+      };
+    }
+
+    if (!inlineVolunteerSuggestions[roleId]) {
+      inlineVolunteerSuggestions = {
+        ...inlineVolunteerSuggestions,
+        [roleId]: []
+      };
+    }
+
+    if (!(roleId in inlineSuggestionLoading)) {
+      inlineSuggestionLoading = {
+        ...inlineSuggestionLoading,
+        [roleId]: false
+      };
+    }
+  }
+
   function updateInlineVolunteerForm(roleId, field, value) {
+    ensureInlineVolunteerState(roleId);
     const existing = inlineVolunteerForms[roleId] || emptyInlineVolunteerForm();
     const updatedForm = { ...existing, [field]: value };
     inlineVolunteerForms = {
@@ -565,6 +597,7 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
     if (showAllVolunteers) {
       // Expand all roles
       const allRoleIds = $roles.map(r => r.id);
+      allRoleIds.forEach((id) => ensureInlineVolunteerState(id));
       expandedRoles = new Set(allRoleIds);
       
       // Fetch volunteers for all roles that haven't been loaded yet
@@ -1842,8 +1875,8 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
                                   type="text"
                                   class="input"
                                   placeholder="First name"
-                                  value={inlineForm.first_name}
-                                  on:input={(event) => updateInlineVolunteerForm(role.id, 'first_name', /** @type {HTMLInputElement} */ (event.currentTarget).value)}
+                                  bind:value={inlineVolunteerForms[role.id].first_name}
+                                  on:input={() => scheduleInlineVolunteerSuggestions(role.id)}
                                   on:keydown={(event) => handleInlineAddKeydown(event, role)}
                                   aria-label={`First name for ${role.name}`}
                                 />
@@ -1851,8 +1884,8 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
                                   type="text"
                                   class="input"
                                   placeholder="Last name"
-                                  value={inlineForm.last_name}
-                                  on:input={(event) => updateInlineVolunteerForm(role.id, 'last_name', /** @type {HTMLInputElement} */ (event.currentTarget).value)}
+                                  bind:value={inlineVolunteerForms[role.id].last_name}
+                                  on:input={() => scheduleInlineVolunteerSuggestions(role.id)}
                                   on:keydown={(event) => handleInlineAddKeydown(event, role)}
                                   aria-label={`Last name for ${role.name}`}
                                 />
@@ -1860,8 +1893,8 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
                                   type="email"
                                   class="input"
                                   placeholder="Email address"
-                                  value={inlineForm.email}
-                                  on:input={(event) => updateInlineVolunteerForm(role.id, 'email', /** @type {HTMLInputElement} */ (event.currentTarget).value)}
+                                  bind:value={inlineVolunteerForms[role.id].email}
+                                  on:input={() => scheduleInlineVolunteerSuggestions(role.id)}
                                   on:keydown={(event) => handleInlineAddKeydown(event, role)}
                                   aria-label={`Email for ${role.name}`}
                                 />
@@ -1869,15 +1902,13 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
                                   type="tel"
                                   class="input"
                                   placeholder="Phone (optional)"
-                                  value={inlineForm.phone}
-                                  on:input={(event) => updateInlineVolunteerForm(role.id, 'phone', /** @type {HTMLInputElement} */ (event.currentTarget).value)}
+                                  bind:value={inlineVolunteerForms[role.id].phone}
                                   on:keydown={(event) => handleInlineAddKeydown(event, role)}
                                   aria-label={`Phone for ${role.name}`}
                                 />
                                 <select
                                   class="input"
-                                  value={inlineForm.team_club_affiliation_id}
-                                  on:change={(event) => updateInlineVolunteerForm(role.id, 'team_club_affiliation_id', /** @type {HTMLSelectElement} */ (event.currentTarget).value)}
+                                  bind:value={inlineVolunteerForms[role.id].team_club_affiliation_id}
                                   disabled={inlineAddState.loading}
                                   aria-label={`Team or club affiliation for ${role.name}`}
                                 >
