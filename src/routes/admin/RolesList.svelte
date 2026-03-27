@@ -375,23 +375,23 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
     }
 
     const session = sessionData.session;
-    const expiresAt = session.expires_at || 0;
-    const nowInSeconds = Math.floor(Date.now() / 1000);
-
-    if (expiresAt > nowInSeconds + 60) {
-      return session;
-    }
 
     const refreshResult = await Promise.race([
       supabase.auth.refreshSession(),
       new Promise((resolve) => setTimeout(() => resolve({ data: { session: null }, error: new Error('Session refresh timed out') }), 5000))
     ]);
 
-    if (refreshResult?.error || !refreshResult?.data?.session) {
-      throw new Error('Your admin session expired. Please refresh this page or sign in again, then retry.');
+    if (refreshResult?.data?.session) {
+      return refreshResult.data.session;
     }
 
-    return refreshResult.data.session;
+    const expiresAt = session.expires_at || 0;
+    const nowInSeconds = Math.floor(Date.now() / 1000);
+    if (expiresAt > nowInSeconds + 60) {
+      return session;
+    }
+
+    throw new Error('Your admin session expired. Please refresh this page or sign in again, then retry.');
   }
 
   function sendWelcomeEmailInBackground(options) {
@@ -448,7 +448,7 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
     };
 
     try {
-      await ensureActiveAdminSession();
+      const activeSession = await ensureActiveAdminSession();
 
       const body = {
         role_id: roleId,
@@ -459,7 +459,12 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
         team_club_affiliation_id: affiliationId
       };
 
-      const { data: fnData, error: fnError } = await supabase.functions.invoke('create-volunteer-and-signup', { body });
+      const { data: fnData, error: fnError } = await supabase.functions.invoke('create-volunteer-and-signup', {
+        body,
+        headers: {
+          Authorization: `Bearer ${activeSession.access_token}`
+        }
+      });
       if (fnError) throw fnError;
       if (fnData?.error) {
         throw new Error(typeof fnData.error === 'string' ? fnData.error : fnData.error?.message || 'Failed to create volunteer');
