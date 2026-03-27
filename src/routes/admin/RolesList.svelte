@@ -2,8 +2,11 @@
 import { onMount } from 'svelte';
 import { roles } from '../../lib/stores/roles';
 import { domains } from '../../lib/stores/domains';
+import { affiliations } from '../../lib/stores/affiliations';
 import { auth } from '../../lib/stores/auth';
 import { supabase } from '../../lib/supabaseClient';
+import { sendWelcomeEmail } from '../../lib/volunteerSignup';
+import { notifySlackSignup } from '../../lib/notifySlackSignup';
 import { getEdgeInvokeErrorMessage } from '../../lib/edgeFunctionError';
 import { push } from 'svelte-spa-router';
 import RoleForm from '../../lib/components/RoleForm.svelte';
@@ -61,6 +64,11 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
   let emailSuccess = '';
   let domainVolunteers = [];
   let loadingDomainVolunteers = false;
+  let inlineVolunteerForms = {};
+  let inlineAddStates = {};
+  let inlineVolunteerSuggestions = {};
+  let inlineSuggestionLoading = {};
+  let inlineSuggestionTimers = {};
 
   onMount(async () => {
     if (!$auth.isAdmin) {
@@ -109,6 +117,7 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
     } else {
       try {
         await Promise.all([roles.fetchRoles(), domains.fetchDomains()]);
+        affiliations.fetchAffiliations().catch(() => {});
       } catch (err) {
         error = err.message;
       } finally {
@@ -160,6 +169,284 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
     } catch (err) {
       console.error('Error fetching volunteers:', err);
       error = 'Failed to load volunteers: ' + err.message;
+    }
+  }
+
+  function emptyInlineVolunteerForm() {
+    return {
+      first_name: '',
+      last_name: '',
+      email: '',
+      phone: '',
+      team_club_affiliation_id: ''
+    };
+  }
+
+  function emptyInlineAddState() {
+    return {
+      loading: false,
+      error: '',
+      success: ''
+    };
+  }
+
+  function updateInlineVolunteerForm(roleId, field, value) {
+    const existing = inlineVolunteerForms[roleId] || emptyInlineVolunteerForm();
+    const updatedForm = { ...existing, [field]: value };
+    inlineVolunteerForms = {
+      ...inlineVolunteerForms,
+      [roleId]: updatedForm
+    };
+    scheduleInlineVolunteerSuggestions(roleId, updatedForm);
+  }
+
+  function validateEmail(email) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  }
+
+  function scheduleInlineVolunteerSuggestions(roleId, formSnapshot) {
+    if (inlineSuggestionTimers[roleId]) clearTimeout(inlineSuggestionTimers[roleId]);
+    const form = formSnapshot ?? inlineVolunteerForms[roleId] ?? emptyInlineVolunteerForm();
+    const email = (form.email || '').trim();
+    const first = (form.first_name || '').trim();
+    const last = (form.last_name || '').trim();
+    if (!email && first.length < 2 && last.length < 2) {
+      inlineVolunteerSuggestions = { ...inlineVolunteerSuggestions, [roleId]: [] };
+      inlineSuggestionLoading = { ...inlineSuggestionLoading, [roleId]: false };
+      return;
+    }
+    inlineSuggestionLoading = { ...inlineSuggestionLoading, [roleId]: true };
+    inlineSuggestionTimers[roleId] = setTimeout(() => fetchInlineVolunteerSuggestions(roleId, formSnapshot), 300);
+  }
+
+  async function fetchInlineVolunteerSuggestions(roleId, formSnapshot) {
+    inlineSuggestionTimers[roleId] = null;
+    const form = formSnapshot ?? inlineVolunteerForms[roleId] ?? emptyInlineVolunteerForm();
+    try {
+      const email = (form.email || '').trim();
+      const first = (form.first_name || '').trim().replace(/[,%]/g, '');
+      const last = (form.last_name || '').trim().replace(/[,%]/g, '');
+
+      let profilesQuery = supabase
+        .from('profiles')
+        .select('id, first_name, last_name, email, phone, role')
+        .in('role', ['volunteer', 'volunteer_leader', 'admin'])
+        .limit(5)
+        .order('first_name');
+
+      if (email && email.includes('@')) {
+        profilesQuery = profilesQuery.ilike('email', `%${email}%`);
+      } else if (first || last) {
+        const filters = [];
+        if (first) {
+          filters.push(`first_name.ilike.%${first}%`);
+          filters.push(`last_name.ilike.%${first}%`);
+        }
+        if (last) {
+          filters.push(`first_name.ilike.%${last}%`);
+          filters.push(`last_name.ilike.%${last}%`);
+        }
+        if (first && last) filters.push(`and(first_name.ilike.%${first}%,last_name.ilike.%${last}%)`);
+        if (filters.length) profilesQuery = profilesQuery.or(filters.join(','));
+      }
+
+      let contactsQuery = supabase
+        .from('volunteer_contacts')
+        .select('id, first_name, last_name, email, phone')
+        .is('profile_id', null)
+        .limit(5);
+
+      if (email && email.includes('@')) {
+        contactsQuery = contactsQuery.ilike('email', `%${email}%`);
+      } else if (first || last) {
+        const filters = [];
+        if (first) {
+          filters.push(`first_name.ilike.%${first}%`);
+          filters.push(`last_name.ilike.%${first}%`);
+        }
+        if (last) {
+          filters.push(`first_name.ilike.%${last}%`);
+          filters.push(`last_name.ilike.%${last}%`);
+        }
+        if (first && last) filters.push(`and(first_name.ilike.%${first}%,last_name.ilike.%${last}%)`);
+        if (filters.length) contactsQuery = contactsQuery.or(filters.join(','));
+      } else {
+        contactsQuery = contactsQuery.limit(0);
+      }
+
+      const [profilesRes, contactsRes] = await Promise.all([
+        profilesQuery,
+        email || first || last ? contactsQuery : { data: [] }
+      ]);
+
+      const profiles = (profilesRes.data || []).filter((p) => p.email).map((p) => ({ ...p, source: 'profile' }));
+      const contacts = (contactsRes.data || []).filter((c) => c.email).map((c) => ({ ...c, source: 'contact' }));
+      const byEmail = new Map();
+      for (const profile of profiles) byEmail.set((profile.email || '').toLowerCase(), profile);
+      for (const contact of contacts) {
+        const key = (contact.email || '').toLowerCase();
+        if (!byEmail.has(key)) byEmail.set(key, contact);
+      }
+
+      inlineVolunteerSuggestions = {
+        ...inlineVolunteerSuggestions,
+        [roleId]: Array.from(byEmail.values()).slice(0, 8)
+      };
+    } catch (err) {
+      console.error('Inline volunteer suggestion lookup error:', err);
+      inlineVolunteerSuggestions = { ...inlineVolunteerSuggestions, [roleId]: [] };
+    } finally {
+      inlineSuggestionLoading = { ...inlineSuggestionLoading, [roleId]: false };
+    }
+  }
+
+  function applyInlineVolunteerSuggestion(roleId, person) {
+    inlineVolunteerForms = {
+      ...inlineVolunteerForms,
+      [roleId]: {
+        ...emptyInlineVolunteerForm(),
+        first_name: person.first_name || '',
+        last_name: person.last_name || '',
+        email: person.email || '',
+        phone: person.phone || ''
+      }
+    };
+    inlineVolunteerSuggestions = { ...inlineVolunteerSuggestions, [roleId]: [] };
+    inlineSuggestionLoading = { ...inlineSuggestionLoading, [roleId]: false };
+  }
+
+  function clearInlineRoleMessage(roleId, type = 'success') {
+    setTimeout(() => {
+      const existing = inlineAddStates[roleId];
+      if (!existing) return;
+      inlineAddStates = {
+        ...inlineAddStates,
+        [roleId]: {
+          ...existing,
+          [type]: ''
+        }
+      };
+    }, 4000);
+  }
+
+  function handleInlineAddKeydown(event, role) {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      addVolunteerToExpandedRole(role);
+    }
+  }
+
+  async function addVolunteerToExpandedRole(role) {
+    const roleId = role.id;
+    const form = inlineVolunteerForms[roleId] || emptyInlineVolunteerForm();
+    const firstName = form.first_name.trim();
+    const lastName = form.last_name.trim();
+    const email = form.email.trim();
+    const phone = form.phone.trim();
+    const affiliationId = (form.team_club_affiliation_id || '').trim();
+    const isRoleFull = Number(role.positions_filled || 0) >= Number(role.positions_total || 0);
+
+    if (isRoleFull) {
+      inlineAddStates = {
+        ...inlineAddStates,
+        [roleId]: { loading: false, error: 'This role is already full.', success: '' }
+      };
+      return;
+    }
+
+    if (!firstName || !lastName) {
+      inlineAddStates = {
+        ...inlineAddStates,
+        [roleId]: { loading: false, error: 'First and last name are required.', success: '' }
+      };
+      return;
+    }
+
+    if (!email || !validateEmail(email)) {
+      inlineAddStates = {
+        ...inlineAddStates,
+        [roleId]: { loading: false, error: 'Please enter a valid email address.', success: '' }
+      };
+      return;
+    }
+
+    if (!affiliationId) {
+      inlineAddStates = {
+        ...inlineAddStates,
+        [roleId]: { loading: false, error: 'Please select a team or club affiliation.', success: '' }
+      };
+      return;
+    }
+
+    inlineAddStates = {
+      ...inlineAddStates,
+      [roleId]: { loading: true, error: '', success: '' }
+    };
+
+    try {
+      const body = {
+        role_id: roleId,
+        email,
+        first_name: firstName,
+        last_name: lastName,
+        phone: phone || null,
+        team_club_affiliation_id: affiliationId
+      };
+
+      const { data: fnData, error: fnError } = await supabase.functions.invoke('create-volunteer-and-signup', { body });
+      if (fnError) throw fnError;
+      if (fnData?.error) {
+        throw new Error(typeof fnData.error === 'string' ? fnData.error : fnData.error?.message || 'Failed to create volunteer');
+      }
+
+      const volunteerId = fnData?.volunteerId;
+      if (!volunteerId) throw new Error('Volunteer creation failed.');
+
+      notifySlackSignup({
+        role_id: roleId,
+        volunteer_id: volunteerId,
+        volunteer_name: [firstName, lastName].filter(Boolean).join(' ').trim() || undefined,
+        volunteer_email: email
+      }).catch(() => {});
+
+      await sendWelcomeEmail({
+        to: email,
+        first_name: firstName,
+        promptWaiverAndEmergencyContact: true
+      });
+
+      inlineAddStates = {
+        ...inlineAddStates,
+        [roleId]: {
+          loading: false,
+          error: '',
+          success: `Added ${firstName} ${lastName} and sent a welcome email.`
+        }
+      };
+
+      inlineVolunteerForms = {
+        ...inlineVolunteerForms,
+        [roleId]: emptyInlineVolunteerForm()
+      };
+      inlineVolunteerSuggestions = { ...inlineVolunteerSuggestions, [roleId]: [] };
+      inlineSuggestionLoading = { ...inlineSuggestionLoading, [roleId]: false };
+
+      await Promise.all([
+        roles.fetchRoles(),
+        fetchRoleVolunteers(roleId)
+      ]);
+      clearInlineRoleMessage(roleId, 'success');
+    } catch (err) {
+      console.error('Inline add volunteer error:', err);
+      inlineAddStates = {
+        ...inlineAddStates,
+        [roleId]: {
+          loading: false,
+          error: err.message || 'Failed to add volunteer.',
+          success: ''
+        }
+      };
+      clearInlineRoleMessage(roleId, 'error');
     }
   }
 
@@ -581,7 +868,7 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
   }
 
   function handleLeaderSelectChange(event) {
-    const value = event.target.value;
+    const value = /** @type {HTMLSelectElement} */ (event.currentTarget).value;
 
     if (value === '__add_new__') {
       pendingDomainForNewLeader = selectedDomain;
@@ -594,7 +881,7 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
       addVolunteerError = '';
       showAddVolunteerModal = true;
       selectedLeaderId = '';
-      event.target.value = '';
+      /** @type {HTMLSelectElement} */ (event.currentTarget).value = '';
       return;
     }
 
@@ -1294,7 +1581,7 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
                               type="text"
                               placeholder="First name"
                               value={form.first_name}
-                              on:input={(e) => handleLeaderFormInput(domain.id, 'first_name', e.target.value)}
+                              on:input={(e) => handleLeaderFormInput(domain.id, 'first_name', /** @type {HTMLInputElement} */ (e.currentTarget).value)}
                               on:keydown={(e) => handleLeaderFormKeydown(e, domain)}
                               disabled={isCreating}
                             />
@@ -1303,7 +1590,7 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
                               type="text"
                               placeholder="Last name"
                               value={form.last_name}
-                              on:input={(e) => handleLeaderFormInput(domain.id, 'last_name', e.target.value)}
+                              on:input={(e) => handleLeaderFormInput(domain.id, 'last_name', /** @type {HTMLInputElement} */ (e.currentTarget).value)}
                               on:keydown={(e) => handleLeaderFormKeydown(e, domain)}
                               disabled={isCreating}
                             />
@@ -1344,7 +1631,7 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
                               type="email"
                               placeholder="Email address"
                               value={form.email}
-                              on:input={(e) => handleLeaderFormInput(domain.id, 'email', e.target.value)}
+                              on:input={(e) => handleLeaderFormInput(domain.id, 'email', /** @type {HTMLInputElement} */ (e.currentTarget).value)}
                               on:keydown={(e) => handleLeaderFormKeydown(e, domain)}
                               disabled={isCreating}
                             />
@@ -1437,6 +1724,9 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
                     {@const fillPercent = Math.round((role.positions_filled / role.positions_total) * 100)}
                     {@const isExpanded = expandedRoles.has(role.id)}
                     {@const volunteers = roleVolunteers[role.id] || []}
+                    {@const inlineForm = inlineVolunteerForms[role.id] || emptyInlineVolunteerForm()}
+                    {@const inlineAddState = inlineAddStates[role.id] || emptyInlineAddState()}
+                    {@const isRoleFull = Number(role.positions_filled || 0) >= Number(role.positions_total || 0)}
 
                     <tr>
                       <td class="td-featured">
@@ -1519,6 +1809,108 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
                             {:else}
                               <p class="no-volunteers">No volunteers signed up yet</p>
                             {/if}
+
+                            <div class="inline-add-volunteer">
+                              <div class="inline-add-volunteer__header">
+                                <h4>Add volunteer directly to this role</h4>
+                                {#if isRoleFull}
+                                  <span class="inline-add-volunteer__status">Role is full</span>
+                                {/if}
+                              </div>
+
+                              <div class="inline-add-volunteer__grid">
+                                <input
+                                  type="text"
+                                  class="input"
+                                  placeholder="First name"
+                                  value={inlineForm.first_name}
+                                  on:input={(event) => updateInlineVolunteerForm(role.id, 'first_name', /** @type {HTMLInputElement} */ (event.currentTarget).value)}
+                                  on:keydown={(event) => handleInlineAddKeydown(event, role)}
+                                  aria-label={`First name for ${role.name}`}
+                                />
+                                <input
+                                  type="text"
+                                  class="input"
+                                  placeholder="Last name"
+                                  value={inlineForm.last_name}
+                                  on:input={(event) => updateInlineVolunteerForm(role.id, 'last_name', /** @type {HTMLInputElement} */ (event.currentTarget).value)}
+                                  on:keydown={(event) => handleInlineAddKeydown(event, role)}
+                                  aria-label={`Last name for ${role.name}`}
+                                />
+                                <input
+                                  type="email"
+                                  class="input"
+                                  placeholder="Email address"
+                                  value={inlineForm.email}
+                                  on:input={(event) => updateInlineVolunteerForm(role.id, 'email', /** @type {HTMLInputElement} */ (event.currentTarget).value)}
+                                  on:keydown={(event) => handleInlineAddKeydown(event, role)}
+                                  aria-label={`Email for ${role.name}`}
+                                />
+                                <input
+                                  type="tel"
+                                  class="input"
+                                  placeholder="Phone (optional)"
+                                  value={inlineForm.phone}
+                                  on:input={(event) => updateInlineVolunteerForm(role.id, 'phone', /** @type {HTMLInputElement} */ (event.currentTarget).value)}
+                                  on:keydown={(event) => handleInlineAddKeydown(event, role)}
+                                  aria-label={`Phone for ${role.name}`}
+                                />
+                                <select
+                                  class="input"
+                                  value={inlineForm.team_club_affiliation_id}
+                                  on:change={(event) => updateInlineVolunteerForm(role.id, 'team_club_affiliation_id', /** @type {HTMLSelectElement} */ (event.currentTarget).value)}
+                                  disabled={inlineAddState.loading}
+                                  aria-label={`Team or club affiliation for ${role.name}`}
+                                >
+                                  <option value="">Team/Club *</option>
+                                  {#each $affiliations as aff (aff.id)}
+                                    <option value={aff.id}>{aff.name}</option>
+                                  {/each}
+                                </select>
+                                <button
+                                  type="button"
+                                  class="btn btn-primary inline-add-volunteer__button"
+                                  on:click={() => addVolunteerToExpandedRole(role)}
+                                  disabled={inlineAddState.loading || isRoleFull}
+                                >
+                                  {inlineAddState.loading ? 'Adding…' : '+ Add'}
+                                </button>
+                              </div>
+
+                              {#if inlineSuggestionLoading[role.id]}
+                                <div class="inline-volunteer-suggestions inline-volunteer-suggestions--loading">Searching existing volunteers…</div>
+                              {:else if inlineVolunteerSuggestions[role.id]?.length}
+                                <div class="inline-volunteer-suggestions">
+                                  <span class="inline-volunteer-suggestions__intro">Select an existing volunteer:</span>
+                                  <div class="inline-volunteer-suggestions__list">
+                                    {#each inlineVolunteerSuggestions[role.id] as person (person.id)}
+                                      <button
+                                        type="button"
+                                        class="inline-volunteer-suggestion-chip"
+                                        on:click={() => applyInlineVolunteerSuggestion(role.id, person)}
+                                      >
+                                        <span class="name">{person.first_name || 'No'} {person.last_name || 'Name'}</span>
+                                        <span class="email">{person.email}</span>
+                                        {#if person.phone}
+                                          <span class="phone">{person.phone}</span>
+                                        {/if}
+                                        {#if person.source === 'contact'}
+                                          <span class="badge">Past volunteer</span>
+                                        {/if}
+                                      </button>
+                                    {/each}
+                                  </div>
+                                </div>
+                              {/if}
+
+                              {#if inlineAddState.error}
+                                <div class="inline-alert error">{inlineAddState.error}</div>
+                              {/if}
+
+                              {#if inlineAddState.success}
+                                <div class="inline-alert success">{inlineAddState.success}</div>
+                              {/if}
+                            </div>
                           </div>
                         </td>
                       </tr>
@@ -2142,6 +2534,124 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
     font-size: 1rem;
   }
 
+  .inline-add-volunteer {
+    margin-top: 1.25rem;
+    padding-top: 1rem;
+    border-top: 1px solid #dee2e6;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .inline-add-volunteer__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .inline-add-volunteer__header h4 {
+    margin: 0;
+  }
+
+  .inline-add-volunteer__status {
+    color: #856404;
+    background: #fff3cd;
+    border: 1px solid #ffeaa7;
+    border-radius: 999px;
+    padding: 0.2rem 0.6rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+  }
+
+  .inline-add-volunteer__grid {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 0.75rem;
+    align-items: center;
+  }
+
+  .inline-add-volunteer__button {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .inline-volunteer-suggestions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .inline-volunteer-suggestions--loading {
+    color: #6c757d;
+    font-size: 0.9rem;
+  }
+
+  .inline-volunteer-suggestions__intro {
+    color: #495057;
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+
+  .inline-volunteer-suggestions__list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .inline-volunteer-suggestion-chip {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.1rem;
+    padding: 0.45rem 0.65rem;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    background: #fff;
+    cursor: pointer;
+    text-align: left;
+  }
+
+  .inline-volunteer-suggestion-chip:hover {
+    border-color: #0d6efd;
+    background: #e7f1ff;
+  }
+
+  .inline-volunteer-suggestion-chip .name {
+    font-weight: 600;
+    color: #212529;
+  }
+
+  .inline-volunteer-suggestion-chip .email {
+    color: #0d6efd;
+    font-size: 0.85rem;
+  }
+
+  .inline-volunteer-suggestion-chip .phone,
+  .inline-volunteer-suggestion-chip .badge {
+    color: #6c757d;
+    font-size: 0.75rem;
+  }
+
+  .inline-alert {
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    font-size: 0.9rem;
+  }
+
+  .inline-alert.error {
+    background: #f8d7da;
+    border: 1px solid #f5c6cb;
+    color: #721c24;
+  }
+
+  .inline-alert.success {
+    background: #d4edda;
+    border: 1px solid #c3e6cb;
+    color: #155724;
+  }
+
   .volunteers-list {
     display: grid;
     gap: 0.75rem;
@@ -2586,6 +3096,10 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
     .input-sm,
     .inline-email-input .input-sm {
       width: 100%;
+    }
+
+    .inline-add-volunteer__grid {
+      grid-template-columns: 1fr;
     }
   }
 </style>
