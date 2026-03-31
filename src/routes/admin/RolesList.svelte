@@ -11,6 +11,7 @@ import { getEdgeInvokeErrorMessage } from '../../lib/edgeFunctionError';
 import { push } from 'svelte-spa-router';
 import RoleForm from '../../lib/components/RoleForm.svelte';
 import BulkUpload from '../../lib/components/BulkUpload.svelte';
+import AdminRoleInlineAdd from '../../lib/components/AdminRoleInlineAdd.svelte';
 import { format } from 'date-fns';
 import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
 
@@ -170,6 +171,18 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
     } catch (err) {
       console.error('Error fetching volunteers:', err);
       error = 'Failed to load volunteers: ' + err.message;
+    }
+  }
+
+  async function handleRoleVolunteerAdded(roleId) {
+    try {
+      await Promise.all([
+        roles.fetchRoles(),
+        fetchRoleVolunteers(roleId)
+      ]);
+    } catch (refreshError) {
+      console.error('Failed to refresh roles after inline add:', refreshError);
+      error = refreshError.message || 'Volunteer was added, but the role list did not refresh automatically.';
     }
   }
 
@@ -1804,9 +1817,6 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
                     {@const fillPercent = Math.round((role.positions_filled / role.positions_total) * 100)}
                     {@const isExpanded = expandedRoles.has(role.id)}
                     {@const volunteers = roleVolunteers[role.id] || []}
-                    {@const inlineForm = inlineVolunteerForms[role.id] || emptyInlineVolunteerForm()}
-                    {@const inlineAddState = inlineAddStates[role.id] || emptyInlineAddState()}
-                    {@const isRoleFull = Number(role.positions_filled || 0) >= Number(role.positions_total || 0)}
 
                     <tr>
                       <td class="td-featured">
@@ -1890,105 +1900,12 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
                               <p class="no-volunteers">No volunteers signed up yet</p>
                             {/if}
 
-                            <div class="inline-add-volunteer">
-                              <div class="inline-add-volunteer__header">
-                                <h4>Add volunteer directly to this role</h4>
-                                {#if isRoleFull}
-                                  <span class="inline-add-volunteer__status">Role is full</span>
-                                {/if}
-                              </div>
-
-                              <div class="inline-add-volunteer__grid">
-                                <input
-                                  type="text"
-                                  class="input"
-                                  placeholder="First name"
-                                  bind:value={inlineVolunteerForms[role.id].first_name}
-                                  on:input={() => scheduleInlineVolunteerSuggestions(role.id)}
-                                  on:keydown={(event) => handleInlineAddKeydown(event, role)}
-                                  aria-label={`First name for ${role.name}`}
-                                />
-                                <input
-                                  type="text"
-                                  class="input"
-                                  placeholder="Last name"
-                                  bind:value={inlineVolunteerForms[role.id].last_name}
-                                  on:input={() => scheduleInlineVolunteerSuggestions(role.id)}
-                                  on:keydown={(event) => handleInlineAddKeydown(event, role)}
-                                  aria-label={`Last name for ${role.name}`}
-                                />
-                                <input
-                                  type="email"
-                                  class="input"
-                                  placeholder="Email address"
-                                  bind:value={inlineVolunteerForms[role.id].email}
-                                  on:input={() => scheduleInlineVolunteerSuggestions(role.id)}
-                                  on:keydown={(event) => handleInlineAddKeydown(event, role)}
-                                  aria-label={`Email for ${role.name}`}
-                                />
-                                <input
-                                  type="tel"
-                                  class="input"
-                                  placeholder="Phone (optional)"
-                                  bind:value={inlineVolunteerForms[role.id].phone}
-                                  on:keydown={(event) => handleInlineAddKeydown(event, role)}
-                                  aria-label={`Phone for ${role.name}`}
-                                />
-                                <select
-                                  class="input"
-                                  bind:value={inlineVolunteerForms[role.id].team_club_affiliation_id}
-                                  disabled={inlineAddState.loading}
-                                  aria-label={`Team or club affiliation for ${role.name}`}
-                                >
-                                  <option value="">Team/Club *</option>
-                                  {#each $affiliations as aff (aff.id)}
-                                    <option value={aff.id}>{aff.name}</option>
-                                  {/each}
-                                </select>
-                                <button
-                                  type="button"
-                                  class="btn btn-primary inline-add-volunteer__button"
-                                  on:click={() => addVolunteerToExpandedRole(role)}
-                                  disabled={inlineAddState.loading || isRoleFull}
-                                >
-                                  {inlineAddState.loading ? 'Adding…' : '+ Add'}
-                                </button>
-                              </div>
-
-                              {#if inlineSuggestionLoading[role.id]}
-                                <div class="inline-volunteer-suggestions inline-volunteer-suggestions--loading">Searching existing volunteers…</div>
-                              {:else if inlineVolunteerSuggestions[role.id]?.length}
-                                <div class="inline-volunteer-suggestions">
-                                  <span class="inline-volunteer-suggestions__intro">Select an existing volunteer:</span>
-                                  <div class="inline-volunteer-suggestions__list">
-                                    {#each inlineVolunteerSuggestions[role.id] as person (person.id)}
-                                      <button
-                                        type="button"
-                                        class="inline-volunteer-suggestion-chip"
-                                        on:click={() => applyInlineVolunteerSuggestion(role.id, person)}
-                                      >
-                                        <span class="name">{person.first_name || 'No'} {person.last_name || 'Name'}</span>
-                                        <span class="email">{person.email}</span>
-                                        {#if person.phone}
-                                          <span class="phone">{person.phone}</span>
-                                        {/if}
-                                        {#if person.source === 'contact'}
-                                          <span class="badge">Past volunteer</span>
-                                        {/if}
-                                      </button>
-                                    {/each}
-                                  </div>
-                                </div>
-                              {/if}
-
-                              {#if inlineAddState.error}
-                                <div class="inline-alert error">{inlineAddState.error}</div>
-                              {/if}
-
-                              {#if inlineAddState.success}
-                                <div class="inline-alert success">{inlineAddState.success}</div>
-                              {/if}
-                            </div>
+                            <AdminRoleInlineAdd
+                              {role}
+                              affiliations={$affiliations}
+                              existingVolunteers={volunteers}
+                              on:added={() => handleRoleVolunteerAdded(role.id)}
+                            />
                           </div>
                         </td>
                       </tr>
@@ -2612,124 +2529,6 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
     font-size: 1rem;
   }
 
-  .inline-add-volunteer {
-    margin-top: 1.25rem;
-    padding-top: 1rem;
-    border-top: 1px solid #dee2e6;
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-  }
-
-  .inline-add-volunteer__header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 0.75rem;
-    flex-wrap: wrap;
-  }
-
-  .inline-add-volunteer__header h4 {
-    margin: 0;
-  }
-
-  .inline-add-volunteer__status {
-    color: #856404;
-    background: #fff3cd;
-    border: 1px solid #ffeaa7;
-    border-radius: 999px;
-    padding: 0.2rem 0.6rem;
-    font-size: 0.8rem;
-    font-weight: 600;
-  }
-
-  .inline-add-volunteer__grid {
-    display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
-    gap: 0.75rem;
-    align-items: center;
-  }
-
-  .inline-add-volunteer__button {
-    width: 100%;
-    min-width: 0;
-  }
-
-  .inline-volunteer-suggestions {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-  }
-
-  .inline-volunteer-suggestions--loading {
-    color: #6c757d;
-    font-size: 0.9rem;
-  }
-
-  .inline-volunteer-suggestions__intro {
-    color: #495057;
-    font-size: 0.9rem;
-    font-weight: 600;
-  }
-
-  .inline-volunteer-suggestions__list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-  }
-
-  .inline-volunteer-suggestion-chip {
-    display: inline-flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.1rem;
-    padding: 0.45rem 0.65rem;
-    border: 1px solid #dee2e6;
-    border-radius: 6px;
-    background: #fff;
-    cursor: pointer;
-    text-align: left;
-  }
-
-  .inline-volunteer-suggestion-chip:hover {
-    border-color: #0d6efd;
-    background: #e7f1ff;
-  }
-
-  .inline-volunteer-suggestion-chip .name {
-    font-weight: 600;
-    color: #212529;
-  }
-
-  .inline-volunteer-suggestion-chip .email {
-    color: #0d6efd;
-    font-size: 0.85rem;
-  }
-
-  .inline-volunteer-suggestion-chip .phone,
-  .inline-volunteer-suggestion-chip .badge {
-    color: #6c757d;
-    font-size: 0.75rem;
-  }
-
-  .inline-alert {
-    border-radius: 8px;
-    padding: 0.75rem 1rem;
-    font-size: 0.9rem;
-  }
-
-  .inline-alert.error {
-    background: #f8d7da;
-    border: 1px solid #f5c6cb;
-    color: #721c24;
-  }
-
-  .inline-alert.success {
-    background: #d4edda;
-    border: 1px solid #c3e6cb;
-    color: #155724;
-  }
-
   .volunteers-list {
     display: grid;
     gap: 0.75rem;
@@ -3176,9 +2975,6 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
       width: 100%;
     }
 
-    .inline-add-volunteer__grid {
-      grid-template-columns: 1fr;
-    }
   }
 </style>
 
