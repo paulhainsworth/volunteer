@@ -6,6 +6,7 @@ DROP POLICY IF EXISTS "Users can create their own signups" ON signups;
 DROP POLICY IF EXISTS "Volunteers can sign up for roles" ON signups;
 DROP POLICY IF EXISTS "Users can create signups or admins can create for anyone" ON signups;
 DROP POLICY IF EXISTS "Users, admins, or leaders can create signups" ON signups;
+DROP POLICY IF EXISTS "Users, admins, or leaders can update signups" ON signups;
 DROP POLICY IF EXISTS "Users, admins, or leaders can delete signups" ON signups;
 
 -- Create new INSERT policy that allows:
@@ -27,6 +28,47 @@ CREATE POLICY "Users, admins, or leaders can create signups"
     OR
     -- Volunteer leader signing up for their role or domain
     EXISTS (
+      SELECT 1
+      FROM volunteer_roles vr
+      LEFT JOIN volunteer_leader_domains vld ON vr.domain_id = vld.id
+      WHERE vr.id = signups.role_id
+        AND (
+          vr.leader_id = auth.uid()
+          OR vld.leader_id = auth.uid()
+        )
+    )
+  );
+
+-- Allow users to cancel their own signup, and admins/leaders to cancel or edit
+-- signups they are allowed to manage.
+CREATE POLICY "Users, admins, or leaders can update signups"
+  ON signups FOR UPDATE
+  USING (
+    volunteer_id = auth.uid()
+    OR EXISTS (
+      SELECT 1 FROM profiles
+      WHERE profiles.id = auth.uid()
+      AND profiles.role = 'admin'
+    )
+    OR EXISTS (
+      SELECT 1
+      FROM volunteer_roles vr
+      LEFT JOIN volunteer_leader_domains vld ON vr.domain_id = vld.id
+      WHERE vr.id = signups.role_id
+        AND (
+          vr.leader_id = auth.uid()
+          OR vld.leader_id = auth.uid()
+        )
+    )
+  )
+  WITH CHECK (
+    volunteer_id = auth.uid()
+    OR EXISTS (
+      SELECT 1 FROM profiles
+      WHERE profiles.id = auth.uid()
+      AND profiles.role = 'admin'
+    )
+    OR EXISTS (
       SELECT 1
       FROM volunteer_roles vr
       LEFT JOIN volunteer_leader_domains vld ON vr.domain_id = vld.id
@@ -71,7 +113,7 @@ SELECT
   END as with_check_clause
 FROM pg_policies 
 WHERE tablename = 'signups'
-AND cmd IN ('INSERT', 'DELETE')
+AND cmd IN ('INSERT', 'UPDATE', 'DELETE')
 ORDER BY policyname;
 
 SELECT '✅ Admins and leaders can now assign volunteers to roles and remove them!' as status;
