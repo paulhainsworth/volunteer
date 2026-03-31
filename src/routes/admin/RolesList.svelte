@@ -2,12 +2,14 @@
 import { onMount } from 'svelte';
 import { roles } from '../../lib/stores/roles';
 import { domains } from '../../lib/stores/domains';
+import { affiliations } from '../../lib/stores/affiliations';
 import { auth } from '../../lib/stores/auth';
 import { supabase } from '../../lib/supabaseClient';
 import { getEdgeInvokeErrorMessage } from '../../lib/edgeFunctionError';
 import { push } from 'svelte-spa-router';
 import RoleForm from '../../lib/components/RoleForm.svelte';
 import BulkUpload from '../../lib/components/BulkUpload.svelte';
+import AdminRoleInlineAdd from '../../lib/components/AdminRoleInlineAdd.svelte';
 import { format } from 'date-fns';
 import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
 
@@ -89,7 +91,7 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
       showForm = true;
       loading = false;
       try {
-        await domains.fetchDomains();
+        await Promise.all([domains.fetchDomains(), affiliations.fetchAffiliations()]);
       } catch (err) {
         console.error('Failed to load domains:', err);
       }
@@ -97,7 +99,8 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
       try {
         const [roleData] = await Promise.all([
           roles.fetchRole(params.id),
-          domains.fetchDomains()
+          domains.fetchDomains(),
+          affiliations.fetchAffiliations()
         ]);
         editingRole = roleData;
         showForm = true;
@@ -108,7 +111,7 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
       }
     } else {
       try {
-        await Promise.all([roles.fetchRoles(), domains.fetchDomains()]);
+        await Promise.all([roles.fetchRoles(), domains.fetchDomains(), affiliations.fetchAffiliations()]);
       } catch (err) {
         error = err.message;
       } finally {
@@ -160,6 +163,18 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
     } catch (err) {
       console.error('Error fetching volunteers:', err);
       error = 'Failed to load volunteers: ' + err.message;
+    }
+  }
+
+  async function handleRoleVolunteerAdded(roleId) {
+    try {
+      await Promise.all([
+        roles.fetchRoles(),
+        fetchRoleVolunteers(roleId)
+      ]);
+    } catch (refreshError) {
+      console.error('Failed to refresh roles after inline add:', refreshError);
+      error = refreshError.message || 'Volunteer was added, but the role list did not refresh automatically.';
     }
   }
 
@@ -581,7 +596,7 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
   }
 
   function handleLeaderSelectChange(event) {
-    const value = event.target.value;
+    const value = /** @type {HTMLSelectElement} */ (event.currentTarget).value;
 
     if (value === '__add_new__') {
       pendingDomainForNewLeader = selectedDomain;
@@ -594,7 +609,7 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
       addVolunteerError = '';
       showAddVolunteerModal = true;
       selectedLeaderId = '';
-      event.target.value = '';
+      /** @type {HTMLSelectElement} */ (event.currentTarget).value = '';
       return;
     }
 
@@ -1294,7 +1309,7 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
                               type="text"
                               placeholder="First name"
                               value={form.first_name}
-                              on:input={(e) => handleLeaderFormInput(domain.id, 'first_name', e.target.value)}
+                              on:input={(e) => handleLeaderFormInput(domain.id, 'first_name', /** @type {HTMLInputElement} */ (e.currentTarget).value)}
                               on:keydown={(e) => handleLeaderFormKeydown(e, domain)}
                               disabled={isCreating}
                             />
@@ -1303,7 +1318,7 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
                               type="text"
                               placeholder="Last name"
                               value={form.last_name}
-                              on:input={(e) => handleLeaderFormInput(domain.id, 'last_name', e.target.value)}
+                              on:input={(e) => handleLeaderFormInput(domain.id, 'last_name', /** @type {HTMLInputElement} */ (e.currentTarget).value)}
                               on:keydown={(e) => handleLeaderFormKeydown(e, domain)}
                               disabled={isCreating}
                             />
@@ -1344,7 +1359,7 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
                               type="email"
                               placeholder="Email address"
                               value={form.email}
-                              on:input={(e) => handleLeaderFormInput(domain.id, 'email', e.target.value)}
+                              on:input={(e) => handleLeaderFormInput(domain.id, 'email', /** @type {HTMLInputElement} */ (e.currentTarget).value)}
                               on:keydown={(e) => handleLeaderFormKeydown(e, domain)}
                               disabled={isCreating}
                             />
@@ -1519,6 +1534,12 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
                             {:else}
                               <p class="no-volunteers">No volunteers signed up yet</p>
                             {/if}
+                            <AdminRoleInlineAdd
+                              {role}
+                              affiliations={$affiliations}
+                              existingVolunteers={volunteers}
+                              on:added={() => handleRoleVolunteerAdded(role.id)}
+                            />
                           </div>
                         </td>
                       </tr>
