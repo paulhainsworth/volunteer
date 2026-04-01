@@ -81,6 +81,63 @@ Berkeley Omnium Volunteer Team`;
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
+  function escapeHtml(value) {
+    return String(value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function formatEmailBodyHtml(text) {
+    return text
+      .split('\n')
+      .map((line) => {
+        const escaped = escapeHtml(line || ' ');
+        const linked = escaped.replace(
+          /(https?:\/\/[^\s<]+)/g,
+          '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>'
+        );
+        return `<p>${linked || ' '}</p>`;
+      })
+      .join('');
+  }
+
+  function isRetryableSendError(invokeError, data) {
+    const message = [invokeError?.message, data?.error, data?.details]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+
+    return message.includes('429') || message.includes('rate limit');
+  }
+
+  async function sendEmailWithRetry(payload, recipientEmail) {
+    const MAX_ATTEMPTS = 4;
+    const BASE_RETRY_DELAY_MS = 1500;
+
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      const { data, error: invokeError } = await supabase.functions.invoke('send-email', {
+        body: payload
+      });
+
+      if (!invokeError && !data?.error) {
+        return data;
+      }
+
+      const retryable = isRetryableSendError(invokeError, data);
+      const details = data?.details ? ` (${data.details})` : '';
+      const message = invokeError?.message || data?.error || 'Failed to invoke send-email';
+
+      if (!retryable || attempt === MAX_ATTEMPTS) {
+        throw new Error(`${recipientEmail}: ${message}${details}`);
+      }
+
+      await sleep(BASE_RETRY_DELAY_MS * attempt);
+    }
+  }
+
   function fillWaiverReminderTemplate() {
     recipientType = 'waiver_unsigned';
     subject = WAIVER_REMINDER_SUBJECT;
@@ -112,11 +169,7 @@ Berkeley Omnium Volunteer Team`;
       for (let i = 0; i < recipientsToSend.length; i++) {
         const volunteer = recipientsToSend[i];
         const name = [volunteer.first_name, volunteer.last_name].filter(Boolean).join(' ').trim() || 'there';
-        const bodyHtml = body
-          .replace(/\{volunteer_name\}/g, name)
-          .split('\n')
-          .map((line) => `<p>${line || ' '}</p>`)
-          .join('');
+        const bodyHtml = formatEmailBodyHtml(body.replace(/\{volunteer_name\}/g, name));
         const html = `
           <h2>${subject}</h2>
           ${bodyHtml}
@@ -126,19 +179,7 @@ Berkeley Omnium Volunteer Team`;
           </p>
         `;
         try {
-          const { data, error: invokeError } = await supabase.functions.invoke('send-email', {
-            body: { to: volunteer.email, subject, html }
-          });
-
-          if (invokeError) {
-            throw new Error(`${volunteer.email}: ${invokeError.message || 'Failed to invoke send-email'}`);
-          }
-
-          if (data?.error) {
-            const details = data.details ? ` (${data.details})` : '';
-            throw new Error(`${volunteer.email}: ${data.error}${details}`);
-          }
-
+          await sendEmailWithRetry({ to: volunteer.email, subject, html }, volunteer.email);
           successes.push(volunteer.email);
         } catch (sendError) {
           failures.push(sendError?.message || `${volunteer.email}: Unknown email send failure`);
