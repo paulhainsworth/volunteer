@@ -24,6 +24,7 @@
   let selectedRole = null; // For modal
   let expandedDomains = new Set(); // Track which domains are expanded
   let domainsInitialized = false; // Track if we've initialized domains
+  let isProspectiveVolunteer = false;
 
   // Race dates
   const BHRR_DATE = '2026-04-18'; // Saturday April 18, 2026
@@ -177,6 +178,37 @@
     };
   }
 
+  function getRemainingSpots(role) {
+    return Math.max((role.positions_total || 0) - (role.positions_filled || 0), 0);
+  }
+
+  function compareRolesForDomain(a, b) {
+    const criticalCompare = Number(b?.critical || false) - Number(a?.critical || false);
+    if (criticalCompare !== 0) return criticalCompare;
+    return (a?.name || '').localeCompare(b?.name || '');
+  }
+
+  function hasOpenCriticalRole(domainEntry) {
+    return domainEntry.roles.some((role) => role.critical && getRemainingSpots(role) > 0);
+  }
+
+  function getDomainSortKey(domainEntry) {
+    return domainEntry.roles.reduce((best, role) => {
+      const time = parseEventDate(role.event_date)?.getTime() ?? Infinity;
+      const tieBreaker = isFlexibleTime(role) ? 1 : 0;
+      const start = role.start_time || '';
+      const candidate = { time, tieBreaker, start };
+      if (
+        candidate.time < best.time ||
+        (candidate.time === best.time && candidate.tieBreaker < best.tieBreaker) ||
+        (candidate.time === best.time && candidate.tieBreaker === best.tieBreaker && candidate.start < best.start)
+      ) {
+        return candidate;
+      }
+      return best;
+    }, { time: Infinity, tieBreaker: 1, start: '' });
+  }
+
   // Normalize date to YYYY-MM-DD format for consistent comparison
   function normalizeDate(dateValue) {
     if (!dateValue) return null;
@@ -240,6 +272,8 @@
     expandedDomains = new Set();
     domainsInitialized = true;
   }
+
+  $: isProspectiveVolunteer = !$auth.user;
 
   $: filteredRoles = $roles
     .filter(role => {
@@ -327,7 +361,7 @@
     filteredRoles.forEach(role => {
       const domainId = role.domain?.id || `general-${role.direct_leader?.id || 'unassigned'}`;
       const meta = getDomainMeta(role);
-      const remainingSpots = Math.max((role.positions_total || 0) - (role.positions_filled || 0), 0);
+      const remainingSpots = getRemainingSpots(role);
 
       if (!map.has(domainId)) {
         map.set(domainId, {
@@ -345,17 +379,26 @@
       domainEntry.openSpots += remainingSpots;
     });
 
-    return Array.from(map.values()).sort((a, b) => {
-      const firstRoleA = a.roles[0];
-      const firstRoleB = b.roles[0];
-      const timeA = parseEventDate(firstRoleA.event_date)?.getTime() ?? Infinity;
-      const timeB = parseEventDate(firstRoleB.event_date)?.getTime() ?? Infinity;
-      const dateCompare = timeA - timeB;
-      if (dateCompare !== 0) return dateCompare;
-      if (isFlexibleTime(firstRoleA) && !isFlexibleTime(firstRoleB)) return 1;
-      if (!isFlexibleTime(firstRoleA) && isFlexibleTime(firstRoleB)) return -1;
-      return (firstRoleA.start_time || '').localeCompare(firstRoleB.start_time || '');
-    });
+    return Array.from(map.values())
+      .map((domainEntry) => ({
+        ...domainEntry,
+        roles: isProspectiveVolunteer ? [...domainEntry.roles].sort(compareRolesForDomain) : domainEntry.roles
+      }))
+      .filter((domainEntry) => !isProspectiveVolunteer || domainEntry.openSpots > 0)
+      .sort((a, b) => {
+        if (isProspectiveVolunteer) {
+          const criticalDomainCompare = Number(hasOpenCriticalRole(b)) - Number(hasOpenCriticalRole(a));
+          if (criticalDomainCompare !== 0) return criticalDomainCompare;
+          return a.name.localeCompare(b.name);
+        }
+
+        const keyA = getDomainSortKey(a);
+        const keyB = getDomainSortKey(b);
+        if (keyA.time !== keyB.time) return keyA.time - keyB.time;
+        if (keyA.tieBreaker !== keyB.tieBreaker) return keyA.tieBreaker - keyB.tieBreaker;
+        if (keyA.start !== keyB.start) return keyA.start.localeCompare(keyB.start);
+        return a.name.localeCompare(b.name);
+      });
   })();
 
   function handleSignup(roleOrId) {
@@ -623,7 +666,7 @@
     <div class="loading">Loading opportunities...</div>
   {:else if error}
     <div class="error">{error}</div>
-  {:else if filteredRoles.length === 0}
+  {:else if groupedDomains.length === 0}
     <div class="empty">
       <p>No volunteer opportunities found matching your filters.</p>
     </div>
@@ -666,7 +709,12 @@
                 <div class="role-card compact">
                   <div class="role-main">
                     <div class="role-title-row">
-                      <h3>{role.name}</h3>
+                      <h3>
+                        {#if role.critical}
+                          <span class="critical-icon" title="Critical role" aria-label="Critical role">⚠</span>
+                        {/if}
+                        {role.name}
+                      </h3>
                       <span class="status-badge {status.class}">{status.label}</span>
                     </div>
 
@@ -1162,6 +1210,19 @@
     font-size: 1rem;
     font-weight: 600;
     flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+  }
+
+  .critical-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #dc3545;
+    font-size: 0.85rem;
+    line-height: 1;
   }
 
   .role-meta {
