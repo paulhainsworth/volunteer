@@ -101,7 +101,7 @@ Berkeley Omnium Volunteer Team`;
     sending = true;
 
     try {
-      const sendPromises = recipientsToSend.map((volunteer) => {
+      const sendPromises = recipientsToSend.map(async (volunteer) => {
         const name = [volunteer.first_name, volunteer.last_name].filter(Boolean).join(' ').trim() || 'there';
         const bodyHtml = body
           .replace(/\{volunteer_name\}/g, name)
@@ -116,12 +116,37 @@ Berkeley Omnium Volunteer Team`;
             Sent via Berkeley Omnium Volunteer Hub
           </p>
         `;
-        return supabase.functions.invoke('send-email', {
+        const { data, error: invokeError } = await supabase.functions.invoke('send-email', {
           body: { to: volunteer.email, subject, html }
         });
+
+        if (invokeError) {
+          throw new Error(`${volunteer.email}: ${invokeError.message || 'Failed to invoke send-email'}`);
+        }
+
+        if (data?.error) {
+          const details = data.details ? ` (${data.details})` : '';
+          throw new Error(`${volunteer.email}: ${data.error}${details}`);
+        }
+
+        return { email: volunteer.email, data };
       });
-      await Promise.all(sendPromises);
-      success = `Email sent to ${recipientsToSend.length} recipient${recipientsToSend.length === 1 ? '' : 's'}.`;
+
+      const results = await Promise.allSettled(sendPromises);
+      const failures = results
+        .filter((result) => result.status === 'rejected')
+        .map((result) => result.reason?.message || 'Unknown email send failure');
+
+      const successes = results.filter((result) => result.status === 'fulfilled').length;
+
+      if (failures.length > 0) {
+        const summary = failures.slice(0, 3).join('; ');
+        throw new Error(
+          `${failures.length} of ${recipientsToSend.length} emails failed${summary ? `: ${summary}` : ''}`
+        );
+      }
+
+      success = `Email sent to ${successes} recipient${successes === 1 ? '' : 's'}.`;
 
       subject = '';
       body = '';
