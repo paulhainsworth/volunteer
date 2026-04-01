@@ -138,20 +138,32 @@ function validateRole(role, rowNumber) {
   role.leader_email = role.leader_email || '';
   role.domain_name = role.domain_name || '';
 
-  // critical: optional. Accept true/false, 1/0, yes/no (case-insensitive)
+  // critical_positions_required: optional explicit count.
+  const criticalCountRaw = (role.critical_positions_required || '').toString().trim();
+  const parsedCriticalCount = criticalCountRaw === '' ? null : Number(criticalCountRaw);
+  if (parsedCriticalCount != null && (!Number.isFinite(parsedCriticalCount) || parsedCriticalCount < 0)) {
+    throw new Error('critical_positions_required must be a whole number 0 or greater');
+  }
+
+  // Legacy critical: optional true/false, 1/0, yes/no (case-insensitive)
   const criticalVal = (role.critical || '').toString().toLowerCase().trim();
-  role.critical = ['true', '1', 'yes'].includes(criticalVal);
+  const legacyCritical = ['true', '1', 'yes'].includes(criticalVal);
+
+  role.critical_positions_required = parsedCriticalCount == null
+    ? (legacyCritical ? Number(role.positions_total) : 0)
+    : Math.min(Math.floor(parsedCriticalCount), Number(role.positions_total));
+  role.critical = role.critical_positions_required > 0;
 
   return role;
 }
 
 export function generateTemplateCSV() {
-  const headers = ['name', 'description', 'event_date', 'start_time', 'end_time', 'location', 'positions_total', 'critical', 'domain_name', 'leader_email'];
+  const headers = ['name', 'description', 'event_date', 'start_time', 'end_time', 'location', 'positions_total', 'critical_positions_required', 'domain_name', 'leader_email'];
   const exampleRows = [
-    ['Registration Table', 'Check in riders and hand out race numbers', '2026-06-15', '07:00', '09:00', 'Main tent near start/finish', '4', 'true', 'Registration & Check-in', ''],
-    ['Course Marshal - Corner 1', 'Direct riders at first turn', '2026-06-15', '08:00', '12:00', 'Corner of Main St and Oak Ave', '2', 'true', 'Course Marshals', ''],
-    ['Water Station 1', 'Hand out water bottles to riders', '2026-06-15', '08:30', '11:30', 'Mile marker 10', '3', 'false', 'Water Stations & Aid', ''],
-    ['Pre-race Setup (flexible)', 'Help with setup; time TBD', '2026-06-14', '', '', 'Event site', '2', 'false', 'Loading & Logistics', '']
+    ['Registration Table', 'Check in riders and hand out race numbers', '2026-06-15', '07:00', '09:00', 'Main tent near start/finish', '4', '4', 'Registration & Check-in', ''],
+    ['Course Marshal - Corner 1', 'Direct riders at first turn', '2026-06-15', '08:00', '12:00', 'Corner of Main St and Oak Ave', '2', '1', 'Course Marshals', ''],
+    ['Water Station 1', 'Hand out water bottles to riders', '2026-06-15', '08:30', '11:30', 'Mile marker 10', '3', '0', 'Water Stations & Aid', ''],
+    ['Pre-race Setup (flexible)', 'Help with setup; time TBD', '2026-06-14', '', '', 'Event site', '2', '0', 'Loading & Logistics', '']
   ];
 
   const csvContent = [

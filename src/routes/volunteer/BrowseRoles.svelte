@@ -3,6 +3,7 @@
   import { roles } from '../../lib/stores/roles';
   import { auth } from '../../lib/stores/auth';
   import { push } from 'svelte-spa-router';
+  import { getCriticalOpenSpots } from '../../lib/utils/criticalSpots';
   import { formatTimeRange, calculateDuration, isFlexibleTime, formatEstimateDuration, formatEventDateInPacific, parseEventDate } from '../../lib/utils/timeDisplay';
   import {
     createVolunteerAndSignup,
@@ -183,13 +184,13 @@
   }
 
   function compareRolesForDomain(a, b) {
-    const criticalCompare = Number(b?.critical || false) - Number(a?.critical || false);
+    const criticalCompare = Number(getCriticalOpenSpots(b) > 0) - Number(getCriticalOpenSpots(a) > 0);
     if (criticalCompare !== 0) return criticalCompare;
     return (a?.name || '').localeCompare(b?.name || '');
   }
 
   function hasOpenCriticalRole(domainEntry) {
-    return domainEntry.roles.some((role) => role.critical && getRemainingSpots(role) > 0);
+    return domainEntry.roles.some((role) => getCriticalOpenSpots(role) > 0);
   }
 
   function getDomainSortKey(domainEntry) {
@@ -705,13 +706,14 @@
                 {@const status = getFillStatus(role)}
                 {@const duration = calculateDuration(role.start_time, role.end_time)}
                 {@const isFull = role.positions_filled >= role.positions_total}
+                {@const criticalOpenSpots = getCriticalOpenSpots(role)}
 
                 <div class="role-card compact">
                   <div class="role-main">
                     <div class="role-title-row">
                       <h3>
-                        {#if role.critical}
-                          <span class="critical-icon" title="Critical role" aria-label="Critical role">⚠</span>
+                        {#if criticalOpenSpots > 0}
+                          <span class="critical-icon" title={`Critical need: ${criticalOpenSpots} open`} aria-label="Critical role">⚠</span>
                         {/if}
                         {role.name}
                       </h3>
@@ -745,6 +747,13 @@
                         <span class="icon">👥</span>
                         <span>{role.positions_filled} / {role.positions_total} spots filled</span>
                       </div>
+
+                      {#if criticalOpenSpots > 0}
+                        <div class="detail-inline critical-detail">
+                          <span class="icon">⚠</span>
+                          <span>{criticalOpenSpots} critical spot{criticalOpenSpots === 1 ? '' : 's'} still needed</span>
+                        </div>
+                      {/if}
                     </div>
                   </div>
 
@@ -1303,6 +1312,11 @@
     font-size: 0.85rem;
     color: #495057;
     line-height: 1.4;
+  }
+
+  .detail-inline.critical-detail {
+    color: #b91c1c;
+    font-weight: 600;
   }
 
   .icon {

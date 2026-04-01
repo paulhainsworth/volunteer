@@ -1,5 +1,12 @@
 import { writable, derived } from 'svelte/store';
 import { supabase } from '../supabaseClient';
+import {
+  getCriticalOpenSpots,
+  getCriticalPositionsFilled,
+  getCriticalPositionsRequired,
+  getNiceToHaveOpenSpots,
+  hasCriticalRequirement
+} from '../utils/criticalSpots';
 import { withSupabaseReadTimeout } from '../utils/withTimeout';
 
 function createRolesStore() {
@@ -215,15 +222,13 @@ export const dashboardStats = derived(roles, $roles => {
     return fillPercentage < 50 && daysUntil <= 7;
   });
 
-  // Admin-flagged critical roles
-  const criticalFlaggedRoles = $roles.filter(r => r.critical);
-  const criticalUnfulfilled = criticalFlaggedRoles.filter(r => r.positions_filled < r.positions_total);
-  const criticalPositionsTotal = criticalFlaggedRoles.reduce((s, r) => s + r.positions_total, 0);
-  const criticalPositionsFilled = criticalFlaggedRoles.reduce((s, r) => s + r.positions_filled, 0);
-  const criticalOpenSpots = criticalUnfulfilled.reduce((s, r) => s + (r.positions_total - r.positions_filled), 0);
-  const niceToHaveRoles = $roles.filter(r => !r.critical);
-  const niceToHaveUnfulfilled = niceToHaveRoles.filter(r => r.positions_filled < r.positions_total);
-  const niceToHaveOpenSpots = niceToHaveUnfulfilled.reduce((s, r) => s + (r.positions_total - r.positions_filled), 0);
+  const criticalFlaggedRoles = $roles.filter((role) => hasCriticalRequirement(role));
+  const criticalUnfulfilled = criticalFlaggedRoles.filter((role) => getCriticalOpenSpots(role) > 0);
+  const criticalPositionsTotal = criticalFlaggedRoles.reduce((sum, role) => sum + getCriticalPositionsRequired(role), 0);
+  const criticalPositionsFilled = criticalFlaggedRoles.reduce((sum, role) => sum + getCriticalPositionsFilled(role), 0);
+  const criticalOpenSpots = criticalFlaggedRoles.reduce((sum, role) => sum + getCriticalOpenSpots(role), 0);
+  const niceToHaveUnfulfilled = $roles.filter((role) => getNiceToHaveOpenSpots(role) > 0);
+  const niceToHaveOpenSpots = $roles.reduce((sum, role) => sum + getNiceToHaveOpenSpots(role), 0);
 
   return {
     totalPositions,

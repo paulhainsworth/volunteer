@@ -4,6 +4,11 @@
   import { auth } from '../../lib/stores/auth';
   import { push } from 'svelte-spa-router';
   import { format } from 'date-fns';
+  import {
+    getCriticalOpenSpots,
+    getCriticalPositionsFilled,
+    getCriticalPositionsRequired
+  } from '../../lib/utils/criticalSpots';
   import { formatTimeRange } from '../../lib/utils/timeDisplay';
 
   let loading = true;
@@ -47,7 +52,7 @@
 
   function getCriticalFlaggedUnfulfilled() {
     return $roles
-      .filter(r => r.critical && r.positions_filled < r.positions_total)
+      .filter((role) => getCriticalOpenSpots(role) > 0)
       .sort((a, b) => new Date(a.event_date).getTime() - new Date(b.event_date).getTime());
   }
 
@@ -139,7 +144,7 @@
       <div class="dashboard-section">
         <h2>Critical Spots Overview</h2>
         <p class="section-description">
-          Volunteer spots in roles you've marked as critical (must-fill) vs nice-to-have
+          Volunteer spots you've marked as must-fill vs nice-to-have overflow spots
         </p>
         <div class="critical-overview">
           <div class="critical-summary">
@@ -162,7 +167,7 @@
       <div class="dashboard-section">
         <h2>Critical Spots Needing Volunteers</h2>
         <p class="section-description">
-          Roles marked critical with open spots ({$dashboardStats.criticalOpenSpots} total)
+          Roles with unmet critical spot requirements ({$dashboardStats.criticalOpenSpots} total)
         </p>
 
         <div class="roles-table">
@@ -178,12 +183,16 @@
             </thead>
             <tbody>
               {#each criticalFlaggedUnfulfilled as role (role.id)}
-                {@const fillPercent = Math.round((role.positions_filled / role.positions_total) * 100)}
+                {@const criticalRequired = getCriticalPositionsRequired(role)}
+                {@const criticalFilled = getCriticalPositionsFilled(role)}
+                {@const criticalOpen = getCriticalOpenSpots(role)}
+                {@const fillPercent = criticalRequired > 0 ? Math.round((criticalFilled / criticalRequired) * 100) : 0}
                 {@const daysUntil = Math.ceil((new Date(role.event_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))}
                 
                 <tr>
                   <td>
                     <strong>{role.name}</strong>
+                    <div class="role-subtext">Critical requirement: {criticalRequired} of {role.positions_total} spots</div>
                     {#if daysUntil <= 3}
                       <span class="urgent-tag">Urgent</span>
                     {/if}
@@ -195,7 +204,8 @@
                   <td>{formatTimeRange(role)}</td>
                   <td>
                     <div class="fill-status {getFillClass(role)}">
-                      {role.positions_filled} / {role.positions_total}
+                      {criticalFilled} / {criticalRequired}
+                      <span class="fill-percent">({criticalOpen} open)</span>
                       <span class="fill-percent">({fillPercent}%)</span>
                     </div>
                   </td>
@@ -518,6 +528,12 @@
   .fill-status.low {
     background: #f8d7da;
     color: #721c24;
+  }
+
+  .role-subtext {
+    margin-top: 0.25rem;
+    font-size: 0.85rem;
+    color: #6c757d;
   }
 
   .fill-percent {
