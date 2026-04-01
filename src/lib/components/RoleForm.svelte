@@ -5,6 +5,7 @@
   import { get } from 'svelte/store';
   import { supabase } from '../supabaseClient';
   import { domains } from '../stores/domains';
+  import { getCriticalPositionsRequired, normalizeCriticalPositionsInput } from '../utils/criticalSpots';
 
   export let role = null;
   export let loading = false;
@@ -44,6 +45,7 @@
     end_time: '',
     location: '',
     positions_total: 1,
+    critical_positions_required: 0,
     domain_id: null,
     leader_id: null,
     critical: false
@@ -57,12 +59,17 @@
     formData.end_time = role.end_time || '';
     formData.location = role.location || '';
     formData.positions_total = role.positions_total || 1;
+    formData.critical_positions_required = getCriticalPositionsRequired(role);
     formData.domain_id = role.domain_id || null;
     formData.leader_id = role.leader_id || null;
-    formData.critical = !!role.critical;
   } else if (defaultDomainId) {
     formData.domain_id = defaultDomainId;
   }
+
+  $: formData.critical_positions_required = normalizeCriticalPositionsInput(
+    formData.critical_positions_required,
+    formData.positions_total
+  );
 
   $: if (!role && defaultDomainId && formData.domain_id !== defaultDomainId) {
     formData.domain_id = defaultDomainId;
@@ -161,16 +168,19 @@
     />
   </div>
 
-  <div class="form-group checkbox-group">
+  <div class="form-group">
+    <label for="critical_positions_required">Critical Spots Required</label>
     <input
-      type="checkbox"
-      id="critical"
-      bind:checked={formData.critical}
+      type="number"
+      id="critical_positions_required"
+      bind:value={formData.critical_positions_required}
+      min="0"
+      max={formData.positions_total}
       disabled={loading}
     />
-    <label for="critical">
-      Critical role (must be filled for the event to run)
-    </label>
+    <small>
+      Set how many of this role's spots are must-fill. Use 0 for nice-to-have only, or up to {formData.positions_total}.
+    </small>
   </div>
 
   <div class="form-group">
@@ -246,21 +256,6 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 1rem;
-  }
-
-  .checkbox-group {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-  }
-
-  .checkbox-group input[type="checkbox"] {
-    width: auto;
-  }
-
-  .checkbox-group label {
-    margin: 0;
-    font-weight: 500;
   }
 
   label {

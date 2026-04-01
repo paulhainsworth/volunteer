@@ -13,6 +13,11 @@ import RoleForm from '../../lib/components/RoleForm.svelte';
 import BulkUpload from '../../lib/components/BulkUpload.svelte';
 import AdminRoleInlineAdd from '../../lib/components/AdminRoleInlineAdd.svelte';
 import { format } from 'date-fns';
+import {
+  getCriticalOpenSpots,
+  getCriticalPositionsRequired,
+  normalizeCriticalPositionsInput
+} from '../../lib/utils/criticalSpots';
 import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
 
   export let params = {};
@@ -679,7 +684,14 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
       positions_total: Number(formData.positions_total) || 0,
       domain_id: sanitizeSelect(formData.domain_id),
       leader_id: sanitizeSelect(formData.leader_id),
-      critical: !!formData.critical
+      critical_positions_required: normalizeCriticalPositionsInput(
+        formData.critical_positions_required,
+        Number(formData.positions_total) || 0
+      ),
+      critical: normalizeCriticalPositionsInput(
+        formData.critical_positions_required,
+        Number(formData.positions_total) || 0
+      ) > 0
     };
   }
 
@@ -781,14 +793,19 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
           const startTime = roleDataClean.start_time === 'flexible' ? sentinel.start_time : roleDataClean.start_time;
           const endTime = roleDataClean.end_time === 'flexible' ? sentinel.end_time : roleDataClean.end_time;
 
-          const { critical = false, ...rest } = roleDataClean;
+          const criticalPositionsRequired = normalizeCriticalPositionsInput(
+            roleDataClean.critical_positions_required ?? (roleDataClean.critical ? roleDataClean.positions_total : 0),
+            roleDataClean.positions_total
+          );
+          const { critical = false, critical_positions_required, ...rest } = roleDataClean;
           await roles.createRole({
             ...rest,
             start_time: startTime,
             end_time: endTime,
             domain_id: domainId,
             leader_id: leaderId,
-            critical: !!critical,
+            critical_positions_required: criticalPositionsRequired,
+            critical: criticalPositionsRequired > 0 || !!critical,
             created_by: $auth.user.id
           });
           successCount++;
@@ -857,9 +874,17 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
     }
   }
 
-  async function toggleCritical(role) {
+  async function updateCriticalPositionsRequired(role, value) {
+    const nextValue = normalizeCriticalPositionsInput(value, role.positions_total);
+    const currentValue = getCriticalPositionsRequired(role);
+
+    if (nextValue === currentValue) return;
+
     try {
-      await roles.updateRole(role.id, { critical: !role.critical });
+      await roles.updateRole(role.id, {
+        critical_positions_required: nextValue,
+        critical: nextValue > 0
+      });
     } catch (err) {
       error = err.message;
     }
@@ -1805,7 +1830,7 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
                 <thead>
                   <tr>
                     <th class="th-featured" title="Show on homepage">Featured</th>
-                    <th class="th-critical" title="Must-fill for event">Critical</th>
+                    <th class="th-critical" title="How many spots in this role are must-fill">Critical Spots</th>
                     <th>Role Name</th>
                     <th>Volunteer Leader</th>
                     <th>Fill Status</th>
@@ -1830,14 +1855,25 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
                         </button>
                       </td>
                       <td class="td-critical">
-                        <button
-                          type="button"
-                          class="critical-toggle {role.critical ? 'critical' : ''}"
-                          title={role.critical ? 'Mark as nice-to-have' : 'Mark as critical (must-fill)'}
-                          on:click={() => toggleCritical(role)}
-                        >
-                          ⚠
-                        </button>
+                        <div class="critical-control">
+                          <label class="critical-input-wrap" for={"critical-" + role.id}>
+                            <span class:active={getCriticalPositionsRequired(role) > 0}>⚠</span>
+                            <input
+                              id={"critical-" + role.id}
+                              type="number"
+                              min="0"
+                              max={role.positions_total}
+                              value={getCriticalPositionsRequired(role)}
+                              title="Number of must-fill spots in this role"
+                              on:click|stopPropagation={() => {}}
+                              on:change={(e) => updateCriticalPositionsRequired(role, /** @type {HTMLInputElement} */ (e.currentTarget).value)}
+                            />
+                            <span>/ {role.positions_total}</span>
+                          </label>
+                          {#if getCriticalOpenSpots(role) > 0}
+                            <div class="critical-helper">{getCriticalOpenSpots(role)} open critical</div>
+                          {/if}
+                        </div>
                       </td>
                       <td>
                         <div class="role-name-cell" on:click={() => toggleRoleExpansion(role.id)}>
@@ -2651,21 +2687,33 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
     vertical-align: middle;
   }
 
-  .critical-toggle {
-    background: none;
-    border: none;
-    cursor: pointer;
-    font-size: 1.25rem;
-    padding: 0.25rem;
-    color: #dee2e6;
-    transition: color 0.15s;
+  .critical-control {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.2rem;
   }
 
-  .critical-toggle:hover {
+  .critical-input-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-weight: 600;
+    color: #6c757d;
+  }
+
+  .critical-input-wrap span.active {
     color: #dc3545;
   }
 
-  .critical-toggle.critical {
+  .critical-input-wrap input {
+    width: 4.25rem;
+    padding: 0.35rem 0.45rem;
+    text-align: center;
+  }
+
+  .critical-helper {
+    font-size: 0.75rem;
     color: #dc3545;
   }
 

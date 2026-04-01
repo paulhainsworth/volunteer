@@ -97,12 +97,15 @@
         <li><code>end_time</code> - Time in HH:MM format, e.g. 09:00. Leave empty for <strong>flexible</strong></li>
         <li><code>description</code> - Role description</li>
         <li><code>location</code> - Meeting point or location</li>
-        <li><code>critical</code> - <code>true</code>, <code>1</code>, or <code>yes</code> for must-fill roles; <code>false</code>/<code>0</code>/<code>no</code> or empty for nice-to-have (default)</li>
+        <li><code>critical_positions_required</code> - number of must-fill spots in this role, from <code>0</code> to <code>positions_total</code></li>
         <li><code>domain_name</code> - Domain name (e.g., "Course Marshals", "Registration & Check-in")</li>
         <li><code>leader_email</code> - Direct leader assignment (email address of volunteer leader)</li>
       </ul>
       <p class="info-note">
         <strong>Times:</strong> If <code>start_time</code> or <code>end_time</code> is empty, both are treated as <strong>flexible</strong> and displayed as "Flexible" on the site.
+      </p>
+      <p class="info-note">
+        <strong>Compatibility:</strong> Legacy <code>critical</code> values are still accepted during import, but <code>critical_positions_required</code> is now the preferred column.
       </p>
       <p class="info-note">
         <strong>Note:</strong> If both <code>domain_name</code> and <code>leader_email</code> are provided, 
@@ -183,7 +186,7 @@
                   <th>Date</th>
                   <th>Time</th>
                   <th>Positions</th>
-                  <th>Critical</th>
+                  <th>Critical Spots</th>
                   <th>Location</th>
                 </tr>
               </thead>
@@ -199,7 +202,7 @@
                     <td>{role.event_date}</td>
                     <td>{formatTimeRange(role)}</td>
                     <td>{role.positions_total}</td>
-                    <td>{role.critical ? 'Yes' : 'No'}</td>
+                    <td>{role.critical_positions_required} / {role.positions_total}</td>
                     <td>{role.location || '-'}</td>
                   </tr>
                 {/each}

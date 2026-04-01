@@ -48,8 +48,24 @@ type OpenCriticalRole = {
   name: string
   event_date: string | null
   positions_total: number
+  critical_positions_required: number
   positions_filled: number
+  overall_open_spots: number
   open_spots: number
+}
+
+function getCriticalPositionsRequired(role: { positions_total?: number | null; critical_positions_required?: number | null; critical?: boolean | null }) {
+  const positionsTotal = Math.max(Number(role.positions_total) || 0, 0)
+
+  if (role.critical_positions_required !== undefined && role.critical_positions_required !== null) {
+    return Math.min(Math.max(Number(role.critical_positions_required) || 0, 0), positionsTotal)
+  }
+
+  return role.critical ? positionsTotal : 0
+}
+
+function getCriticalOpenSpots(role: { positions_total?: number | null; critical_positions_required?: number | null; critical?: boolean | null; positions_filled?: number | null }) {
+  return Math.max(getCriticalPositionsRequired(role) - (Number(role.positions_filled) || 0), 0)
 }
 
 function getPacificParts(date = new Date()) {
@@ -112,7 +128,7 @@ function buildEmailHtml(metrics: SummaryMetrics, roles: OpenCriticalRole[]) {
           const dateLabel = formatEventDate(role.event_date)
           return `
             <li style="margin: 0 0 12px;">
-              <strong>${escapeHtml(role.name)}</strong> (${escapeHtml(dateLabel)}): ${role.open_spots} of ${role.positions_total} volunteer spots still open
+              <strong>${escapeHtml(role.name)}</strong> (${escapeHtml(dateLabel)}): ${role.open_spots} critical spots still open out of ${role.critical_positions_required} required
             </li>
           `
         })
@@ -323,7 +339,7 @@ serve(async (req) => {
 
     const { data: roles, error: rolesError } = await supabaseAdmin
       .from('volunteer_roles')
-      .select('id, name, event_date, positions_total, critical')
+      .select('id, name, event_date, positions_total, critical, critical_positions_required')
 
     if (rolesError) throw rolesError
 
@@ -353,7 +369,9 @@ serve(async (req) => {
         status,
         role:volunteer_roles!role_id(
           id,
-          critical
+          critical,
+          critical_positions_required,
+          positions_total
         )
       `)
       .gte('signed_up_at', recentSince)
@@ -369,31 +387,37 @@ serve(async (req) => {
       yesterdayConfirmedSignups
         .filter((signup) => {
           const role = Array.isArray(signup.role) ? signup.role[0] : signup.role
-          return !!role?.critical
+          return getCriticalPositionsRequired(role || {}) > 0
         })
         .map((signup) => signup.role_id)
     )
 
     const rolesWithCounts = (roles || []).map((role) => {
       const positionsFilled = countByRole[role.id] || 0
-      const openSpots = Math.max((role.positions_total || 0) - positionsFilled, 0)
-      return {
+      const criticalOpenSpots = getCriticalOpenSpots({
         ...role,
         positions_filled: positionsFilled,
-        open_spots: openSpots,
+      })
+      const overallOpenSpots = Math.max((role.positions_total || 0) - positionsFilled, 0)
+      return {
+        ...role,
+        critical_positions_required: getCriticalPositionsRequired(role),
+        positions_filled: positionsFilled,
+        overall_open_spots: overallOpenSpots,
+        open_spots: criticalOpenSpots,
       }
     })
 
-    const openRoles = rolesWithCounts.filter((role) => role.open_spots > 0)
+    const openRoles = rolesWithCounts.filter((role) => role.overall_open_spots > 0)
     const openCriticalRoles = openRoles
-      .filter((role) => role.critical)
+      .filter((role) => role.open_spots > 0)
       .sort((a, b) => {
         if (b.open_spots !== a.open_spots) return b.open_spots - a.open_spots
         if ((a.event_date || '') !== (b.event_date || '')) return (a.event_date || '').localeCompare(b.event_date || '')
         return a.name.localeCompare(b.name)
       })
 
-    const openSpots = openRoles.reduce((sum, role) => sum + role.open_spots, 0)
+    const openSpots = openRoles.reduce((sum, role) => sum + role.overall_open_spots, 0)
     const openCriticalSpots = openCriticalRoles.reduce((sum, role) => sum + role.open_spots, 0)
 
     const metrics: SummaryMetrics = {
