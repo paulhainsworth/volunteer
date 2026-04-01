@@ -1,5 +1,6 @@
 import { writable } from 'svelte/store';
 import { supabase } from '../supabaseClient';
+import { withSupabaseReadTimeout } from '../utils/withTimeout';
 
 function createDomainsStore() {
   const { subscribe, set, update } = writable([]);
@@ -10,26 +11,28 @@ function createDomainsStore() {
     fetchDomains: async (options = {}) => {
       const { leaderId } = options;
 
-      let query = supabase
-        .from('volunteer_leader_domains')
-        .select(`
-          *,
-          leader:profiles!leader_id(
-            id,
-            first_name,
-            last_name,
-            email,
-            phone
-          ),
-          roles:volunteer_roles(count)
-        `)
-        .order('name', { ascending: true });
+      const { data, error } = await withSupabaseReadTimeout(async () => {
+        let query = supabase
+          .from('volunteer_leader_domains')
+          .select(`
+            *,
+            leader:profiles!leader_id(
+              id,
+              first_name,
+              last_name,
+              email,
+              phone
+            ),
+            roles:volunteer_roles(count)
+          `)
+          .order('name', { ascending: true });
 
-      if (leaderId) {
-        query = query.eq('leader_id', leaderId);
-      }
+        if (leaderId) {
+          query = query.eq('leader_id', leaderId);
+        }
 
-      const { data, error } = await query;
+        return query;
+      }, 'domains.fetchDomains');
 
       if (error) throw error;
 
@@ -42,7 +45,7 @@ function createDomainsStore() {
       return domainsWithCounts;
     },
 
-    fetchDomain: async (id) => {
+    fetchDomain: async (id) => withSupabaseReadTimeout(async () => {
       const { data, error } = await supabase
         .from('volunteer_leader_domains')
         .select(`
@@ -92,7 +95,7 @@ function createDomainsStore() {
           positions_filled: confirmedCountByRole[role.id] ?? 0
         }))
       };
-    },
+    }, 'domains.fetchDomain'),
 
     createDomain: async (domainData) => {
       const { data, error } = await supabase

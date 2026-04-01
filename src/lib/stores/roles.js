@@ -1,10 +1,11 @@
 import { writable, derived } from 'svelte/store';
 import { supabase } from '../supabaseClient';
+import { withSupabaseReadTimeout } from '../utils/withTimeout';
 
 function createRolesStore() {
   const { subscribe, set, update } = writable([]);
 
-  const fetchRole = async (id) => {
+  const fetchRole = async (id) => withSupabaseReadTimeout(async () => {
     const { data, error } = await supabase
       .from('volunteer_roles')
       .select(`
@@ -36,51 +37,54 @@ function createRolesStore() {
       signups: confirmedSignups,
       positions_filled: confirmedSignups.length
     };
-  };
+  }, 'roles.fetchRole');
 
   return {
     subscribe,
     
     fetchRoles: async (filters = {}) => {
       try {
-        let query = supabase
-          .from('volunteer_roles')
-          .select(`
-            *,
-            signups:signups(count),
-            created_by:profiles!created_by(first_name, last_name, email),
-            direct_leader:profiles!leader_id(id, first_name, last_name),
-            domain:volunteer_leader_domains!domain_id(
-              id,
-              name,
-              leader:profiles!leader_id(id, first_name, last_name)
-            )
-          `)
-          .order('event_date', { ascending: true, nullsFirst: false })
-          .order('start_time', { ascending: true, nullsFirst: false });
+        const rolesWithCounts = await withSupabaseReadTimeout(async () => {
+          let query = supabase
+            .from('volunteer_roles')
+            .select(`
+              *,
+              signups:signups(count),
+              created_by:profiles!created_by(first_name, last_name, email),
+              direct_leader:profiles!leader_id(id, first_name, last_name),
+              domain:volunteer_leader_domains!domain_id(
+                id,
+                name,
+                leader:profiles!leader_id(id, first_name, last_name)
+              )
+            `)
+            .order('event_date', { ascending: true, nullsFirst: false })
+            .order('start_time', { ascending: true, nullsFirst: false });
 
-        if (filters.startDate) query = query.gte('event_date', filters.startDate);
-        if (filters.endDate) query = query.lte('event_date', filters.endDate);
+          if (filters.startDate) query = query.gte('event_date', filters.startDate);
+          if (filters.endDate) query = query.lte('event_date', filters.endDate);
 
-        const { data, error } = await query;
-        if (error) throw error;
+          const { data, error } = await query;
+          if (error) throw error;
 
-        // Use RPC for counts so unauthenticated users get correct fill (RLS blocks direct signups read)
-        const roleIds = (data || []).map((r) => r.id);
-        let confirmedCountByRole = {};
-        if (roleIds.length > 0) {
-          const { data: countRows } = await supabase.rpc('get_confirmed_signup_counts', {
-            role_ids: roleIds
-          });
-          (countRows || []).forEach((row) => {
-            confirmedCountByRole[row.role_id] = Number(row.cnt) || 0;
-          });
-        }
+          // Use RPC for counts so unauthenticated users get correct fill (RLS blocks direct signups read)
+          const roleIds = (data || []).map((r) => r.id);
+          let confirmedCountByRole = {};
+          if (roleIds.length > 0) {
+            const { data: countRows } = await supabase.rpc('get_confirmed_signup_counts', {
+              role_ids: roleIds
+            });
+            (countRows || []).forEach((row) => {
+              confirmedCountByRole[row.role_id] = Number(row.cnt) || 0;
+            });
+          }
 
-        const rolesWithCounts = (data || []).map(role => ({
-          ...role,
-          positions_filled: confirmedCountByRole[role.id] ?? 0
-        }));
+          return (data || []).map(role => ({
+            ...role,
+            positions_filled: confirmedCountByRole[role.id] ?? 0
+          }));
+        }, 'roles.fetchRoles');
+
         set(rolesWithCounts);
         return rolesWithCounts;
       } catch (e) {
@@ -90,7 +94,7 @@ function createRolesStore() {
     },
 
     /** Fetch up to 6 featured roles for the homepage. Returns [] if none featured. */
-    fetchFeaturedRoles: async () => {
+    fetchFeaturedRoles: async () => withSupabaseReadTimeout(async () => {
       const select = `
         *,
         signups:signups(count),
@@ -118,7 +122,7 @@ function createRolesStore() {
         ...role,
         positions_filled: confirmedCountByRole[role.id] ?? 0
       }));
-    },
+    }, 'roles.fetchFeaturedRoles'),
 
     fetchRole,
 

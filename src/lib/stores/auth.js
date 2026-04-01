@@ -1,5 +1,9 @@
 import { writable } from 'svelte/store';
 import { supabase } from '../supabaseClient';
+import { TimeoutError, withSupabaseReadTimeout, withTimeout } from '../utils/withTimeout';
+
+const AUTH_BOOTSTRAP_TIMEOUT_MS = 4000;
+const PROFILE_READ_TIMEOUT_MS = 2500;
 
 function createAuthStore() {
   const { subscribe, set } = writable({
@@ -8,6 +12,7 @@ function createAuthStore() {
     loading: true,
     isAdmin: false
   });
+  let authSubscriptionInitialized = false;
 
   const applySession = async (session) => {
     if (session?.user) {
@@ -16,14 +21,20 @@ function createAuthStore() {
       const maxRetries = 5;
 
       while (!profile && retries < maxRetries) {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', session.user.id)
-          .maybeSingle();
+        const { data, error } = await withSupabaseReadTimeout(
+          () => supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', session.user.id)
+            .maybeSingle(),
+          'auth.applySession.profile',
+          PROFILE_READ_TIMEOUT_MS
+        );
 
         if (data) {
           profile = data;
+        } else if (error) {
+          throw error;
         } else {
           retries++;
           await new Promise(resolve => setTimeout(resolve, 500));
@@ -44,19 +55,54 @@ function createAuthStore() {
   };
 
   const loadCurrentSession = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { session } } = await withSupabaseReadTimeout(
+      () => supabase.auth.getSession(),
+      'auth.loadCurrentSession',
+      PROFILE_READ_TIMEOUT_MS
+    );
     return applySession(session);
+  };
+
+  const setLoggedOutState = () => {
+    set({ user: null, profile: null, loading: false, isAdmin: false });
   };
 
   return {
     subscribe,
     
     initialize: async () => {
-      await loadCurrentSession();
+      if (!authSubscriptionInitialized) {
+        supabase.auth.onAuthStateChange(async (event, session) => {
+          try {
+            await applySession(session);
+          } catch (error) {
+            console.error('Auth state change handling failed:', error);
+            setLoggedOutState();
+          }
+        });
+        authSubscriptionInitialized = true;
+      }
 
-      supabase.auth.onAuthStateChange(async (event, session) => {
-        await applySession(session);
+      const bootstrapPromise = loadCurrentSession().catch((error) => {
+        console.error('Auth bootstrap failed:', error);
+        setLoggedOutState();
+        throw error;
       });
+
+      try {
+        return await withTimeout(bootstrapPromise, {
+          label: 'auth.initialize',
+          timeoutMs: AUTH_BOOTSTRAP_TIMEOUT_MS
+        });
+      } catch (error) {
+        if (error instanceof TimeoutError) {
+          console.warn('Auth bootstrap timed out; rendering app without blocking on auth.');
+          setLoggedOutState();
+          return { user: null, profile: null, timedOut: true };
+        }
+
+        return { user: null, profile: null, error };
+      }
     },
 
     refreshSession: async () => {

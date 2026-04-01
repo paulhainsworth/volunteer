@@ -1,5 +1,6 @@
 import { writable } from 'svelte/store';
 import { supabase } from '../supabaseClient';
+import { withSupabaseReadTimeout } from '../utils/withTimeout';
 
 function createWaiverStore() {
   const { subscribe, set, update } = writable({
@@ -10,21 +11,29 @@ function createWaiverStore() {
 
   const fetchCurrentWaiver = async () => {
     update(state => ({ ...state, loading: true }));
-    
-    const { data, error } = await supabase
-      .from('waiver_settings')
-      .select('*')
-      .single();
 
-    if (error) throw error;
+    try {
+      const { data, error } = await withSupabaseReadTimeout(
+        () => supabase
+          .from('waiver_settings')
+          .select('*')
+          .single(),
+        'waiver.fetchCurrentWaiver'
+      );
 
-    set({
-      text: data.waiver_text,
-      version: data.version,
-      loading: false
-    });
+      if (error) throw error;
 
-    return data;
+      set({
+        text: data.waiver_text,
+        version: data.version,
+        loading: false
+      });
+
+      return data;
+    } catch (error) {
+      update(state => ({ ...state, loading: false }));
+      throw error;
+    }
   };
 
   return {
