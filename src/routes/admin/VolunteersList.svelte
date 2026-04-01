@@ -47,6 +47,34 @@
   let addVolunteerSuggestionLoading = false;
   let addVolunteerSuggestionTimer = null;
   let selectedAffiliationId = '';
+  let showNicaSummary = false;
+  let nicaCopyFeedback = '';
+  const NICA_BENEFICIARIES = [
+    {
+      label: 'Albany',
+      affiliationNames: ['Albany', 'Albany High School Mountain Bike Team']
+    },
+    {
+      label: 'Berkeley',
+      affiliationNames: ['Berkeley', 'Berkeley Mountain Bike Association']
+    },
+    {
+      label: 'El Cerrito',
+      affiliationNames: ['El Cerrito', 'El Cerrito High School']
+    },
+    {
+      label: 'Oakland Composite',
+      affiliationNames: ['Oakland Composite']
+    },
+    {
+      label: 'Oakland Technical',
+      affiliationNames: ['Oakland Technical', 'Oakland Technical High School MTB']
+    },
+    {
+      label: 'Skyline',
+      affiliationNames: ['Skyline', 'Skyline High School Mountain Bike Team']
+    }
+  ];
 
   onMount(async () => {
     if (!$auth.isAdmin) {
@@ -128,6 +156,96 @@
     }
     return sortVolunteers(filtered);
   })();
+
+  $: nicaSummaryRows = NICA_BENEFICIARIES.map((beneficiary) => {
+    const matchingAffiliationIds = new Set(
+      $affiliations
+        .filter((entry) => beneficiary.affiliationNames.includes(entry.name))
+        .map((entry) => entry.id)
+    );
+    const volunteerSpots = $volunteers
+      .filter((volunteer) => matchingAffiliationIds.has(volunteer.team_club_affiliation_id || ''))
+      .reduce((sum, volunteer) => sum + (volunteer.totalSignups || 0), 0);
+    const remainingSpots = Math.max(10 - volunteerSpots, 0);
+
+    return {
+      beneficiary: beneficiary.label,
+      volunteerSpots,
+      remainingLabel: remainingSpots === 0 ? 'Complete 🎉' : remainingSpots
+    };
+  });
+
+  function escapeHtml(value) {
+    return String(value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function getNicaSummaryPlainText() {
+    return [
+      'Beneficiary\tVolunteer Spots\tRemaining',
+      ...nicaSummaryRows.map((row) => `${row.beneficiary}\t${row.volunteerSpots}\t${row.remainingLabel}`)
+    ].join('\n');
+  }
+
+  function getNicaSummaryHtml() {
+    const rows = nicaSummaryRows
+      .map(
+        (row) => `
+          <tr>
+            <td style="border:1px solid #d0d7de;padding:8px 10px;">${escapeHtml(row.beneficiary)}</td>
+            <td style="border:1px solid #d0d7de;padding:8px 10px;text-align:left;">${escapeHtml(row.volunteerSpots)}</td>
+            <td style="border:1px solid #d0d7de;padding:8px 10px;text-align:left;">${escapeHtml(row.remainingLabel)}</td>
+          </tr>
+        `
+      )
+      .join('');
+
+    return `
+      <table style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:14px;">
+        <thead>
+          <tr>
+            <th style="border:1px solid #d0d7de;padding:8px 10px;background:#f6f8fa;text-align:left;">Beneficiary</th>
+            <th style="border:1px solid #d0d7de;padding:8px 10px;background:#f6f8fa;text-align:left;">Volunteer Spots</th>
+            <th style="border:1px solid #d0d7de;padding:8px 10px;background:#f6f8fa;text-align:left;">Remaining</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    `;
+  }
+
+  async function copyNicaSummary() {
+    const plainText = getNicaSummaryPlainText();
+    const html = getNicaSummaryHtml();
+
+    try {
+      if (window.ClipboardItem && navigator.clipboard?.write) {
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            'text/plain': new Blob([plainText], { type: 'text/plain' }),
+            'text/html': new Blob([html], { type: 'text/html' })
+          })
+        ]);
+      } else if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(plainText);
+      } else {
+        throw new Error('Clipboard access is not available in this browser');
+      }
+
+      nicaCopyFeedback = 'Copied';
+      setTimeout(() => {
+        if (nicaCopyFeedback === 'Copied') nicaCopyFeedback = '';
+      }, 2000);
+    } catch (err) {
+      console.error('Failed to copy NICA summary:', err);
+      error = 'Failed to copy NICA summary to clipboard';
+      nicaCopyFeedback = '';
+    }
+  }
 
   function exportToCSV() {
     const headers = ['First Name', 'Last Name', 'Email', 'Phone', 'Total Signups', 'Total Hours', 'Waiver Signed'];
@@ -781,6 +899,50 @@
         </button>
       </div>
     </div>
+
+    <div class="nica-toggle-row">
+      <button
+        class="btn btn-secondary"
+        on:click={() => showNicaSummary = !showNicaSummary}
+        aria-expanded={showNicaSummary}
+      >
+        {showNicaSummary ? 'Hide NICA' : 'Show NICA'}
+      </button>
+    </div>
+
+    {#if showNicaSummary}
+      <div class="nica-summary-card">
+        <div class="nica-summary-header">
+          <h2>NICA Beneficiary Summary</h2>
+          <div class="nica-summary-actions">
+            <button class="btn btn-secondary btn-sm" type="button" on:click={copyNicaSummary}>
+              Copy
+            </button>
+            {#if nicaCopyFeedback}
+              <span class="nica-copy-feedback">{nicaCopyFeedback}</span>
+            {/if}
+          </div>
+        </div>
+        <table class="nica-summary-table">
+          <thead>
+            <tr>
+              <th>Beneficiary</th>
+              <th>Volunteer Spots</th>
+              <th>Remaining</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each nicaSummaryRows as row (row.beneficiary)}
+              <tr>
+                <td>{row.beneficiary}</td>
+                <td>{row.volunteerSpots}</td>
+                <td>{row.remainingLabel}</td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      </div>
+    {/if}
 
     {#if viewMode === 'table'}
       <div class="table-view">
@@ -1472,6 +1634,62 @@
     gap: 1rem;
     margin-bottom: 2rem;
     flex-wrap: wrap;
+  }
+
+  .nica-toggle-row {
+    margin-bottom: 1rem;
+  }
+
+  .nica-summary-card {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    padding: 1.25rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .nica-summary-card h2 {
+    margin: 0 0 1rem 0;
+    color: #1a1a1a;
+    font-size: 1.1rem;
+  }
+
+  .nica-summary-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1rem;
+  }
+
+  .nica-summary-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .nica-copy-feedback {
+    font-size: 0.9rem;
+    color: #198754;
+    font-weight: 600;
+  }
+
+  .nica-summary-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .nica-summary-table th,
+  .nica-summary-table td {
+    padding: 0.75rem;
+    text-align: left;
+    border-bottom: 1px solid #dee2e6;
+  }
+
+  .nica-summary-table th {
+    background: #f8f9fa;
+    font-weight: 600;
+    color: #495057;
   }
 
   .search-box {
