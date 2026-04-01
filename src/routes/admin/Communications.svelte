@@ -77,6 +77,10 @@ Berkeley Omnium Volunteer Team`;
     return (volunteer?.waivers || []).some((waiver) => (waiver.waiver_version ?? 0) >= waiverVersion);
   }
 
+  function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
   function fillWaiverReminderTemplate() {
     recipientType = 'waiver_unsigned';
     subject = WAIVER_REMINDER_SUBJECT;
@@ -101,7 +105,12 @@ Berkeley Omnium Volunteer Team`;
     sending = true;
 
     try {
-      const sendPromises = recipientsToSend.map(async (volunteer) => {
+      const SEND_DELAY_MS = 300;
+      const successes = [];
+      const failures = [];
+
+      for (let i = 0; i < recipientsToSend.length; i++) {
+        const volunteer = recipientsToSend[i];
         const name = [volunteer.first_name, volunteer.last_name].filter(Boolean).join(' ').trim() || 'there';
         const bodyHtml = body
           .replace(/\{volunteer_name\}/g, name)
@@ -116,28 +125,29 @@ Berkeley Omnium Volunteer Team`;
             Sent via Berkeley Omnium Volunteer Hub
           </p>
         `;
-        const { data, error: invokeError } = await supabase.functions.invoke('send-email', {
-          body: { to: volunteer.email, subject, html }
-        });
+        try {
+          const { data, error: invokeError } = await supabase.functions.invoke('send-email', {
+            body: { to: volunteer.email, subject, html }
+          });
 
-        if (invokeError) {
-          throw new Error(`${volunteer.email}: ${invokeError.message || 'Failed to invoke send-email'}`);
+          if (invokeError) {
+            throw new Error(`${volunteer.email}: ${invokeError.message || 'Failed to invoke send-email'}`);
+          }
+
+          if (data?.error) {
+            const details = data.details ? ` (${data.details})` : '';
+            throw new Error(`${volunteer.email}: ${data.error}${details}`);
+          }
+
+          successes.push(volunteer.email);
+        } catch (sendError) {
+          failures.push(sendError?.message || `${volunteer.email}: Unknown email send failure`);
         }
 
-        if (data?.error) {
-          const details = data.details ? ` (${data.details})` : '';
-          throw new Error(`${volunteer.email}: ${data.error}${details}`);
+        if (i < recipientsToSend.length - 1) {
+          await sleep(SEND_DELAY_MS);
         }
-
-        return { email: volunteer.email, data };
-      });
-
-      const results = await Promise.allSettled(sendPromises);
-      const failures = results
-        .filter((result) => result.status === 'rejected')
-        .map((result) => result.reason?.message || 'Unknown email send failure');
-
-      const successes = results.filter((result) => result.status === 'fulfilled').length;
+      }
 
       if (failures.length > 0) {
         const summary = failures.slice(0, 3).join('; ');
@@ -146,7 +156,7 @@ Berkeley Omnium Volunteer Team`;
         );
       }
 
-      success = `Email sent to ${successes} recipient${successes === 1 ? '' : 's'}.`;
+      success = `Email sent to ${successes.length} recipient${successes.length === 1 ? '' : 's'}.`;
 
       subject = '';
       body = '';
