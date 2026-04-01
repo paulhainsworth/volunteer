@@ -1,5 +1,6 @@
 import { writable } from 'svelte/store';
 import { supabase } from '../supabaseClient';
+import { withSupabaseReadTimeout } from '../utils/withTimeout';
 
 function createVolunteersStore() {
   const { subscribe, set, update } = writable([]);
@@ -8,29 +9,32 @@ function createVolunteersStore() {
     subscribe,
     
     fetchVolunteers: async () => {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select(`
-          *,
-          signups:signups!volunteer_id(
-            id,
-            role:volunteer_roles!role_id(
+      const { data, error } = await withSupabaseReadTimeout(
+        () => supabase
+          .from('profiles')
+          .select(`
+            *,
+            signups:signups!volunteer_id(
               id,
-              name,
-              event_date,
-              start_time,
-              end_time
+              role:volunteer_roles!role_id(
+                id,
+                name,
+                event_date,
+                start_time,
+                end_time
+              ),
+              status,
+              signed_up_at
             ),
-            status,
-            signed_up_at
-          ),
-          waivers:waivers(
-            id,
-            agreed_at,
-            waiver_version
-          )
-        `)
-        .order('last_name', { ascending: true });
+            waivers:waivers(
+              id,
+              agreed_at,
+              waiver_version
+            )
+          `)
+          .order('last_name', { ascending: true }),
+        'volunteers.fetchVolunteers'
+      );
 
       if (error) throw error;
 
