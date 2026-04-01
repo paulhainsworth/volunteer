@@ -191,7 +191,7 @@ function buildEmailHtml(metrics: SummaryMetrics, roles: OpenCriticalRole[]) {
 function buildSlackPayload(metrics: SummaryMetrics, roles: OpenCriticalRole[]) {
   const summaryDateLabel = formatEventDate(metrics.summary_date)
   const roleLines = roles.length
-    ? roles.map((role) => `• *${role.name}* (${formatEventDate(role.event_date)}): ${role.open_spots} of ${role.positions_total} spots still open`)
+    ? roles.map((role) => `• *${role.name}* (${formatEventDate(role.event_date)}): ${role.open_spots} critical spots still open out of ${role.critical_positions_required} required`)
     : ['• All critical roles are currently filled']
 
   return {
