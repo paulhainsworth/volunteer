@@ -76,6 +76,31 @@
     }
   ];
 
+  /** NICA table: these roles count as more than one spot toward the 10-spot beneficiary goal */
+  const NICA_WEIGHTED_SPOT_ROLES = new Set([
+    'BSC Medic - Afternoon Shift',
+    'BSC Medic - Morning Shift'
+  ]);
+  const NICA_WEIGHTED_SPOT_VALUE = 2.5;
+
+  function nicaSpotWeightForSignup(signup) {
+    const roleName = signup?.role?.name || '';
+    if (NICA_WEIGHTED_SPOT_ROLES.has(roleName)) return NICA_WEIGHTED_SPOT_VALUE;
+    return 1;
+  }
+
+  function nicaVolunteerSpots(volunteer) {
+    const signups = volunteer.signups || [];
+    return signups.reduce((sum, signup) => sum + nicaSpotWeightForSignup(signup), 0);
+  }
+
+  function formatNicaNumber(num) {
+    const x = Number(num);
+    if (!Number.isFinite(x)) return '0';
+    if (Math.abs(x - Math.round(x)) < 1e-9) return String(Math.round(x));
+    return x.toFixed(1);
+  }
+
   onMount(async () => {
     if (!$auth.isAdmin) {
       push('/volunteer');
@@ -165,13 +190,13 @@
     );
     const volunteerSpots = $volunteers
       .filter((volunteer) => matchingAffiliationIds.has(volunteer.team_club_affiliation_id || ''))
-      .reduce((sum, volunteer) => sum + (volunteer.totalSignups || 0), 0);
+      .reduce((sum, volunteer) => sum + nicaVolunteerSpots(volunteer), 0);
     const remainingSpots = Math.max(10 - volunteerSpots, 0);
 
     return {
       beneficiary: beneficiary.label,
       volunteerSpots,
-      remainingLabel: remainingSpots === 0 ? 'Complete 🎉' : remainingSpots
+      remainingLabel: remainingSpots === 0 ? 'Complete 🎉' : formatNicaNumber(remainingSpots)
     };
   });
 
@@ -187,7 +212,10 @@
   function getNicaSummaryPlainText() {
     return [
       'Beneficiary\tVolunteer Spots\tRemaining',
-      ...nicaSummaryRows.map((row) => `${row.beneficiary}\t${row.volunteerSpots}\t${row.remainingLabel}`)
+      ...nicaSummaryRows.map(
+        (row) =>
+          `${row.beneficiary}\t${formatNicaNumber(row.volunteerSpots)}\t${row.remainingLabel}`
+      )
     ].join('\n');
   }
 
@@ -197,7 +225,7 @@
         (row) => `
           <tr>
             <td style="border:1px solid #d0d7de;padding:8px 10px;">${escapeHtml(row.beneficiary)}</td>
-            <td style="border:1px solid #d0d7de;padding:8px 10px;text-align:left;">${escapeHtml(row.volunteerSpots)}</td>
+            <td style="border:1px solid #d0d7de;padding:8px 10px;text-align:left;">${escapeHtml(formatNicaNumber(row.volunteerSpots))}</td>
             <td style="border:1px solid #d0d7de;padding:8px 10px;text-align:left;">${escapeHtml(row.remainingLabel)}</td>
           </tr>
         `
@@ -887,7 +915,7 @@
             {#each nicaSummaryRows as row (row.beneficiary)}
               <tr>
                 <td>{row.beneficiary}</td>
-                <td>{row.volunteerSpots}</td>
+                <td>{formatNicaNumber(row.volunteerSpots)}</td>
                 <td>{row.remainingLabel}</td>
               </tr>
             {/each}
