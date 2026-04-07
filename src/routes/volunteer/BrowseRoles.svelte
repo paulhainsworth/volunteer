@@ -267,13 +267,6 @@
     expandedDomains = newSet;
   }
 
-  // Initialize domains as closed by default (only once)
-  $: if (groupedDomains && groupedDomains.length > 0 && !domainsInitialized) {
-    // Start with all domains closed (empty set)
-    expandedDomains = new Set();
-    domainsInitialized = true;
-  }
-
   $: isProspectiveVolunteer = !$auth.user;
 
   $: filteredRoles = $roles
@@ -401,6 +394,47 @@
         return a.name.localeCompare(b.name);
       });
   })();
+
+  const TOP_CRITICAL_SPOTLIGHT = 10;
+
+  /** Unauthenticated hub: surface roles that still need critical coverage first */
+  $: topCriticalRoles = isProspectiveVolunteer
+    ? [...filteredRoles]
+        .filter(
+          (role) => getCriticalOpenSpots(role) > 0 && getRemainingSpots(role) > 0
+        )
+        .sort((a, b) => {
+          const c = getCriticalOpenSpots(b) - getCriticalOpenSpots(a);
+          if (c !== 0) return c;
+          const ta = parseEventDate(a.event_date)?.getTime() ?? 0;
+          const tb = parseEventDate(b.event_date)?.getTime() ?? 0;
+          if (ta !== tb) return ta - tb;
+          return (a.name || '').localeCompare(b.name || '');
+        })
+        .slice(0, TOP_CRITICAL_SPOTLIGHT)
+    : [];
+
+  $: topCriticalRoleIds = new Set(topCriticalRoles.map((r) => r.id));
+
+  /** Avoid duplicating spotlight roles in the expandable domain sections */
+  $: groupedDomainsDisplay = (() => {
+    if (!isProspectiveVolunteer || topCriticalRoleIds.size === 0) {
+      return groupedDomains;
+    }
+    return groupedDomains
+      .map((d) => {
+        const roles = d.roles.filter((r) => !topCriticalRoleIds.has(r.id));
+        const openSpots = roles.reduce((sum, r) => sum + getRemainingSpots(r), 0);
+        return { ...d, roles, openSpots };
+      })
+      .filter((d) => d.roles.length > 0);
+  })();
+
+  // Initialize domains as closed by default (only once; after groupedDomainsDisplay exists)
+  $: if (groupedDomainsDisplay && groupedDomainsDisplay.length > 0 && !domainsInitialized) {
+    expandedDomains = new Set();
+    domainsInitialized = true;
+  }
 
   function handleSignup(roleOrId) {
     const role = typeof roleOrId === 'object' ? roleOrId : $roles.find((r) => r.id === roleOrId);
@@ -667,18 +701,109 @@
     <div class="loading">Loading opportunities...</div>
   {:else if error}
     <div class="error">{error}</div>
-  {:else if groupedDomains.length === 0}
+  {:else if groupedDomainsDisplay.length === 0 && topCriticalRoles.length === 0}
     <div class="empty">
       <p>No volunteer opportunities found matching your filters.</p>
     </div>
   {:else}
-    {@const totalOpenSpots = groupedDomains.reduce((sum, d) => sum + d.openSpots, 0)}
+    {@const totalOpenSpots = filteredRoles.reduce((sum, r) => sum + getRemainingSpots(r), 0)}
     <div class="opportunities-summary">
       <span>{totalOpenSpots} total open spot{totalOpenSpots === 1 ? '' : 's'}</span>
     </div>
 
+    {#if isProspectiveVolunteer && topCriticalRoles.length > 0}
+      <section class="critical-spotlight" aria-label="Critical volunteer spots still needed">
+        <p class="critical-spotlight-intro">
+          Thanks for volunteering at 2026 Berkeley Omnium! In our final days before race weekend,
+          please consider choosing one of the remaining critical spots. We can't host the races
+          without these spots filled. Thank you! — 2026 Berkeley Omnium Team
+        </p>
+        <div class="roles-grid critical-spotlight-grid">
+          {#each topCriticalRoles as role (role.id)}
+            {@const status = getFillStatus(role)}
+            {@const duration = calculateDuration(role.start_time, role.end_time)}
+            {@const isFull = role.positions_filled >= role.positions_total}
+            {@const criticalOpenSpots = getCriticalOpenSpots(role)}
+
+            <div class="role-card compact">
+              <div class="role-main">
+                <div class="role-title-row">
+                  <h3>
+                    {#if criticalOpenSpots > 0}
+                      <span class="critical-icon" title={`Critical need: ${criticalOpenSpots} open`} aria-label="Critical role">⚠</span>
+                    {/if}
+                    {role.name}
+                  </h3>
+                  <span class="status-badge {status.class}">{status.label}</span>
+                </div>
+
+                <div class="role-details-compact">
+                  <div class="detail-inline">
+                    <span class="icon">📅</span>
+                    <span>{formatDateCompact(role.event_date)}</span>
+                  </div>
+
+                  <div class="detail-inline">
+                    <span class="icon">🕐</span>
+                    <span>{formatTimeRange(role)}{#if duration != null} (~{duration}h){/if}</span>
+                  </div>
+
+                  <div class="detail-inline">
+                    <span class="icon">⏱</span>
+                    <span>Est. {formatEstimateDuration(role.estimate_duration_hours)}</span>
+                  </div>
+
+                  {#if role.location}
+                    <div class="detail-inline">
+                      <span class="icon">📍</span>
+                      <span>{role.location}</span>
+                    </div>
+                  {/if}
+
+                  <div class="detail-inline">
+                    <span class="icon">👥</span>
+                    <span>{role.positions_filled} / {role.positions_total} spots filled</span>
+                  </div>
+
+                  {#if criticalOpenSpots > 0}
+                    <div class="detail-inline critical-detail">
+                      <span class="icon">⚠</span>
+                      <span>{criticalOpenSpots} critical spot{criticalOpenSpots === 1 ? '' : 's'} still needed</span>
+                    </div>
+                  {/if}
+                </div>
+              </div>
+
+              <div class="role-actions-compact">
+                <button
+                  class="btn btn-primary btn-compact"
+                  on:click={() => handleSignup(role)}
+                  disabled={isFull}
+                >
+                  {isFull ? 'Full' : 'Sign Up'}
+                </button>
+
+                <button
+                  class="btn btn-secondary btn-compact"
+                  on:click={() => showMoreInfo(role)}
+                  title="View full details"
+                >
+                  Info
+                </button>
+              </div>
+            </div>
+          {/each}
+        </div>
+      </section>
+    {/if}
+
+    {#if isProspectiveVolunteer && topCriticalRoles.length > 0 && groupedDomainsDisplay.length > 0}
+      <h2 class="domains-section-heading">Browse by team</h2>
+      <p class="domains-section-lead">Expand a team to see more roles and sign up.</p>
+    {/if}
+
     <div class="domains-list">
-      {#each groupedDomains as domain (domain.id)}
+      {#each groupedDomainsDisplay as domain (domain.id)}
         {@const isExpanded = expandedDomains.has(domain.id)}
         <section class="domain-section">
           <div 
@@ -1103,6 +1228,38 @@
     margin-bottom: 1rem;
     color: #6c757d;
     font-weight: 500;
+  }
+
+  .critical-spotlight {
+    margin-bottom: 2.5rem;
+  }
+
+  .critical-spotlight-intro {
+    margin: 0 0 1.25rem 0;
+    padding: 1.25rem 1.35rem;
+    background: linear-gradient(135deg, #f0f7ff 0%, #e8f4fc 100%);
+    border: 1px solid #c5ddf5;
+    border-radius: 10px;
+    color: #1a3a52;
+    font-size: 1.05rem;
+    line-height: 1.55;
+  }
+
+  .critical-spotlight-grid {
+    margin-top: 0;
+  }
+
+  .domains-section-heading {
+    margin: 0 0 0.35rem 0;
+    font-size: 1.25rem;
+    color: #1a1a1a;
+    font-weight: 600;
+  }
+
+  .domains-section-lead {
+    margin: 0 0 1rem 0;
+    color: #6c757d;
+    font-size: 0.95rem;
   }
 
   .roles-grid {
