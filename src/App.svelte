@@ -55,33 +55,37 @@
     '/board': Board
   };
 
-  onMount(async () => {
+  onMount(() => {
     const hash = typeof window !== 'undefined' ? window.location.hash : '';
     const hasAuthParams = hash && (hash.includes('access_token=') || hash.includes('type=magiclink'));
-    await auth.initialize();
-    if (hasAuthParams) {
-      // Supabase parses auth tokens from the URL asynchronously. Wait for session
-      // to be recovered before we clear the hash, or the tokens are lost.
-      const { supabase } = await import('./lib/supabaseClient');
-      for (let i = 0; i < 20; i++) {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-          const { replace } = await import('svelte-spa-router');
-          const { profile } = await auth.refreshSession();
-          const needsOnboarding = !profile?.emergency_contact_name;
-          const fromMagicLink = hash.includes('type=magiclink');
-          if (needsOnboarding) {
-            await replace('/onboarding');
-          } else if (fromMagicLink) {
-            await replace('/my-signups');
-          } else {
-            await replace('/');
+    // Run auth init without blocking mount so the login form can submit while bootstrap runs;
+    // a timed-out getSession race previously left Supabase hung and froze magic-link sends.
+    void (async () => {
+      await auth.initialize();
+      if (hasAuthParams) {
+        // Supabase parses auth tokens from the URL asynchronously. Wait for session
+        // to be recovered before we clear the hash, or the tokens are lost.
+        const { supabase } = await import('./lib/supabaseClient');
+        for (let i = 0; i < 20; i++) {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session) {
+            const { replace } = await import('svelte-spa-router');
+            const { profile } = await auth.refreshSession();
+            const needsOnboarding = !profile?.emergency_contact_name;
+            const fromMagicLink = hash.includes('type=magiclink');
+            if (needsOnboarding) {
+              await replace('/onboarding');
+            } else if (fromMagicLink) {
+              await replace('/my-signups');
+            } else {
+              await replace('/');
+            }
+            break;
           }
-          break;
+          await new Promise((r) => setTimeout(r, 100));
         }
-        await new Promise((r) => setTimeout(r, 100));
       }
-    }
+    })();
   });
 </script>
 
