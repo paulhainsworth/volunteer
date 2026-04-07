@@ -2,11 +2,12 @@ import { writable } from 'svelte/store';
 import { supabase } from '../supabaseClient';
 import { TimeoutError, withSupabaseReadTimeout, withTimeout } from '../utils/withTimeout';
 
-const AUTH_BOOTSTRAP_TIMEOUT_MS = 4000;
-const PROFILE_READ_TIMEOUT_MS = 2500;
+/** Allow cold/slow Supabase + profile retries without aborting bootstrap */
+const AUTH_BOOTSTRAP_TIMEOUT_MS = 60000;
+const PROFILE_READ_TIMEOUT_MS = 12000;
 
 function createAuthStore() {
-  const { subscribe, set } = writable({
+  const { subscribe, set, update } = writable({
     user: null,
     profile: null,
     loading: true,
@@ -21,23 +22,36 @@ function createAuthStore() {
       const maxRetries = 5;
 
       while (!profile && retries < maxRetries) {
-        const { data, error } = await withSupabaseReadTimeout(
-          () => supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', session.user.id)
-            .maybeSingle(),
-          'auth.applySession.profile',
-          PROFILE_READ_TIMEOUT_MS
-        );
+        try {
+          const { data, error } = await withSupabaseReadTimeout(
+            () => supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', session.user.id)
+              .maybeSingle(),
+            'auth.applySession.profile',
+            PROFILE_READ_TIMEOUT_MS
+          );
 
-        if (data) {
-          profile = data;
-        } else if (error) {
-          throw error;
-        } else {
-          retries++;
-          await new Promise(resolve => setTimeout(resolve, 500));
+          if (data) {
+            profile = data;
+          } else if (error) {
+            throw error;
+          } else {
+            retries++;
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+        } catch (e) {
+          if (e instanceof TimeoutError && retries < maxRetries - 1) {
+            retries++;
+            await new Promise(resolve => setTimeout(resolve, 500));
+            continue;
+          }
+          if (e instanceof TimeoutError) {
+            console.warn('Profile fetch timed out; continuing with session only until retry succeeds.');
+            break;
+          }
+          throw e;
         }
       }
 
@@ -77,7 +91,14 @@ function createAuthStore() {
             await applySession(session);
           } catch (error) {
             console.error('Auth state change handling failed:', error);
-            setLoggedOutState();
+            if (session?.user) {
+              console.warn('Session present after auth handler error; not clearing auth state.');
+              void applySession(session).catch((err) =>
+                console.error('Auth state retry after error failed:', err)
+              );
+            } else {
+              setLoggedOutState();
+            }
           }
         });
         authSubscriptionInitialized = true;
@@ -85,7 +106,9 @@ function createAuthStore() {
 
       const bootstrapPromise = loadCurrentSession().catch((error) => {
         console.error('Auth bootstrap failed:', error);
-        setLoggedOutState();
+        if (!(error instanceof TimeoutError)) {
+          setLoggedOutState();
+        }
         throw error;
       });
 
@@ -96,8 +119,13 @@ function createAuthStore() {
         });
       } catch (error) {
         if (error instanceof TimeoutError) {
-          console.warn('Auth bootstrap timed out; rendering app without blocking on auth.');
-          setLoggedOutState();
+          console.warn(
+            'Auth bootstrap timed out; finishing load in background without clearing session.'
+          );
+          update((state) => ({ ...state, loading: false }));
+          void loadCurrentSession()
+            .then(() => {})
+            .catch((err) => console.error('Auth bootstrap background retry failed:', err));
           return { user: null, profile: null, timedOut: true };
         }
 
