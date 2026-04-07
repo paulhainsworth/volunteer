@@ -2,8 +2,9 @@ import { writable } from 'svelte/store';
 import { supabase } from '../supabaseClient';
 import { TimeoutError, withSupabaseReadTimeout, withTimeout } from '../utils/withTimeout';
 
-/** Allow cold/slow Supabase + profile retries without aborting bootstrap */
-const AUTH_BOOTSTRAP_TIMEOUT_MS = 60000;
+/** Whole bootstrap (session + profile retries) — outer safety net only */
+const AUTH_BOOTSTRAP_TIMEOUT_MS = 120000;
+/** Profile row fetch only — keep bounded; session read is not wrapped (see loadCurrentSession) */
 const PROFILE_READ_TIMEOUT_MS = 12000;
 
 function createAuthStore() {
@@ -69,12 +70,12 @@ function createAuthStore() {
   };
 
   const loadCurrentSession = async () => {
-    const { data: { session } } = await withSupabaseReadTimeout(
-      () => supabase.auth.getSession(),
-      'auth.loadCurrentSession',
-      PROFILE_READ_TIMEOUT_MS
-    );
-    return applySession(session);
+    // Do not wrap getSession() in withTimeout. If the race rejects early, the underlying
+    // Supabase promise keeps running and can block later auth calls (e.g. magic-link invoke),
+    // leaving the login button stuck on "Sending link...".
+    const { data, error } = await supabase.auth.getSession();
+    if (error) throw error;
+    return applySession(data.session);
   };
 
   const setLoggedOutState = () => {
