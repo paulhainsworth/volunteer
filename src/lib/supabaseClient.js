@@ -13,7 +13,8 @@ const storageKey = (() => {
 })();
 
 if (typeof window !== 'undefined' && storageKey) {
-  // Migrate any older tab-scoped sessions so admin auth survives reloads and tab changes.
+  // Older builds used sessionStorage for auth (tab-scoped magic links). Migrate into
+  // localStorage so admin sessions survive reloads and work across tabs.
   const keysToMigrate = Object.keys(window.sessionStorage).filter(
     (key) => key === storageKey || key.startsWith(`${storageKey}-`)
   );

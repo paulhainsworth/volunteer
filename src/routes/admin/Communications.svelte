@@ -69,42 +69,73 @@ Berkeley Omnium Volunteer Team`;
     }
   }
 
-  function getUnsignedVolunteers() {
-    if (currentWaiverVersion == null) return [];
-    return $volunteers.filter((v) => {
-      const waivers = v.waivers || [];
-      const hasSignedCurrent = waivers.some((w) => (w.waiver_version ?? 0) >= currentWaiverVersion);
-      return !hasSignedCurrent;
-    });
+  function hasConfirmedSignup(volunteer) {
+    return (volunteer?.signups || []).some((signup) => signup.status === 'confirmed');
   }
 
-  function getRecipients() {
-    if (recipientType === 'all') {
-      return $volunteers;
-    }
-    if (recipientType === 'waiver_unsigned') {
-      return getUnsignedVolunteers();
-    }
-    if (recipientType === 'role' && selectedRoleId) {
-      const role = $roles.find((r) => r.id === selectedRoleId);
-      const signups = role?.signups?.filter((s) => s.status === 'confirmed') || [];
-      return signups.map((s) => s.volunteer).filter(Boolean);
-    }
-    if (recipientType === 'date' && selectedDate) {
-      const dateRoles = $roles.filter((r) => r.event_date === selectedDate);
-      const byId = new Map();
-      dateRoles.forEach((role) => {
-        role.signups?.forEach((signup) => {
-          if (signup.volunteer) byId.set(signup.volunteer.id, signup.volunteer);
-        });
+  function hasSignedCurrentWaiver(volunteer, waiverVersion) {
+    return (volunteer?.waivers || []).some((waiver) => (waiver.waiver_version ?? 0) >= waiverVersion);
+  }
+
+  function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  function escapeHtml(value) {
+    return String(value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function formatEmailBodyHtml(text) {
+    return text
+      .split('\n')
+      .map((line) => {
+        const escaped = escapeHtml(line || ' ');
+        const linked = escaped.replace(
+          /(https?:\/\/[^\s<]+)/g,
+          '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>'
+        );
+        return `<p>${linked || ' '}</p>`;
+      })
+      .join('');
+  }
+
+  function isRetryableSendError(invokeError, data) {
+    const message = [invokeError?.message, data?.error, data?.details]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+
+    return message.includes('429') || message.includes('rate limit');
+  }
+
+  async function sendEmailWithRetry(payload, recipientEmail) {
+    const MAX_ATTEMPTS = 4;
+    const BASE_RETRY_DELAY_MS = 1500;
+
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      const { data, error: invokeError } = await supabase.functions.invoke('send-email', {
+        body: payload
       });
-      return Array.from(byId.values());
-    }
-    return [];
-  }
 
-  function getRecipientCount() {
-    return getRecipients().length;
+      if (!invokeError && !data?.error) {
+        return data;
+      }
+
+      const retryable = isRetryableSendError(invokeError, data);
+      const details = data?.details ? ` (${data.details})` : '';
+      const message = invokeError?.message || data?.error || 'Failed to invoke send-email';
+
+      if (!retryable || attempt === MAX_ATTEMPTS) {
+        throw new Error(`${recipientEmail}: ${message}${details}`);
+      }
+
+      await sleep(BASE_RETRY_DELAY_MS * attempt);
+    }
   }
 
   function fillWaiverReminderTemplate() {
@@ -122,8 +153,8 @@ Berkeley Omnium Volunteer Team`;
       return;
     }
 
-    const recipients = getRecipients();
-    if (recipients.length === 0) {
+    const recipientsToSend = recipients;
+    if (recipientsToSend.length === 0) {
       error = 'No recipients selected.';
       return;
     }
@@ -131,13 +162,14 @@ Berkeley Omnium Volunteer Team`;
     sending = true;
 
     try {
-      const sendPromises = recipients.map((volunteer) => {
+      const SEND_DELAY_MS = 300;
+      const successes = [];
+      const failures = [];
+
+      for (let i = 0; i < recipientsToSend.length; i++) {
+        const volunteer = recipientsToSend[i];
         const name = [volunteer.first_name, volunteer.last_name].filter(Boolean).join(' ').trim() || 'there';
-        const bodyHtml = body
-          .replace(/\{volunteer_name\}/g, name)
-          .split('\n')
-          .map((line) => `<p>${line || ' '}</p>`)
-          .join('');
+        const bodyHtml = formatEmailBodyHtml(body.replace(/\{volunteer_name\}/g, name));
         const html = `
           <h2>${subject}</h2>
           ${bodyHtml}
@@ -146,12 +178,26 @@ Berkeley Omnium Volunteer Team`;
             Sent via Berkeley Omnium Volunteer Hub
           </p>
         `;
-        return supabase.functions.invoke('send-email', {
-          body: { to: volunteer.email, subject, html }
-        });
-      });
-      await Promise.all(sendPromises);
-      success = `Email sent to ${recipients.length} recipient${recipients.length === 1 ? '' : 's'}.`;
+        try {
+          await sendEmailWithRetry({ to: volunteer.email, subject, html }, volunteer.email);
+          successes.push(volunteer.email);
+        } catch (sendError) {
+          failures.push(sendError?.message || `${volunteer.email}: Unknown email send failure`);
+        }
+
+        if (i < recipientsToSend.length - 1) {
+          await sleep(SEND_DELAY_MS);
+        }
+      }
+
+      if (failures.length > 0) {
+        const summary = failures.slice(0, 3).join('; ');
+        throw new Error(
+          `${failures.length} of ${recipientsToSend.length} emails failed${summary ? `: ${summary}` : ''}`
+        );
+      }
+
+      success = `Email sent to ${successes.length} recipient${successes.length === 1 ? '' : 's'}.`;
 
       subject = '';
       body = '';
@@ -165,8 +211,37 @@ Berkeley Omnium Volunteer Team`;
     }
   }
 
-  $: recipientCount = getRecipientCount();
-  $: unsignedVolunteers = getUnsignedVolunteers();
+  $: volunteersWithConfirmedSignups = $volunteers.filter((volunteer) => hasConfirmedSignup(volunteer));
+  $: unsignedVolunteers = currentWaiverVersion == null
+    ? []
+    : volunteersWithConfirmedSignups.filter((volunteer) => !hasSignedCurrentWaiver(volunteer, currentWaiverVersion));
+  $: recipients = (() => {
+    if (recipientType === 'all') {
+      return $volunteers;
+    }
+    if (recipientType === 'waiver_unsigned') {
+      return unsignedVolunteers;
+    }
+    if (recipientType === 'role' && selectedRoleId) {
+      const role = $roles.find((r) => r.id === selectedRoleId);
+      const signups = role?.signups?.filter((s) => s.status === 'confirmed') || [];
+      return signups.map((s) => s.volunteer).filter(Boolean);
+    }
+    if (recipientType === 'date' && selectedDate) {
+      const dateRoles = $roles.filter((r) => r.event_date === selectedDate);
+      const byId = new Map();
+      dateRoles.forEach((role) => {
+        role.signups?.forEach((signup) => {
+          if (signup.status === 'confirmed' && signup.volunteer) {
+            byId.set(signup.volunteer.id, signup.volunteer);
+          }
+        });
+      });
+      return Array.from(byId.values());
+    }
+    return [];
+  })();
+  $: recipientCount = recipients.length;
   $: eventDates = [...new Set($roles.map((r) => r.event_date))].sort();
 </script>
 
@@ -251,7 +326,7 @@ Berkeley Omnium Volunteer Team`;
               bind:group={recipientType}
               value="waiver_unsigned"
             />
-            Volunteers who haven't signed the waiver ({unsignedVolunteers.length})
+            Volunteers with signups who haven't signed the current waiver ({unsignedVolunteers.length})
           </label>
           {#if recipientType === 'waiver_unsigned'}
             <button type="button" class="btn btn-secondary btn-template" on:click={fillWaiverReminderTemplate}>
