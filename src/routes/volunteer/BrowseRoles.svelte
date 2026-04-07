@@ -269,6 +269,8 @@
 
   $: isProspectiveVolunteer = !$auth.user;
 
+  $: isProspectiveVolunteer = !$auth.user;
+
   $: filteredRoles = $roles
     .filter(role => {
       // Search filter

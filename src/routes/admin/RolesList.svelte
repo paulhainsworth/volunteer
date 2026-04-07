@@ -103,7 +103,7 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
       showForm = true;
       loading = false;
       try {
-        await domains.fetchDomains();
+        await Promise.all([domains.fetchDomains(), affiliations.fetchAffiliations()]);
       } catch (err) {
         console.error('Failed to load domains:', err);
       }
@@ -111,7 +111,8 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
       try {
         const [roleData] = await Promise.all([
           roles.fetchRole(params.id),
-          domains.fetchDomains()
+          domains.fetchDomains(),
+          affiliations.fetchAffiliations()
         ]);
         editingRole = roleData;
         showForm = true;

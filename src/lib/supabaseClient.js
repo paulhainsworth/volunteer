@@ -13,8 +13,8 @@ const storageKey = (() => {
 })();
 
 if (typeof window !== 'undefined' && storageKey) {
-  // Older builds stored auth in sessionStorage, which made magic-link logins tab-specific.
-  // Move any existing session into localStorage so preview/admin flows work across tabs.
+  // Older builds used sessionStorage for auth (tab-scoped magic links). Migrate into
+  // localStorage so admin sessions survive reloads and work across tabs.
   const keysToMigrate = Object.keys(window.sessionStorage).filter(
     (key) => key === storageKey || key.startsWith(`${storageKey}-`)
   );
