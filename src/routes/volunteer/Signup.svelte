@@ -6,7 +6,13 @@
   import { auth } from '../../lib/stores/auth';
   import { push } from 'svelte-spa-router';
   import { formatTimeRange, calculateDuration, formatEventDateInPacific } from '../../lib/utils/timeDisplay';
-  import { sendRoleConfirmationEmail } from '../../lib/volunteerSignup';
+  import {
+    createVolunteerAndSignup,
+    sendRoleConfirmationEmail,
+    sendWelcomeEmail,
+    sendParentGuardianConfirmationEmail
+  } from '../../lib/volunteerSignup';
+  import { affiliations } from '../../lib/stores/affiliations';
 
   export let params = {};
 
@@ -24,6 +30,27 @@
   let hasLoadedUserData = false;
   let loadingUserData = false;
   let alreadySignedUp = false;
+
+  // Guest signup (same flow as Volunteer Hub “Sign Up” → PII modal)
+  let guestForm = {
+    first_name: '',
+    last_name: '',
+    email: '',
+    phone: '',
+    emergency_contact_name: '',
+    emergency_contact_phone: '',
+    team_club_affiliation_id: ''
+  };
+  let guestSubmitting = false;
+  let guestError = '';
+  let guestWaiverText = '';
+  let guestWaiverLoading = false;
+  let guestWaiverAgreed = false;
+  let guestIsMinor = false;
+  let guestParentGuardianName = '';
+  let guestParentGuardianEmail = '';
+  let guestParentGuardianPhone = '';
+  let guestParentSignatureName = '';
 
   // Minor volunteer / parent consent (Option 1 prototype – UI only, no backend)
   let isMinor = false;
@@ -76,8 +103,18 @@
     try {
       role = await roles.fetchRole(roleId);
 
-      // Don't redirect unauthenticated users - show role details + login prompt.
-      // (Redirecting to /volunteer?signup=... opened the PII modal for users who already signed up.)
+      if (!$auth.user) {
+        affiliations.fetchAffiliations().catch(() => {});
+        guestWaiverLoading = true;
+        try {
+          const d = await waiverStore.fetchCurrentWaiver();
+          guestWaiverText = d.waiver_text ?? d.text ?? '';
+        } catch {
+          guestWaiverText = '';
+        } finally {
+          guestWaiverLoading = false;
+        }
+      }
 
       if (isAuthenticated && $auth.user) {
         await loadAuthenticatedData($auth.user.id);
@@ -114,6 +151,95 @@
     waiverText = '';
     waiverAgreed = false;
     signatureName = '';
+  }
+
+  async function submitGuestSignup() {
+    const f = guestForm;
+    if (!f.first_name?.trim() || !f.last_name?.trim() || !f.email?.trim()) {
+      guestError = 'First name, last name, and email are required.';
+      return;
+    }
+    if (!f.team_club_affiliation_id?.trim()) {
+      guestError = 'Please select a team or club affiliation.';
+      return;
+    }
+    if (!role) {
+      guestError = 'Role could not be loaded.';
+      return;
+    }
+    if (!guestWaiverAgreed) {
+      guestError = 'You must agree to the liability waiver to complete signup.';
+      return;
+    }
+    if (guestIsMinor) {
+      if (!guestParentGuardianName?.trim()) {
+        guestError = 'Parent/guardian full name is required for volunteers under 18.';
+        return;
+      }
+      if (!guestParentGuardianEmail?.trim()) {
+        guestError = 'Parent/guardian email is required for volunteers under 18.';
+        return;
+      }
+      if (!guestParentSignatureName?.trim()) {
+        guestError = 'Parent/guardian must sign (enter their full name) for volunteers under 18.';
+        return;
+      }
+    }
+
+    guestSubmitting = true;
+    guestError = '';
+
+    try {
+      const result = await createVolunteerAndSignup(
+        {
+          first_name: f.first_name.trim(),
+          last_name: f.last_name.trim(),
+          email: f.email.trim(),
+          phone: f.phone?.trim() || null,
+          emergency_contact_name: f.emergency_contact_name?.trim() || null,
+          emergency_contact_phone: f.emergency_contact_phone?.trim() || null,
+          team_club_affiliation_id: f.team_club_affiliation_id?.trim() || null,
+          is_minor: guestIsMinor,
+          parent_guardian_name: guestIsMinor ? guestParentGuardianName?.trim() || null : null,
+          parent_guardian_email: guestIsMinor ? guestParentGuardianEmail?.trim() || null : null,
+          parent_guardian_phone: guestIsMinor ? guestParentGuardianPhone?.trim() || null : null,
+          parent_signature_name: guestIsMinor ? guestParentSignatureName?.trim() || null : null
+        },
+        roleId
+      );
+
+      sendRoleConfirmationEmail({
+        to: result.email,
+        first_name: result.first_name,
+        role,
+        roleId
+      }).catch((err) => console.error('Role confirmation email failed:', err));
+
+      sendWelcomeEmail({
+        to: result.email,
+        first_name: result.first_name
+      }).catch((err) => console.error('Welcome email failed:', err));
+
+      if (guestIsMinor && guestParentGuardianEmail?.trim()) {
+        sendParentGuardianConfirmationEmail({
+          to: guestParentGuardianEmail.trim(),
+          parent_guardian_name: guestParentGuardianName?.trim() || null,
+          volunteer_first_name: result.first_name,
+          volunteer_last_name: result.last_name,
+          role,
+          roleId
+        }).catch((err) => console.error('Parent/guardian confirmation email failed:', err));
+      }
+
+      success = true;
+      setTimeout(() => {
+        push('/my-signups');
+      }, 2000);
+    } catch (err) {
+      guestError = err.message || 'Signup failed. Please try again.';
+    } finally {
+      guestSubmitting = false;
+    }
   }
 
   async function handleSubmit() {
@@ -263,16 +389,117 @@
       </div>
 
       {#if !isAuthenticated}
-        <div class="login-prompt">
-          <h3>Ready to volunteer?</h3>
-          <p>Log in or create an account to claim this opportunity.</p>
-          <div class="login-actions">
-            <button class="btn btn-primary" on:click={() => push('/auth/login')}>
-              Log In to Sign Up
+        <div class="guest-signup">
+          <h3 class="guest-signup-title">Sign up for {role.name}</h3>
+          <p class="guest-signup-subtitle">Enter your information to complete your signup</p>
+
+          {#if guestError}
+            <div class="alert alert-error">{guestError}</div>
+          {/if}
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="guest-first">First Name *</label>
+              <input id="guest-first" type="text" bind:value={guestForm.first_name} placeholder="First name" disabled={guestSubmitting} />
+            </div>
+            <div class="form-group">
+              <label for="guest-last">Last Name *</label>
+              <input id="guest-last" type="text" bind:value={guestForm.last_name} placeholder="Last name" disabled={guestSubmitting} />
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="guest-email">Email Address *</label>
+            <input id="guest-email" type="email" bind:value={guestForm.email} placeholder="you@example.com" disabled={guestSubmitting} />
+          </div>
+          <div class="form-group">
+            <label for="guest-phone">Phone Number (optional)</label>
+            <input id="guest-phone" type="tel" bind:value={guestForm.phone} placeholder="(555) 123-4567" disabled={guestSubmitting} />
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="guest-emergency-name">Emergency Contact Name *</label>
+              <input id="guest-emergency-name" type="text" bind:value={guestForm.emergency_contact_name} placeholder="Full name" disabled={guestSubmitting} />
+            </div>
+            <div class="form-group">
+              <label for="guest-emergency-phone">Emergency Contact Phone *</label>
+              <input id="guest-emergency-phone" type="tel" bind:value={guestForm.emergency_contact_phone} placeholder="(555) 123-4567" disabled={guestSubmitting} />
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="guest-affiliation">Team / Club Affiliation *</label>
+            <select id="guest-affiliation" bind:value={guestForm.team_club_affiliation_id} disabled={guestSubmitting} required>
+              <option value="">-- Select team or club --</option>
+              {#each $affiliations as aff (aff.id)}
+                <option value={aff.id}>{aff.name}</option>
+              {/each}
+            </select>
+          </div>
+
+          <div class="guest-waiver-section">
+            <h4>Liability Waiver</h4>
+            {#if guestWaiverLoading}
+              <p class="waiver-loading">Loading waiver...</p>
+            {:else if guestWaiverText}
+              <div class="guest-waiver-text">{guestWaiverText}</div>
+              <div class="checkbox-group minor-toggle">
+                <input type="checkbox" id="guest-under-18" bind:checked={guestIsMinor} disabled={guestSubmitting} />
+                <label for="guest-under-18">I will be under 18 on the day of the event</label>
+              </div>
+              {#if guestIsMinor}
+                <div class="guest-parent-consent-section">
+                  <h4>Parent / Legal Guardian Consent</h4>
+                  <p class="parent-consent-intro">
+                    For volunteers under 18, a parent or legal guardian must sign the waiver on your behalf.
+                  </p>
+                  <div class="form-group">
+                    <label for="guest-parent-name">Parent/Guardian Full Name *</label>
+                    <input id="guest-parent-name" type="text" bind:value={guestParentGuardianName} placeholder="Full legal name" disabled={guestSubmitting} />
+                  </div>
+                  <div class="form-group">
+                    <label for="guest-parent-email">Parent/Guardian Email *</label>
+                    <input id="guest-parent-email" type="email" bind:value={guestParentGuardianEmail} placeholder="email@example.com" disabled={guestSubmitting} />
+                  </div>
+                  <div class="form-group">
+                    <label for="guest-parent-phone">Parent/Guardian Phone (optional)</label>
+                    <input id="guest-parent-phone" type="tel" bind:value={guestParentGuardianPhone} placeholder="(555) 123-4567" disabled={guestSubmitting} />
+                  </div>
+                  <p class="parent-attestation">
+                    I am the parent or legal guardian of <strong>{[guestForm.first_name, guestForm.last_name].filter(Boolean).join(' ') || 'the volunteer'}</strong> and I have read and agree to the waiver above on their behalf.
+                  </p>
+                  <div class="form-group">
+                    <label for="guest-parent-signature">Parent/Guardian Digital Signature (Full Name) *</label>
+                    <input id="guest-parent-signature" type="text" bind:value={guestParentSignatureName} placeholder="Parent/guardian full name" disabled={guestSubmitting} />
+                  </div>
+                </div>
+              {/if}
+              <div class="checkbox-group">
+                <input type="checkbox" id="guest-waiver-agree" bind:checked={guestWaiverAgreed} disabled={guestSubmitting} />
+                <label for="guest-waiver-agree">
+                  {#if guestIsMinor}
+                    I have read the waiver above and agree to it on behalf of {[guestForm.first_name, guestForm.last_name].filter(Boolean).join(' ') || 'the volunteer'}.
+                  {:else}
+                    I have read and agree to the waiver above
+                  {/if}
+                </label>
+              </div>
+            {:else}
+              <p class="waiver-error">Waiver could not be loaded. Please try again or contact support.</p>
+            {/if}
+          </div>
+
+          <div class="guest-form-actions">
+            <button
+              type="button"
+              class="btn btn-primary btn-guest-submit"
+              on:click={submitGuestSignup}
+              disabled={guestSubmitting || guestWaiverLoading || !guestWaiverText || !guestWaiverAgreed || (guestIsMinor && (!guestParentGuardianName?.trim() || !guestParentGuardianEmail?.trim() || !guestParentSignatureName?.trim()))}
+            >
+              {guestSubmitting ? 'Signing up...' : 'Complete Signup'}
             </button>
-            <button class="btn btn-outline" on:click={() => push('/auth/signup')}>
-              Create Account
-            </button>
+            <p class="guest-login-hint">
+              Already have an account?
+              <button type="button" class="link-button" on:click={() => push('/auth/login')}>Log in</button>
+            </p>
           </div>
         </div>
       {:else if alreadySignedUp}
@@ -611,12 +838,14 @@
 
   input[type="email"],
   input[type="tel"],
-  input[type="text"] {
+  input[type="text"],
+  select {
     width: 100%;
     padding: 0.75rem;
     border: 1px solid #ced4da;
     border-radius: 6px;
     font-size: 1rem;
+    background: white;
   }
 
   input:disabled {
@@ -719,44 +948,122 @@
     background: #f8f9fa;
   }
 
-  .btn-outline {
-    background: white;
-    color: #1f2937;
-    border: 1px solid #cbd5e1;
-    transition: background 0.2s, border-color 0.2s;
+  .guest-signup {
+    margin-top: 0.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid #dee2e6;
   }
 
-  .btn-outline:hover {
-    background: #f8fafc;
-    border-color: #94a3b8;
-  }
-
-  .login-prompt {
-    background: #f5f8ff;
-    border: 1px solid #cfe0ff;
-    border-radius: 12px;
-    padding: 2rem;
-    text-align: center;
-  }
-
-  .login-prompt h3 {
-    margin: 0 0 0.75rem 0;
+  .guest-signup-title {
+    margin: 0 0 0.35rem 0;
     color: #1a1a1a;
+    font-size: 1.25rem;
   }
 
-  .login-prompt p {
-    margin: 0 0 1.5rem 0;
-    color: #475569;
+  .guest-signup-subtitle {
+    margin: 0 0 1.25rem 0;
+    color: #6c757d;
+    font-size: 0.95rem;
   }
 
-  .login-actions {
+  .form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+
+  @media (max-width: 640px) {
+    .form-row {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .guest-waiver-section {
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid #dee2e6;
+  }
+
+  .guest-waiver-section h4 {
+    margin: 0 0 0.75rem 0;
+    font-size: 1rem;
+    color: #212529;
+  }
+
+  .guest-waiver-text {
+    max-height: 200px;
+    overflow-y: auto;
+    padding: 0.75rem;
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    margin-bottom: 1rem;
+    white-space: pre-wrap;
+  }
+
+  .guest-parent-consent-section {
+    margin: 1rem 0;
+    padding: 1rem;
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+  }
+
+  .guest-parent-consent-section h4 {
+    margin: 0 0 0.5rem 0;
+    font-size: 0.95rem;
+    color: #212529;
+  }
+
+  .waiver-loading,
+  .waiver-error {
+    color: #6c757d;
+    font-size: 0.95rem;
+    margin: 0;
+  }
+
+  .waiver-error {
+    color: #721c24;
+  }
+
+  .guest-form-actions {
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid #dee2e6;
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
+    align-items: stretch;
+    gap: 1rem;
   }
 
-  .login-actions .btn {
+  .btn-guest-submit {
     width: 100%;
+    padding: 0.85rem 1.25rem;
+    font-size: 1.05rem;
+  }
+
+  .guest-login-hint {
+    margin: 0;
+    text-align: center;
+    color: #6c757d;
+    font-size: 0.9rem;
+  }
+
+  .link-button {
+    background: none;
+    border: none;
+    padding: 0;
+    color: #007bff;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: underline;
+    font-size: inherit;
+  }
+
+  .link-button:hover {
+    color: #0056b3;
   }
 </style>
 
