@@ -36,13 +36,24 @@ function createRolesStore() {
 
     if (error) throw error;
 
-    // Filter out cancelled signups
+    // Filter out cancelled signups (visible when RLS allows, e.g. signed-in staff)
     const confirmedSignups = data.signups?.filter(s => s.status === 'confirmed') || [];
-    
+
+    // Same as fetchRoles: use RPC for fill count so anonymous visitors see correct numbers.
+    // RLS hides signups from the public; nested select returns [] and would show 0 filled.
+    let positions_filled = confirmedSignups.length;
+    const { data: countRows } = await supabase.rpc('get_confirmed_signup_counts', {
+      role_ids: [id]
+    });
+    const countRow = (countRows || []).find((r) => r.role_id === id);
+    if (countRow != null) {
+      positions_filled = Number(countRow.cnt) || 0;
+    }
+
     return {
       ...data,
       signups: confirmedSignups,
-      positions_filled: confirmedSignups.length
+      positions_filled
     };
   }, 'roles.fetchRole');
 
