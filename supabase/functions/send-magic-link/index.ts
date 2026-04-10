@@ -114,6 +114,8 @@ serve(async (req) => {
 
     const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
+    const normalizedEmail = to.trim().toLowerCase()
+
     if (sendEmail === false) {
       const authHeader = req.headers.get('Authorization')
       if (!authHeader?.startsWith('Bearer ')) {
@@ -148,15 +150,25 @@ serve(async (req) => {
 
     const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
       type: 'magiclink',
-      email: to,
+      email: normalizedEmail,
       options: { redirectTo },
     })
 
     if (linkError) {
-      console.error('generateLink error:', linkError)
+      console.error('generateLink error:', linkError, { email: normalizedEmail })
+      const msg = linkError.message || ''
+      const looksLikeMissingUser =
+        /finding user|user not found|no user|not registered|email address.*not.*found/i.test(msg)
+      const status = looksLikeMissingUser ? 400 : 500
       return new Response(
-        JSON.stringify({ error: 'Failed to generate magic link', details: linkError.message }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({
+          error: looksLikeMissingUser
+            ? 'No Auth login exists for this email (or email does not match Auth).'
+            : 'Failed to generate magic link',
+          details: msg,
+          email: normalizedEmail,
+        }),
+        { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
@@ -188,7 +200,7 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         from: 'Volunteer Manager <notifications@berkeleyomnium.com>',
-        to: [to],
+        to: [normalizedEmail],
         subject: 'Log in to 2026 Berkeley Omnium Volunteer Hub',
         html,
       }),

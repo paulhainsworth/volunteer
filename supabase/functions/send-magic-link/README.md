@@ -26,6 +26,27 @@ Set secrets (if not already set for other functions):
 supabase secrets set RESEND_API_KEY=re_xxxx
 ```
 
+## Troubleshooting: `Database error finding user`
+
+`auth.admin.generateLink({ type: 'magiclink' })` looks up **`auth.users` by email**. This error usually means there is **no Auth user** for that address, or **email casing** in `profiles` does not match Auth (the function lowercases the address before generating the link).
+
+Check in SQL (staging/production):
+
+```sql
+-- Profiles whose id does not exist in auth.users (should be empty if FKs are intact)
+SELECT p.id, p.email
+FROM public.profiles p
+WHERE NOT EXISTS (SELECT 1 FROM auth.users u WHERE u.id = p.id);
+
+-- Same email different casing between profile and auth (manual inspection)
+SELECT p.email AS profile_email, u.email AS auth_email
+FROM public.profiles p
+JOIN auth.users u ON u.id = p.id
+WHERE lower(p.email) <> lower(u.email);
+```
+
+Volunteers must have signed up or been created through flows that create **`auth.users`** + **`profiles`**.
+
 ## Env
 
 - `RESEND_API_KEY` – Resend API key

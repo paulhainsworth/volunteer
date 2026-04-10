@@ -226,14 +226,15 @@ Berkeley Omnium Volunteer Team`;
 
       for (let i = 0; i < recipientsToSend.length; i++) {
         const volunteer = recipientsToSend[i];
-        const name = [volunteer.first_name, volunteer.last_name].filter(Boolean).join(' ').trim() || 'there';
-        let textBody = body.replace(/\{volunteer_name\}/g, name);
-        if (needsMagicLink) {
-          const actionLink = await resolveMagicLinkForEmail(volunteer.email);
-          textBody = textBody.replace(/\{magic_link\}/g, actionLink);
-        }
-        const bodyHtml = formatEmailBodyHtml(textBody);
-        const html = `
+        try {
+          const name = [volunteer.first_name, volunteer.last_name].filter(Boolean).join(' ').trim() || 'there';
+          let textBody = body.replace(/\{volunteer_name\}/g, name);
+          if (needsMagicLink) {
+            const actionLink = await resolveMagicLinkForEmail(volunteer.email);
+            textBody = textBody.replace(/\{magic_link\}/g, actionLink);
+          }
+          const bodyHtml = formatEmailBodyHtml(textBody);
+          const html = `
           <h2>${subject}</h2>
           ${bodyHtml}
           <hr style="margin: 2rem 0; border: none; border-top: 1px solid #dee2e6;">
@@ -241,7 +242,6 @@ Berkeley Omnium Volunteer Team`;
             Sent via Berkeley Omnium Volunteer Hub
           </p>
         `;
-        try {
           await sendEmailWithRetry({ to: volunteer.email, subject, html }, volunteer.email);
           successes.push(volunteer.email);
         } catch (sendError) {
