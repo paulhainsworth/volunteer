@@ -104,13 +104,33 @@ Berkeley Omnium Volunteer Team`;
       .join('');
   }
 
-  function isRetryableSendError(invokeError, data) {
-    const message = [invokeError?.message, data?.error, data?.details]
-      .filter(Boolean)
-      .join(' ')
-      .toLowerCase();
-
-    return message.includes('429') || message.includes('rate limit');
+  /**
+   * On HTTP errors, @supabase/functions-js sets data=null and error=FunctionsHttpError;
+   * the JSON body is only on error.context (Response). See FunctionsClient.js invoke().
+   */
+  async function parseFunctionsInvokeError(invokeError, data, fallback) {
+    if (data && typeof data === 'object' && data.error != null && String(data.error).trim() !== '') {
+      const d = data.details != null ? String(data.details) : '';
+      return d ? `${String(data.error)} (${d})` : String(data.error);
+    }
+    const res = invokeError?.context;
+    if (res && typeof res.clone === 'function') {
+      try {
+        const ct = (res.headers.get('content-type') || '').toLowerCase();
+        if (ct.includes('application/json')) {
+          const body = await res.clone().json();
+          if (body?.error != null && String(body.error).trim() !== '') {
+            const d = body.details != null ? String(body.details) : '';
+            return d ? `${String(body.error)} (${d})` : String(body.error);
+          }
+        }
+        const text = await res.clone().text();
+        if (text?.trim()) return text.trim().slice(0, 500);
+      } catch {
+        /* ignore */
+      }
+    }
+    return invokeError?.message || fallback;
   }
 
   async function sendEmailWithRetry(payload, recipientEmail) {
@@ -126,12 +146,16 @@ Berkeley Omnium Volunteer Team`;
         return data;
       }
 
-      const retryable = isRetryableSendError(invokeError, data);
-      const details = data?.details ? ` (${data.details})` : '';
-      const message = invokeError?.message || data?.error || 'Failed to invoke send-email';
+      const message = await parseFunctionsInvokeError(
+        invokeError,
+        data,
+        'Failed to invoke send-email'
+      );
+      const retryable =
+        message.toLowerCase().includes('429') || message.toLowerCase().includes('rate limit');
 
       if (!retryable || attempt === MAX_ATTEMPTS) {
-        throw new Error(`${recipientEmail}: ${message}${details}`);
+        throw new Error(`${recipientEmail}: ${message}`);
       }
 
       await sleep(BASE_RETRY_DELAY_MS * attempt);
@@ -151,12 +175,10 @@ Berkeley Omnium Volunteer Team`;
     const { data, error: invokeError } = await supabase.functions.invoke('send-magic-link', {
       body: { to, redirectTo, sendEmail: false }
     });
-    if (invokeError) {
-      throw new Error(invokeError.message || 'Failed to generate magic link');
-    }
-    if (data?.error) {
-      const details = data.details ? ` (${data.details})` : '';
-      throw new Error(`${data.error}${details}`);
+    if (invokeError || (data && typeof data === 'object' && data.error)) {
+      throw new Error(
+        await parseFunctionsInvokeError(invokeError, data, 'Failed to generate magic link')
+      );
     }
     if (!data?.action_link) {
       throw new Error('Magic link not returned');
@@ -188,6 +210,14 @@ Berkeley Omnium Volunteer Team`;
     sending = true;
 
     try {
+      const {
+        data: { session },
+        error: sessionErr
+      } = await supabase.auth.refreshSession();
+      if (!session?.access_token) {
+        throw new Error(sessionErr?.message || 'Your session expired. Sign in again, then retry.');
+      }
+
       const SEND_DELAY_MS = 300;
       const successes = [];
       const failures = [];

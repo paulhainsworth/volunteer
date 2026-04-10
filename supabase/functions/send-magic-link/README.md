@@ -10,6 +10,10 @@ Add each concrete redirect URL to **Supabase Dashboard → Authentication → UR
 - `http://localhost:5173/?post_login=waiver`
 - Preview deploys: `https://your-preview.vercel.app/?post_login=waiver`
 
+## JWT verification (important)
+
+This repo sets **`verify_jwt = false`** for `send-magic-link` in `supabase/config.toml` so the **Edge gateway** does not return **401** before your code runs (anon login requests and admin `{magic_link}` generation both hit this function). **Authorization is still enforced in code** for `sendEmail: false` (admin + profile check). Redeploy after changing `config.toml` so the setting applies.
+
 ## Deploy
 
 ```bash

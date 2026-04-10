@@ -6,3 +6,8 @@ verify_jwt = false
 
 [functions.send-welcome-with-magic-link]
 verify_jwt = false
+
+# Login + Communications ({magic_link}) must run with anon or user JWT; gateway JWT
+# verification can return 401 before the function runs. Admin/non-admin checks live in the function.
+[functions.send-magic-link]
+verify_jwt = false
