@@ -73,8 +73,17 @@
             const { profile } = await auth.refreshSession();
             const needsOnboarding = !profile?.emergency_contact_name;
             const fromMagicLink = hash.includes('type=magiclink');
+            const postLogin =
+              typeof window !== 'undefined'
+                ? new URLSearchParams(window.location.search).get('post_login')
+                : null;
             if (needsOnboarding) {
+              if (postLogin === 'waiver') {
+                sessionStorage.setItem('postOnboardingRoute', '/volunteer/waiver');
+              }
               await replace('/onboarding');
+            } else if (postLogin === 'waiver') {
+              await replace('/volunteer/waiver');
             } else if (fromMagicLink) {
               await replace('/my-signups');
             } else {

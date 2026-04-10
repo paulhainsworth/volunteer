@@ -2,6 +2,14 @@
 
 Sends a **magic link** email when a user requests a sign-in link from the login page (`#/auth/login`). Uses the same branded HTML as the revised magic-link template; email is sent via Resend.
 
+**Admin / Communications:** With `sendEmail: false` and a valid **admin** JWT (`Authorization: Bearer …`), the function returns `{ action_link }` only (no email). The admin Communications page uses this to embed a per-recipient sign-in URL in bulk messages. The client passes `redirectTo` (e.g. `https://your-app/?post_login=waiver`) so that after login the app routes to emergency contact (if needed) then the waiver.
+
+Add each concrete redirect URL to **Supabase Dashboard → Authentication → URL Configuration → Redirect URLs**, for example:
+
+- `https://www.berkeleyomnium.com/?post_login=waiver`
+- `http://localhost:5173/?post_login=waiver`
+- Preview deploys: `https://your-preview.vercel.app/?post_login=waiver`
+
 ## Deploy
 
 ```bash

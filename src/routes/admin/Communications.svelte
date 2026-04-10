@@ -24,9 +24,9 @@
 
 You're signed up to volunteer at the 2026 Berkeley Omnium — thank you! We need you to sign our liability waiver before the event.
 
-Please log in to the volunteer hub and sign the waiver (you'll see it when you view your signups or sign up for another role):
+Click the link below to sign in (no password). We'll ask for your emergency contact if we don't have it yet, then take you to the waiver.
 
-https://www.berkeleyomnium.com/#/volunteer
+{magic_link}
 
 If you have any questions, reply to this email.
 
@@ -138,6 +138,32 @@ Berkeley Omnium Volunteer Team`;
     }
   }
 
+  function waiverMagicLinkRedirectUrl() {
+    if (typeof window === 'undefined') return '';
+    return `${window.location.origin}/?post_login=waiver`;
+  }
+
+  async function resolveMagicLinkForEmail(to) {
+    const redirectTo = waiverMagicLinkRedirectUrl();
+    if (!redirectTo) {
+      throw new Error('Magic link redirect URL unavailable');
+    }
+    const { data, error: invokeError } = await supabase.functions.invoke('send-magic-link', {
+      body: { to, redirectTo, sendEmail: false }
+    });
+    if (invokeError) {
+      throw new Error(invokeError.message || 'Failed to generate magic link');
+    }
+    if (data?.error) {
+      const details = data.details ? ` (${data.details})` : '';
+      throw new Error(`${data.error}${details}`);
+    }
+    if (!data?.action_link) {
+      throw new Error('Magic link not returned');
+    }
+    return data.action_link;
+  }
+
   function fillWaiverReminderTemplate() {
     recipientType = 'waiver_unsigned';
     subject = WAIVER_REMINDER_SUBJECT;
@@ -166,10 +192,17 @@ Berkeley Omnium Volunteer Team`;
       const successes = [];
       const failures = [];
 
+      const needsMagicLink = body.includes('{magic_link}');
+
       for (let i = 0; i < recipientsToSend.length; i++) {
         const volunteer = recipientsToSend[i];
         const name = [volunteer.first_name, volunteer.last_name].filter(Boolean).join(' ').trim() || 'there';
-        const bodyHtml = formatEmailBodyHtml(body.replace(/\{volunteer_name\}/g, name));
+        let textBody = body.replace(/\{volunteer_name\}/g, name);
+        if (needsMagicLink) {
+          const actionLink = await resolveMagicLinkForEmail(volunteer.email);
+          textBody = textBody.replace(/\{magic_link\}/g, actionLink);
+        }
+        const bodyHtml = formatEmailBodyHtml(textBody);
         const html = `
           <h2>${subject}</h2>
           ${bodyHtml}
@@ -360,6 +393,9 @@ Berkeley Omnium Volunteer Team`;
           <button type="button" class="btn-merge" on:click={() => insertMergeField('location')}>
             Location
           </button>
+          <button type="button" class="btn-merge" on:click={() => insertMergeField('magic_link')}>
+            Sign-in link
+          </button>
         </div>
 
         <div class="form-group">
@@ -401,7 +437,11 @@ Berkeley Omnium Volunteer Team`;
       <h3>💡 Tips</h3>
       <ul>
         <li>Use merge fields like <code>{'{volunteer_name}'}</code> to personalize emails</li>
-        <li><strong>Waiver reminder:</strong> Choose "Volunteers who haven't signed the waiver", then "Use waiver reminder template" to pre-fill a message asking them to log in and sign. Only unsigned volunteers receive it.</li>
+        <li>
+          <code>{'{magic_link}'}</code> inserts a one-time sign-in link for this deployment. After sign-in: emergency contact if missing, otherwise the waiver page. Add the redirect URL below to Supabase Auth → URL Configuration → Redirect URLs:
+          <code>?post_login=waiver</code> on your site origin (e.g. <code>https://www.berkeleyomnium.com/?post_login=waiver</code>).
+        </li>
+        <li><strong>Waiver reminder:</strong> Choose "Volunteers who haven't signed the waiver", then "Use waiver reminder template" to pre-fill a message with <code>{'{magic_link}'}</code>. Only unsigned volunteers receive it.</li>
         <li>Send test emails to yourself first by selecting a specific role or date with few recipients</li>
         <li>Schedule reminder emails 7 days and 1 day before events</li>
         <li>Keep subject lines clear and concise</li>

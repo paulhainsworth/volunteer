@@ -68,7 +68,16 @@
       // Refresh auth state to get updated profile
       await auth.initialize();
 
-      // Redirect to dashboard
+      const nextRoute =
+        typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('postOnboardingRoute') : null;
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.removeItem('postOnboardingRoute');
+      }
+      if (nextRoute && nextRoute.startsWith('/')) {
+        push(nextRoute);
+        return;
+      }
+
       redirectToDashboard();
     } catch (err) {
       error = err.message || 'Failed to save emergency contact';

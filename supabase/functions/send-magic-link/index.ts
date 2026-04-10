@@ -93,6 +93,8 @@ function buildMagicLinkHtml(actionLink: string): string {
 interface RequestBody {
   to: string
   redirectTo: string
+  /** When false, only returns action_link (no email). Requires admin JWT — used to embed links in admin-sent messages. */
+  sendEmail?: boolean
 }
 
 serve(async (req) => {
@@ -101,7 +103,7 @@ serve(async (req) => {
   }
 
   try {
-    const { to, redirectTo }: RequestBody = await req.json()
+    const { to, redirectTo, sendEmail = true }: RequestBody = await req.json()
 
     if (!to || !redirectTo) {
       return new Response(
@@ -111,6 +113,38 @@ serve(async (req) => {
     }
 
     const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+
+    if (sendEmail === false) {
+      const authHeader = req.headers.get('Authorization')
+      if (!authHeader?.startsWith('Bearer ')) {
+        return new Response(
+          JSON.stringify({ error: 'Missing or invalid Authorization header' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+      const accessToken = authHeader.replace(/^Bearer\s+/i, '').trim()
+      const {
+        data: { user: caller },
+        error: callerErr,
+      } = await supabaseAdmin.auth.getUser(accessToken)
+      if (callerErr || !caller?.id) {
+        return new Response(
+          JSON.stringify({ error: 'Invalid or expired token' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+      const { data: callerProfile, error: profileErr } = await supabaseAdmin
+        .from('profiles')
+        .select('role')
+        .eq('id', caller.id)
+        .single()
+      if (profileErr || callerProfile?.role !== 'admin') {
+        return new Response(
+          JSON.stringify({ error: 'Forbidden: admin only' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+    }
 
     const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
       type: 'magiclink',
@@ -136,6 +170,12 @@ serve(async (req) => {
         JSON.stringify({ error: 'Magic link not returned' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
+    }
+
+    if (sendEmail === false) {
+      return new Response(JSON.stringify({ success: true, action_link: actionLink }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
     }
 
     const html = buildMagicLinkHtml(actionLink)
