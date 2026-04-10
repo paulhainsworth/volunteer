@@ -10,6 +10,8 @@
   let loading = true;
   let error = '';
   let success = '';
+  /** Populated when a batch has per-recipient failures (diagnostics only). */
+  let sendFailureRows = [];
 
   let subject = '';
   let body = '';
@@ -111,7 +113,11 @@ Berkeley Omnium Volunteer Team`;
   async function parseFunctionsInvokeError(invokeError, data, fallback) {
     if (data && typeof data === 'object' && data.error != null && String(data.error).trim() !== '') {
       const d = data.details != null ? String(data.details) : '';
-      return d ? `${String(data.error)} (${d})` : String(data.error);
+      let out = d ? `${String(data.error)} (${d})` : String(data.error);
+      if (data.email != null && String(data.email).trim() !== '') {
+        out += ` [Auth lookup used email: ${String(data.email).trim()}]`;
+      }
+      return out;
     }
     const res = invokeError?.context;
     if (res && typeof res.clone === 'function') {
@@ -121,7 +127,11 @@ Berkeley Omnium Volunteer Team`;
           const body = await res.clone().json();
           if (body?.error != null && String(body.error).trim() !== '') {
             const d = body.details != null ? String(body.details) : '';
-            return d ? `${String(body.error)} (${d})` : String(body.error);
+            let out = d ? `${String(body.error)} (${d})` : String(body.error);
+            if (body.email != null && String(body.email).trim() !== '') {
+              out += ` [Auth lookup used email: ${String(body.email).trim()}]`;
+            }
+            return out;
           }
         }
         const text = await res.clone().text();
@@ -192,9 +202,19 @@ Berkeley Omnium Volunteer Team`;
     body = WAIVER_REMINDER_BODY;
   }
 
+  function copySendDiagnostics() {
+    const payload = {
+      sendFailureRows,
+      hint:
+        'Compare profile email to auth.users for the profile id. Supabase Dashboard → Authentication → Users, or SQL Editor. Edge Function logs: send-magic-link.'
+    };
+    void navigator.clipboard?.writeText(JSON.stringify(payload, null, 2));
+  }
+
   async function handleSend() {
     error = '';
     success = '';
+    sendFailureRows = [];
 
     if (!subject.trim() || !body.trim()) {
       error = 'Subject and body are required';
@@ -220,19 +240,34 @@ Berkeley Omnium Volunteer Team`;
 
       const SEND_DELAY_MS = 300;
       const successes = [];
-      const failures = [];
+      const failureRecords = [];
 
       const needsMagicLink = body.includes('{magic_link}');
 
       for (let i = 0; i < recipientsToSend.length; i++) {
         const volunteer = recipientsToSend[i];
-        try {
-          const name = [volunteer.first_name, volunteer.last_name].filter(Boolean).join(' ').trim() || 'there';
-          let textBody = body.replace(/\{volunteer_name\}/g, name);
-          if (needsMagicLink) {
+        const name = [volunteer.first_name, volunteer.last_name].filter(Boolean).join(' ').trim() || 'there';
+        let textBody = body.replace(/\{volunteer_name\}/g, name);
+
+        if (needsMagicLink) {
+          try {
             const actionLink = await resolveMagicLinkForEmail(volunteer.email);
             textBody = textBody.replace(/\{magic_link\}/g, actionLink);
+          } catch (mlErr) {
+            const row = {
+              profileId: volunteer.id,
+              profileEmail: volunteer.email,
+              step: 'generate_magic_link',
+              detail: mlErr?.message || String(mlErr)
+            };
+            failureRecords.push(row);
+            console.error('[Communications] magic link generation failed', row);
+            if (i < recipientsToSend.length - 1) await sleep(SEND_DELAY_MS);
+            continue;
           }
+        }
+
+        try {
           const bodyHtml = formatEmailBodyHtml(textBody);
           const html = `
           <h2>${subject}</h2>
@@ -245,7 +280,14 @@ Berkeley Omnium Volunteer Team`;
           await sendEmailWithRetry({ to: volunteer.email, subject, html }, volunteer.email);
           successes.push(volunteer.email);
         } catch (sendError) {
-          failures.push(sendError?.message || `${volunteer.email}: Unknown email send failure`);
+          const row = {
+            profileId: volunteer.id,
+            profileEmail: volunteer.email,
+            step: 'send_email',
+            detail: sendError?.message || String(sendError)
+          };
+          failureRecords.push(row);
+          console.error('[Communications] send-email failed', row);
         }
 
         if (i < recipientsToSend.length - 1) {
@@ -253,14 +295,25 @@ Berkeley Omnium Volunteer Team`;
         }
       }
 
-      if (failures.length > 0) {
-        const summary = failures.slice(0, 3).join('; ');
-        throw new Error(
-          `${failures.length} of ${recipientsToSend.length} emails failed${summary ? `: ${summary}` : ''}`
-        );
+      const total = recipientsToSend.length;
+      const failCount = failureRecords.length;
+
+      if (failCount > 0) {
+        sendFailureRows = failureRecords;
+        if (successes.length > 0) {
+          success = `Sent ${successes.length} of ${total}. ${failCount} failed — see diagnostics below.`;
+        }
+        error = `Failed for ${failCount} of ${total} recipient${total === 1 ? '' : 's'}. Details below (profile email vs Auth).`;
+        console.error('[Communications] batch summary', {
+          failed: failCount,
+          succeeded: successes.length,
+          rows: failureRecords
+        });
+        return;
       }
 
       success = `Email sent to ${successes.length} recipient${successes.length === 1 ? '' : 's'}.`;
+      sendFailureRows = [];
 
       subject = '';
       body = '';
@@ -316,6 +369,34 @@ Berkeley Omnium Volunteer Team`;
 
   {#if error}
     <div class="alert alert-error">{error}</div>
+  {/if}
+
+  {#if sendFailureRows.length > 0}
+    <div class="send-diagnostics" role="region" aria-label="Send failure diagnostics">
+      <h3 class="diagnostics-title">Failure details (for debugging)</h3>
+      <p class="diagnostics-intro">
+        Each row is one recipient. Compare <strong>profile email</strong> to <strong>Authentication → Users</strong> for the same person. The edge function logs the same request under
+        <code>send-magic-link</code>.
+      </p>
+      <ul class="diagnostics-list">
+        {#each sendFailureRows as row}
+          <li>
+            <span class="diag-step">{row.step}</span>
+            <br />
+            <strong>Profile email:</strong> <code>{row.profileEmail}</code>
+            <br />
+            <strong>Profile id:</strong> <code>{row.profileId}</code>
+            <br />
+            <span class="diag-detail">{row.detail}</span>
+          </li>
+        {/each}
+      </ul>
+      <div class="diagnostics-actions">
+        <button type="button" class="btn btn-secondary btn-sm" on:click={copySendDiagnostics}>
+          Copy diagnostics (JSON)
+        </button>
+      </div>
+    </div>
   {/if}
 
   {#if success}
@@ -517,6 +598,63 @@ Berkeley Omnium Volunteer Team`;
     background: #d4edda;
     color: #155724;
     border: 1px solid #c3e6cb;
+  }
+
+  .send-diagnostics {
+    background: #fff8e6;
+    border: 1px solid #e6cf8f;
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.5rem;
+    font-size: 0.95rem;
+  }
+
+  .diagnostics-title {
+    margin: 0 0 0.5rem 0;
+    font-size: 1rem;
+    color: #5c4a00;
+  }
+
+  .diagnostics-intro {
+    margin: 0 0 0.75rem 0;
+    color: #4a4a4a;
+    line-height: 1.45;
+  }
+
+  .diagnostics-list {
+    margin: 0 0 1rem 1rem;
+    padding: 0;
+    line-height: 1.5;
+  }
+
+  .diagnostics-list li {
+    margin-bottom: 0.85rem;
+  }
+
+  .diag-step {
+    display: inline-block;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: #6c757d;
+    margin-bottom: 0.25rem;
+  }
+
+  .diag-detail {
+    display: inline-block;
+    margin-top: 0.35rem;
+    color: #333;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .diagnostics-actions {
+    margin-top: 0.5rem;
+  }
+
+  .btn-sm {
+    font-size: 0.875rem;
+    padding: 0.35rem 0.75rem;
   }
 
   .loading {
