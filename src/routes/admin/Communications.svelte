@@ -22,13 +22,13 @@
   let currentWaiverVersion = null;
 
   const WAIVER_REMINDER_SUBJECT = 'Action required: Sign the volunteer waiver for 2026 Berkeley Omnium';
+  /** Placeholder replaced after HTML escape with <a href="...">link</a> (no giant URL in body). */
+  const MAGIC_LINK_ANCHOR_TOKEN = '__COMM_MAGIC_LINK_ANCHOR__';
   const WAIVER_REMINDER_BODY = `Hi {volunteer_name},
 
 You're signed up to volunteer at the 2026 Berkeley Omnium — thank you! We need you to sign our liability waiver before the event.
 
-Click the link below to sign in (no password). We'll ask for your emergency contact if we don't have it yet, then take you to the waiver.
-
-{magic_link}
+Click this {magic_link_word} to sign in (no password). We'll ask for your emergency contact if we don't have it yet, then take you to the waiver.
 
 If you have any questions, reply to this email.
 
@@ -242,17 +242,20 @@ Berkeley Omnium Volunteer Team`;
       const successes = [];
       const failureRecords = [];
 
-      const needsMagicLink = body.includes('{magic_link}');
+      const needsMagicLink = body.includes('{magic_link}') || body.includes('{magic_link_word}');
 
       for (let i = 0; i < recipientsToSend.length; i++) {
         const volunteer = recipientsToSend[i];
         const name = [volunteer.first_name, volunteer.last_name].filter(Boolean).join(' ').trim() || 'there';
         let textBody = body.replace(/\{volunteer_name\}/g, name);
+        let actionLinkForAnchor = null;
 
         if (needsMagicLink) {
           try {
             const actionLink = await resolveMagicLinkForEmail(volunteer.email);
+            actionLinkForAnchor = actionLink;
             textBody = textBody.replace(/\{magic_link\}/g, actionLink);
+            textBody = textBody.replace(/\{magic_link_word\}/g, MAGIC_LINK_ANCHOR_TOKEN);
           } catch (mlErr) {
             const row = {
               profileId: volunteer.id,
@@ -268,7 +271,13 @@ Berkeley Omnium Volunteer Team`;
         }
 
         try {
-          const bodyHtml = formatEmailBodyHtml(textBody);
+          let bodyHtml = formatEmailBodyHtml(textBody);
+          if (actionLinkForAnchor && bodyHtml.includes(MAGIC_LINK_ANCHOR_TOKEN)) {
+            const href = escapeHtml(actionLinkForAnchor);
+            bodyHtml = bodyHtml.split(MAGIC_LINK_ANCHOR_TOKEN).join(
+              `<a href="${href}" target="_blank" rel="noopener noreferrer">link</a>`
+            );
+          }
           const html = `
           <h2>${subject}</h2>
           ${bodyHtml}
@@ -505,7 +514,10 @@ Berkeley Omnium Volunteer Team`;
             Location
           </button>
           <button type="button" class="btn-merge" on:click={() => insertMergeField('magic_link')}>
-            Sign-in link
+            Sign-in URL
+          </button>
+          <button type="button" class="btn-merge" on:click={() => insertMergeField('magic_link_word')}>
+            Sign-in “link”
           </button>
         </div>
 
@@ -549,10 +561,10 @@ Berkeley Omnium Volunteer Team`;
       <ul>
         <li>Use merge fields like <code>{'{volunteer_name}'}</code> to personalize emails</li>
         <li>
-          <code>{'{magic_link}'}</code> inserts a one-time sign-in link for this deployment. After sign-in: emergency contact if missing, otherwise the waiver page. Add the redirect URL below to Supabase Auth → URL Configuration → Redirect URLs:
+          <code>{'{magic_link_word}'}</code> inserts the word <strong>link</strong> as a clickable sign-in URL (recommended). <code>{'{magic_link}'}</code> inserts the raw URL. After sign-in: emergency contact if missing, otherwise the waiver page. Add the redirect URL to Supabase Auth → URL Configuration → Redirect URLs:
           <code>?post_login=waiver</code> on your site origin (e.g. <code>https://www.berkeleyomnium.com/?post_login=waiver</code>).
         </li>
-        <li><strong>Waiver reminder:</strong> Choose "Volunteers who haven't signed the waiver", then "Use waiver reminder template" to pre-fill a message with <code>{'{magic_link}'}</code>. Only unsigned volunteers receive it.</li>
+        <li><strong>Waiver reminder:</strong> Choose "Volunteers who haven't signed the waiver", then "Use waiver reminder template" — it uses <code>{'{magic_link_word}'}</code> so the email shows “Click this link…” without a long URL. Only unsigned volunteers receive it.</li>
         <li>Send test emails to yourself first by selecting a specific role or date with few recipients</li>
         <li>Schedule reminder emails 7 days and 1 day before events</li>
         <li>Keep subject lines clear and concise</li>
