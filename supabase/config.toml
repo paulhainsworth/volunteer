@@ -11,3 +11,6 @@ verify_jwt = false
 # verification can return 401 before the function runs. Admin/non-admin checks live in the function.
 [functions.send-magic-link]
 verify_jwt = false
+
+[functions.send-nica-coach-digest]
+verify_jwt = false

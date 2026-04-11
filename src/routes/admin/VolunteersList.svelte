@@ -11,6 +11,7 @@
   import { formatEventDateInPacific, formatTimeRange, getTodayDateInPacific, isFlexibleTime } from '../../lib/utils/timeDisplay';
   import { NICA_BENEFICIARIES } from '../../lib/nicaBeneficiaries';
   import { generateNicaTeamVolunteerPdfBlob, nicaTeamPdfFilename } from '../../lib/nicaExportPdf';
+  import NicaCoachesPanel from '../../lib/components/NicaCoachesPanel.svelte';
 
   let loading = true;
   let error = '';
@@ -50,6 +51,7 @@
   let addVolunteerSuggestionTimer = null;
   let selectedAffiliationId = '';
   let showNicaSummary = false;
+  let showNicaCoaches = false;
   let nicaCopyFeedback = '';
   let nicaPdfTeam = '';
   let nicaPdfLoading = false;
@@ -987,7 +989,18 @@
       >
         {showNicaSummary ? 'Hide NICA' : 'Show NICA'}
       </button>
+      <button
+        class="btn btn-secondary"
+        on:click={() => showNicaCoaches = !showNicaCoaches}
+        aria-expanded={showNicaCoaches}
+      >
+        {showNicaCoaches ? 'Hide NICA Coaches' : 'NICA Coaches'}
+      </button>
     </div>
+
+    {#if showNicaCoaches}
+      <NicaCoachesPanel affiliations={$affiliations} />
+    {/if}
 
     {#if showNicaSummary}
       <div class="nica-summary-card">
@@ -1756,6 +1769,10 @@
 
   .nica-toggle-row {
     margin-bottom: 1rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
   }
 
   .nica-summary-card {
