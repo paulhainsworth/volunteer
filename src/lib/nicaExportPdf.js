@@ -1,0 +1,189 @@
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import { formatEventDateInPacific, isFlexibleTime } from './utils/timeDisplay';
+
+function hoursForSignup(signup) {
+  const role = signup?.role;
+  if (!role) return 0;
+  if (isFlexibleTime(role)) return 0;
+  const start = new Date(`2000-01-01 ${role.start_time}`);
+  const end = new Date(`2000-01-01 ${role.end_time}`);
+  const h = (end - start) / (1000 * 60 * 60);
+  return Math.round(h * 100) / 100;
+}
+
+/**
+ * @param {{ label: string, affiliationNames: string[] }} beneficiary
+ * @param {Array<{ id: string, name: string }>} affiliationsList
+ * @param {Array<Record<string, unknown>>} volunteersList
+ */
+export function buildNicaTeamExport(beneficiary, affiliationsList, volunteersList) {
+  const matchingAffiliationIds = new Set(
+    affiliationsList
+      .filter((entry) => beneficiary.affiliationNames.includes(entry.name))
+      .map((entry) => entry.id)
+  );
+
+  const rows = [];
+  for (const v of volunteersList) {
+    const profileRole = v.role;
+    if (profileRole !== 'volunteer' && profileRole !== 'volunteer_leader') continue;
+    if (!matchingAffiliationIds.has(v.team_club_affiliation_id || '')) continue;
+
+    const teamName =
+      affiliationsList.find((a) => a.id === v.team_club_affiliation_id)?.name || '';
+
+    const signups = v.signups || [];
+    for (const s of signups) {
+      if (s.status !== 'confirmed') continue;
+      const role = s.role;
+      const flex = role && isFlexibleTime(role);
+      const hours = hoursForSignup(s);
+      rows.push({
+        email: v.email || '',
+        first_name: v.first_name || '',
+        last_name: v.last_name || '',
+        phone: v.phone != null && v.phone !== '' ? String(v.phone) : '',
+        team_club_affiliation: teamName,
+        signed_up_role: role?.name || '',
+        event_date: role?.event_date || '',
+        hours,
+        hoursDisplay: flex ? '—' : (Number.isFinite(hours) ? String(hours) : '0')
+      });
+    }
+  }
+
+  rows.sort((a, b) => {
+    const ln = (a.last_name || '').localeCompare(b.last_name || '', undefined, { sensitivity: 'base' });
+    if (ln !== 0) return ln;
+    const fn = (a.first_name || '').localeCompare(b.first_name || '', undefined, { sensitivity: 'base' });
+    if (fn !== 0) return fn;
+    const d = String(a.event_date).localeCompare(String(b.event_date));
+    if (d !== 0) return d;
+    return String(a.signed_up_role).localeCompare(String(b.signed_up_role), undefined, { sensitivity: 'base' });
+  });
+
+  const distinctEmails = new Set(rows.map((r) => r.email.toLowerCase().trim()).filter(Boolean));
+  const totalVolunteers = distinctEmails.size;
+  const totalRoles = rows.length;
+  const totalHours = Math.round(rows.reduce((sum, r) => sum + (Number.isFinite(r.hours) ? r.hours : 0), 0) * 100) / 100;
+
+  return {
+    rows,
+    summary: {
+      totalVolunteers,
+      totalRoles,
+      totalHours
+    }
+  };
+}
+
+function sanitizeFilenamePart(label) {
+  return String(label)
+    .replace(/[^a-zA-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'team';
+}
+
+/**
+ * @param {{ label: string, affiliationNames: string[] }} beneficiary
+ * @param {Array<{ id: string, name: string }>} affiliationsList
+ * @param {Array<Record<string, unknown>>} volunteersList
+ * @returns {Blob}
+ */
+export function generateNicaTeamVolunteerPdfBlob(beneficiary, affiliationsList, volunteersList) {
+  const { rows, summary } = buildNicaTeamExport(beneficiary, affiliationsList, volunteersList);
+
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'letter' });
+  const pageW = doc.internal.pageSize.getWidth();
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(13);
+  doc.text(`2026 Berkeley Omnium — ${beneficiary.label} Volunteers`, pageW / 2, 42, { align: 'center' });
+
+  const tableBody = rows.map((r) => [
+    r.email,
+    r.first_name,
+    r.last_name,
+    r.phone,
+    r.team_club_affiliation,
+    r.signed_up_role,
+    formatEventDateInPacific(r.event_date, 'short'),
+    r.hoursDisplay
+  ]);
+
+  const head = [
+    [
+      'email',
+      'first_name',
+      'last_name',
+      'phone',
+      'team_club_affiliation',
+      'signed_up_role',
+      'event_date',
+      'hours'
+    ]
+  ];
+
+  let finalY = 90;
+  if (tableBody.length) {
+    autoTable(doc, {
+      startY: 56,
+      head,
+      body: tableBody,
+      theme: 'grid',
+      styles: { fontSize: 8, cellPadding: 4, overflow: 'linebreak' },
+      headStyles: { fillColor: [246, 248, 250], textColor: [36, 41, 47], fontStyle: 'bold' },
+      columnStyles: {
+        0: { cellWidth: 118 },
+        1: { cellWidth: 62 },
+        2: { cellWidth: 72 },
+        3: { cellWidth: 78 },
+        4: { cellWidth: 100 },
+        5: { cellWidth: 130 },
+        6: { cellWidth: 72 },
+        7: { cellWidth: 36 }
+      }
+    });
+    finalY = doc.lastAutoTable.finalY;
+  } else {
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(9);
+    doc.setTextColor(80, 86, 94);
+    doc.text(
+      'No volunteers with this team affiliation and at least one confirmed signup.',
+      pageW / 2,
+      68,
+      { align: 'center' }
+    );
+    doc.setTextColor(0, 0, 0);
+    doc.setFont('helvetica', 'normal');
+  }
+  const gap = 18;
+
+  autoTable(doc, {
+    startY: finalY + gap,
+    body: [
+      ['Total Volunteers', 'Roles', 'Volunteer hours'],
+      [
+        String(summary.totalVolunteers),
+        String(summary.totalRoles),
+        summary.totalHours.toFixed(2)
+      ]
+    ],
+    theme: 'grid',
+    styles: { fontSize: 9, cellPadding: 6 },
+    bodyStyles: { fillColor: [255, 255, 255] },
+    didParseCell(data) {
+      if (data.section === 'body' && data.row.index === 0) {
+        data.cell.styles.fontStyle = 'bold';
+        data.cell.styles.fillColor = [246, 248, 250];
+      }
+    }
+  });
+
+  return doc.output('blob');
+}
+
+export function nicaTeamPdfFilename(beneficiary) {
+  return `2026-Omnium-${sanitizeFilenamePart(beneficiary.label)}-Volunteers.pdf`;
+}

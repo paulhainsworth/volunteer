@@ -9,6 +9,8 @@
   import { push } from 'svelte-spa-router';
   import { format } from 'date-fns';
   import { formatEventDateInPacific, formatTimeRange, getTodayDateInPacific, isFlexibleTime } from '../../lib/utils/timeDisplay';
+  import { NICA_BENEFICIARIES } from '../../lib/nicaBeneficiaries';
+  import { generateNicaTeamVolunteerPdfBlob, nicaTeamPdfFilename } from '../../lib/nicaExportPdf';
 
   let loading = true;
   let error = '';
@@ -49,32 +51,8 @@
   let selectedAffiliationId = '';
   let showNicaSummary = false;
   let nicaCopyFeedback = '';
-  const NICA_BENEFICIARIES = [
-    {
-      label: 'Albany',
-      affiliationNames: ['Albany', 'Albany High School Mountain Bike Team']
-    },
-    {
-      label: 'Berkeley',
-      affiliationNames: ['Berkeley', 'Berkeley Mountain Bike Association']
-    },
-    {
-      label: 'El Cerrito',
-      affiliationNames: ['El Cerrito', 'El Cerrito High School']
-    },
-    {
-      label: 'Oakland Composite',
-      affiliationNames: ['Oakland Composite']
-    },
-    {
-      label: 'Oakland Technical',
-      affiliationNames: ['Oakland Technical', 'Oakland Technical High School MTB']
-    },
-    {
-      label: 'Skyline',
-      affiliationNames: ['Skyline', 'Skyline High School Mountain Bike Team']
-    }
-  ];
+  let nicaPdfTeam = '';
+  let nicaPdfLoading = false;
 
   /** NICA table: these roles count as more than one spot toward the 10-spot beneficiary goal */
   const NICA_WEIGHTED_SPOT_ROLES = new Set([
@@ -244,6 +222,49 @@
         <tbody>${rows}</tbody>
       </table>
     `;
+  }
+
+  function triggerPdfDownload(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function downloadNicaExportPdf() {
+    if (!nicaPdfTeam || nicaPdfLoading) return;
+    error = '';
+
+    const runOne = async (beneficiary) => {
+      const blob = generateNicaTeamVolunteerPdfBlob(beneficiary, $affiliations, $volunteers);
+      triggerPdfDownload(blob, nicaTeamPdfFilename(beneficiary));
+    };
+
+    nicaPdfLoading = true;
+    try {
+      if (nicaPdfTeam === '__all__') {
+        for (let i = 0; i < NICA_BENEFICIARIES.length; i += 1) {
+          await runOne(NICA_BENEFICIARIES[i]);
+          if (i < NICA_BENEFICIARIES.length - 1) {
+            await new Promise((r) => setTimeout(r, 450));
+          }
+        }
+      } else {
+        const beneficiary = NICA_BENEFICIARIES.find((b) => b.label === nicaPdfTeam);
+        if (!beneficiary) {
+          error = 'Unknown NICA team selection.';
+          return;
+        }
+        await runOne(beneficiary);
+      }
+    } catch (err) {
+      console.error('NICA PDF export failed:', err);
+      error = err?.message ? `NICA PDF export failed: ${err.message}` : 'NICA PDF export failed.';
+    } finally {
+      nicaPdfLoading = false;
+    }
   }
 
   async function copyNicaSummary() {
@@ -869,6 +890,24 @@
       <button class="btn btn-secondary" on:click={exportVolunteerRoster}>
         Export Roster
       </button>
+      <div class="nica-pdf-toolbar" title="Volunteer/signup listing per NICA school team (matches spreadsheet export)">
+        <label class="sr-only" for="nica-pdf-team">NICA team for PDF export</label>
+        <select id="nica-pdf-team" class="nica-pdf-select" bind:value={nicaPdfTeam} disabled={nicaPdfLoading}>
+          <option value="">NICA PDF: team…</option>
+          {#each NICA_BENEFICIARIES as b (b.label)}
+            <option value={b.label}>{b.label}</option>
+          {/each}
+          <option value="__all__">All teams (one PDF each)</option>
+        </select>
+        <button
+          class="btn btn-secondary"
+          type="button"
+          disabled={!nicaPdfTeam || nicaPdfLoading}
+          on:click={downloadNicaExportPdf}
+        >
+          {nicaPdfLoading ? 'Generating…' : 'NICA Export'}
+        </button>
+      </div>
       <button class="btn btn-primary" on:click={openAddVolunteerModal}>
         + Add Volunteer
       </button>
@@ -1631,7 +1670,42 @@
 
   .header-actions {
     display: flex;
+    align-items: center;
     gap: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .nica-pdf-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  .nica-pdf-select {
+    min-width: 11rem;
+    padding: 0.45rem 0.65rem;
+    border-radius: 8px;
+    border: 1px solid #ced4da;
+    font-size: 0.9rem;
+    background: #fff;
+  }
+
+  .nica-pdf-select:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
   }
 
   .alert {
