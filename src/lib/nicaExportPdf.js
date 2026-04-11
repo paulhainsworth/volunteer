@@ -95,6 +95,10 @@ export function generateNicaTeamVolunteerPdfBlob(beneficiary, affiliationsList, 
 
   const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'letter' });
   const pageW = doc.internal.pageSize.getWidth();
+  /** Side margins and table width so column widths sum to the drawable area (avoids autotable overflow warnings). */
+  const sideMargin = 28;
+  const tableWidth = pageW - sideMargin * 2;
+  const col = (fraction) => Math.floor(tableWidth * fraction);
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(13);
@@ -126,22 +130,32 @@ export function generateNicaTeamVolunteerPdfBlob(beneficiary, affiliationsList, 
 
   let finalY = 90;
   if (tableBody.length) {
+    const c0 = col(0.17);
+    const c1 = col(0.09);
+    const c2 = col(0.09);
+    const c3 = col(0.11);
+    const c4 = col(0.14);
+    const c5 = col(0.21);
+    const c6 = col(0.1);
+    const c7 = tableWidth - c0 - c1 - c2 - c3 - c4 - c5 - c6;
     autoTable(doc, {
       startY: 56,
+      margin: { left: sideMargin, right: sideMargin },
+      tableWidth,
       head,
       body: tableBody,
       theme: 'grid',
-      styles: { fontSize: 8, cellPadding: 4, overflow: 'linebreak' },
+      styles: { fontSize: 7, cellPadding: 3, overflow: 'linebreak' },
       headStyles: { fillColor: [246, 248, 250], textColor: [36, 41, 47], fontStyle: 'bold' },
       columnStyles: {
-        0: { cellWidth: 118 },
-        1: { cellWidth: 62 },
-        2: { cellWidth: 72 },
-        3: { cellWidth: 78 },
-        4: { cellWidth: 100 },
-        5: { cellWidth: 130 },
-        6: { cellWidth: 72 },
-        7: { cellWidth: 36 }
+        0: { cellWidth: c0 },
+        1: { cellWidth: c1 },
+        2: { cellWidth: c2 },
+        3: { cellWidth: c3 },
+        4: { cellWidth: c4 },
+        5: { cellWidth: c5 },
+        6: { cellWidth: c6 },
+        7: { cellWidth: c7 }
       }
     });
     finalY = doc.lastAutoTable.finalY;
@@ -160,8 +174,11 @@ export function generateNicaTeamVolunteerPdfBlob(beneficiary, affiliationsList, 
   }
   const gap = 18;
 
+  const summaryTableW = Math.min(420, tableWidth);
   autoTable(doc, {
     startY: finalY + gap,
+    margin: { left: sideMargin, right: sideMargin },
+    tableWidth: summaryTableW,
     body: [
       ['Total Volunteers', 'Roles', 'Volunteer hours'],
       [
@@ -172,6 +189,11 @@ export function generateNicaTeamVolunteerPdfBlob(beneficiary, affiliationsList, 
     ],
     theme: 'grid',
     styles: { fontSize: 9, cellPadding: 6 },
+    columnStyles: {
+      0: { cellWidth: summaryTableW / 3 },
+      1: { cellWidth: summaryTableW / 3 },
+      2: { cellWidth: summaryTableW / 3 }
+    },
     bodyStyles: { fillColor: [255, 255, 255] },
     didParseCell(data) {
       if (data.section === 'body' && data.row.index === 0) {

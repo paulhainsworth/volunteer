@@ -229,12 +229,20 @@
     const a = document.createElement('a');
     a.href = url;
     a.download = filename;
+    a.rel = 'noopener';
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+    window.setTimeout(() => URL.revokeObjectURL(url), 2500);
   }
 
   async function downloadNicaExportPdf() {
-    if (!nicaPdfTeam || nicaPdfLoading) return;
+    if (nicaPdfLoading) return;
+    if (!nicaPdfTeam) {
+      error =
+        'Choose a NICA school in the dropdown (e.g. Albany), then click NICA Export.';
+      return;
+    }
     error = '';
 
     const runOne = async (beneficiary) => {
@@ -901,8 +909,12 @@
         </select>
         <button
           class="btn btn-secondary"
+          class:nica-export-idle={!nicaPdfTeam}
           type="button"
-          disabled={!nicaPdfTeam || nicaPdfLoading}
+          disabled={nicaPdfLoading}
+          title={!nicaPdfTeam
+            ? 'Select a NICA team in the dropdown first'
+            : 'Download PDF for the selected team'}
           on:click={downloadNicaExportPdf}
         >
           {nicaPdfLoading ? 'Generating…' : 'NICA Export'}
@@ -1706,6 +1718,10 @@
   .nica-pdf-select:disabled {
     opacity: 0.65;
     cursor: not-allowed;
+  }
+
+  .btn-secondary.nica-export-idle:not(:disabled) {
+    opacity: 0.75;
   }
 
   .alert {
