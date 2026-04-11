@@ -1,0 +1,29 @@
+# Calls send-nica-coach-digest every 15 minutes. The function only sends email during
+# the 8am Pacific hour (same pattern as pg_cron + daily admin summary).
+#
+# Setup (one time in GitHub repo → Settings → Secrets and variables → Actions):
+#   SUPABASE_URL          = https://YOUR_PROJECT_REF.supabase.co   (no trailing slash)
+#   SUPABASE_SERVICE_ROLE_KEY = service_role JWT from Supabase → Project Settings → API
+
+name: NICA coach digest (schedule)
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: POST send-nica-coach-digest
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        run: |
+          test -n "${SUPABASE_URL}" && test -n "${SUPABASE_SERVICE_ROLE_KEY}" || { echo "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in repo secrets"; exit 1; }
+          curl -sS -f -X POST \
+            "${SUPABASE_URL}/functions/v1/send-nica-coach-digest" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Content-Type: application/json" \
+            -d '{"source":"github-actions"}'
