@@ -120,11 +120,26 @@ function arrayBufferToBase64(buffer: ArrayBuffer) {
   return btoa(binary)
 }
 
+/** Matches `src/lib/nicaExportPdf.js` summary shape (canonical NICA table math). */
+type NicaPdfSummary = {
+  volunteerSpots: number
+  remainingLabel: string
+  confirmedSignups: number
+  totalHours: number
+}
+
 function buildPdfBase64(
   beneficiaryLabel: string,
   tableBody: string[][],
-  summary: { totalVolunteers: number; totalRoles: number; totalHours: number },
+  summary: NicaPdfSummary,
 ) {
+  const fmtSpots = (n: number) => {
+    const x = Number(n)
+    if (!Number.isFinite(x)) return '0'
+    if (Math.abs(x - Math.round(x)) < 1e-9) return String(Math.round(x))
+    return x.toFixed(1)
+  }
+
   const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'letter' })
   const pageW = doc.internal.pageSize.getWidth()
   const sideMargin = 28
@@ -142,20 +157,22 @@ function buildPdfBase64(
     'phone',
     'team_club_affiliation',
     'signed_up_role',
+    'spot_wt',
     'event_date',
     'hours',
   ]]
 
   let finalY = 90
   if (tableBody.length) {
-    const c0 = col(0.17)
-    const c1 = col(0.09)
-    const c2 = col(0.09)
-    const c3 = col(0.11)
-    const c4 = col(0.14)
-    const c5 = col(0.21)
-    const c6 = col(0.1)
-    const c7 = tableWidth - c0 - c1 - c2 - c3 - c4 - c5 - c6
+    const c0 = col(0.155)
+    const c1 = col(0.085)
+    const c2 = col(0.085)
+    const c3 = col(0.095)
+    const c4 = col(0.125)
+    const c5 = col(0.18)
+    const c6 = col(0.055)
+    const c7 = col(0.095)
+    const c8 = tableWidth - c0 - c1 - c2 - c3 - c4 - c5 - c6 - c7
     autoTable(doc, {
       startY: 56,
       margin: { left: sideMargin, right: sideMargin },
@@ -174,6 +191,7 @@ function buildPdfBase64(
         5: { cellWidth: c5 },
         6: { cellWidth: c6 },
         7: { cellWidth: c7 },
+        8: { cellWidth: c8 },
       },
     })
     finalY = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY
@@ -191,25 +209,27 @@ function buildPdfBase64(
     doc.setFont('helvetica', 'normal')
   }
 
-  const summaryTableW = Math.min(420, tableWidth)
+  const summaryTableW = Math.min(520, tableWidth)
   autoTable(doc, {
     startY: finalY + 18,
     margin: { left: sideMargin, right: sideMargin },
     tableWidth: summaryTableW,
     body: [
-      ['Total Volunteers', 'Roles', 'Volunteer hours'],
+      ['Volunteer spots (NICA)', 'Remaining (of 10)', 'Confirmed signups', 'Volunteer hours'],
       [
-        String(summary.totalVolunteers),
-        String(summary.totalRoles),
+        fmtSpots(summary.volunteerSpots),
+        summary.remainingLabel,
+        String(summary.confirmedSignups),
         summary.totalHours.toFixed(2),
       ],
     ],
     theme: 'grid',
     styles: { fontSize: 9, cellPadding: 6 },
     columnStyles: {
-      0: { cellWidth: summaryTableW / 3 },
-      1: { cellWidth: summaryTableW / 3 },
-      2: { cellWidth: summaryTableW / 3 },
+      0: { cellWidth: summaryTableW / 4 },
+      1: { cellWidth: summaryTableW / 4 },
+      2: { cellWidth: summaryTableW / 4 },
+      3: { cellWidth: summaryTableW / 4 },
     },
     bodyStyles: { fillColor: [255, 255, 255] },
     didParseCell(data: { section: string; row: { index: number }; cell: { styles: Record<string, unknown> } }) {
@@ -255,6 +275,49 @@ type ProfileRow = {
     status: string
     role: { id: string; name: string; event_date: string; start_time: string; end_time: string } | null
   }> | null
+}
+
+/** Keep in sync with `src/lib/nicaSpotMath.js` (admin NICA table + browser PDF). */
+const NICA_BENEFICIARY_SPOT_GOAL = 10
+const NICA_WEIGHTED_SPOT_ROLES = new Set(['BSC Medic - Afternoon Shift', 'BSC Medic - Morning Shift'])
+const NICA_WEIGHTED_SPOT_VALUE = 2.5
+
+function nicaSpotWeightForRoleName(roleName: string): number {
+  if (NICA_WEIGHTED_SPOT_ROLES.has(roleName)) return NICA_WEIGHTED_SPOT_VALUE
+  return 1
+}
+
+function formatNicaNumberDigest(num: number): string {
+  const x = Number(num)
+  if (!Number.isFinite(x)) return '0'
+  if (Math.abs(x - Math.round(x)) < 1e-9) return String(Math.round(x))
+  return x.toFixed(1)
+}
+
+function volunteerSpotsForBeneficiaryDigest(
+  beneficiary: Beneficiary,
+  affiliations: { id: string; name: string }[],
+  profiles: ProfileRow[],
+): number {
+  const matchingIds = new Set(
+    affiliations.filter((a) => beneficiary.affiliationNames.includes(a.name)).map((a) => a.id),
+  )
+  let sum = 0
+  for (const v of profiles) {
+    if (!matchingIds.has(v.team_club_affiliation_id || '')) continue
+    for (const s of v.signups || []) {
+      if (s.status !== 'confirmed') continue
+      const r = s.role && Array.isArray(s.role) ? s.role[0] : s.role
+      if (!r) continue
+      sum += nicaSpotWeightForRoleName(r.name || '')
+    }
+  }
+  return sum
+}
+
+function nicaRemainingPlain(volunteerSpots: number): string {
+  const remaining = Math.max(NICA_BENEFICIARY_SPOT_GOAL - volunteerSpots, 0)
+  return remaining === 0 ? 'Complete' : formatNicaNumberDigest(remaining)
 }
 
 serve(async (req) => {
@@ -359,9 +422,11 @@ serve(async (req) => {
             )
           `)
           .in('team_club_affiliation_id', matchingIds)
-          .in('role', ['volunteer', 'volunteer_leader'])
 
         if (profErr) throw profErr
+
+        const profileRows = (profiles || []) as ProfileRow[]
+        const volunteerSpots = volunteerSpotsForBeneficiaryDigest(beneficiary, affiliations || [], profileRows)
 
         const exportRows: Array<{
           email: string
@@ -370,13 +435,13 @@ serve(async (req) => {
           phone: string
           team: string
           roleName: string
+          spotWt: string
           eventDate: string
           hoursDisplay: string
           hours: number
         }> = []
 
-        for (const v of (profiles || []) as ProfileRow[]) {
-          if (v.role !== 'volunteer' && v.role !== 'volunteer_leader') continue
+        for (const v of profileRows) {
           const teamName = affiliations?.find((a) => a.id === v.team_club_affiliation_id)?.name || ''
           for (const s of v.signups || []) {
             const r = s.role && Array.isArray(s.role) ? s.role[0] : s.role
@@ -384,6 +449,7 @@ serve(async (req) => {
             const signup = { role: r }
             const flex = isFlexibleTime(r)
             const h = hoursForSignup(signup)
+            const w = nicaSpotWeightForRoleName(r.name || '')
             exportRows.push({
               email: v.email || '',
               first_name: v.first_name || '',
@@ -391,6 +457,7 @@ serve(async (req) => {
               phone: v.phone != null && v.phone !== '' ? String(v.phone) : '',
               team: teamName,
               roleName: r.name || '',
+              spotWt: formatNicaNumberDigest(w),
               eventDate: r.event_date || '',
               hoursDisplay: flex ? '—' : (Number.isFinite(h) ? String(h) : '0'),
               hours: Number.isFinite(h) ? h : 0,
@@ -408,10 +475,9 @@ serve(async (req) => {
           return a.roleName.localeCompare(b.roleName, undefined, { sensitivity: 'base' })
         })
 
-        const distinctEmails = new Set(exportRows.map((r) => r.email.toLowerCase().trim()).filter(Boolean))
-        const totalVolunteers = distinctEmails.size
-        const totalRoles = exportRows.length
         const totalHours = Math.round(exportRows.reduce((sum, r) => sum + r.hours, 0) * 100) / 100
+        const confirmedSignups = exportRows.length
+        const remainingLabel = nicaRemainingPlain(volunteerSpots)
 
         const tableBody = exportRows.map((r) => [
           r.email,
@@ -420,13 +486,15 @@ serve(async (req) => {
           r.phone,
           r.team,
           r.roleName,
+          r.spotWt,
           formatEventDateShort(r.eventDate),
           r.hoursDisplay,
         ])
 
         const pdfBase64 = buildPdfBase64(beneficiary.label, tableBody, {
-          totalVolunteers,
-          totalRoles,
+          volunteerSpots,
+          remainingLabel,
+          confirmedSignups,
           totalHours,
         })
 
@@ -455,8 +523,9 @@ serve(async (req) => {
           <div style="background:#f8fafc;border:1px solid #e5e7eb;padding:20px 24px;margin-bottom:20px;">
             <h2 style="margin:0 0 12px;font-size:17px;color:#111827;">Summary</h2>
             <ul style="margin:0;padding-left:20px;color:#374151;line-height:1.8;">
-              <li><strong>${totalVolunteers}</strong> volunteers (with at least one confirmed signup)</li>
-              <li><strong>${totalRoles}</strong> volunteer roles (confirmed signups)</li>
+              <li><strong>${formatNicaNumberDigest(volunteerSpots)}</strong> volunteer spots (same as admin NICA table; 10-spot goal)</li>
+              <li>Remaining toward goal: <strong>${escapeHtml(remainingLabel)}</strong></li>
+              <li><strong>${confirmedSignups}</strong> confirmed signup rows (listing rows)</li>
               <li><strong>${totalHours.toFixed(2)}</strong> total volunteer hours (shift lengths)</li>
             </ul>
           </div>

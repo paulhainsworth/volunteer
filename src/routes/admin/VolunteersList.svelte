@@ -10,6 +10,11 @@
   import { format } from 'date-fns';
   import { formatEventDateInPacific, formatTimeRange, getTodayDateInPacific, isFlexibleTime } from '../../lib/utils/timeDisplay';
   import { NICA_BENEFICIARIES } from '../../lib/nicaBeneficiaries';
+  import {
+    formatNicaNumber,
+    nicaRemainingLabel,
+    volunteerSpotsForBeneficiary
+  } from '../../lib/nicaSpotMath';
   import { generateNicaTeamVolunteerPdfBlob, nicaTeamPdfFilename } from '../../lib/nicaExportPdf';
   import NicaCoachesPanel from '../../lib/components/NicaCoachesPanel.svelte';
 
@@ -55,31 +60,6 @@
   let nicaCopyFeedback = '';
   let nicaPdfTeam = '';
   let nicaPdfLoading = false;
-
-  /** NICA table: these roles count as more than one spot toward the 10-spot beneficiary goal */
-  const NICA_WEIGHTED_SPOT_ROLES = new Set([
-    'BSC Medic - Afternoon Shift',
-    'BSC Medic - Morning Shift'
-  ]);
-  const NICA_WEIGHTED_SPOT_VALUE = 2.5;
-
-  function nicaSpotWeightForSignup(signup) {
-    const roleName = signup?.role?.name || '';
-    if (NICA_WEIGHTED_SPOT_ROLES.has(roleName)) return NICA_WEIGHTED_SPOT_VALUE;
-    return 1;
-  }
-
-  function nicaVolunteerSpots(volunteer) {
-    const signups = volunteer.signups || [];
-    return signups.reduce((sum, signup) => sum + nicaSpotWeightForSignup(signup), 0);
-  }
-
-  function formatNicaNumber(num) {
-    const x = Number(num);
-    if (!Number.isFinite(x)) return '0';
-    if (Math.abs(x - Math.round(x)) < 1e-9) return String(Math.round(x));
-    return x.toFixed(1);
-  }
 
   onMount(async () => {
     if (!$auth.isAdmin) {
@@ -163,20 +143,12 @@
   })();
 
   $: nicaSummaryRows = NICA_BENEFICIARIES.map((beneficiary) => {
-    const matchingAffiliationIds = new Set(
-      $affiliations
-        .filter((entry) => beneficiary.affiliationNames.includes(entry.name))
-        .map((entry) => entry.id)
-    );
-    const volunteerSpots = $volunteers
-      .filter((volunteer) => matchingAffiliationIds.has(volunteer.team_club_affiliation_id || ''))
-      .reduce((sum, volunteer) => sum + nicaVolunteerSpots(volunteer), 0);
-    const remainingSpots = Math.max(10 - volunteerSpots, 0);
+    const volunteerSpots = volunteerSpotsForBeneficiary(beneficiary, $affiliations, $volunteers);
 
     return {
       beneficiary: beneficiary.label,
       volunteerSpots,
-      remainingLabel: remainingSpots === 0 ? 'Complete 🎉' : formatNicaNumber(remainingSpots)
+      remainingLabel: nicaRemainingLabel(volunteerSpots)
     };
   });
 

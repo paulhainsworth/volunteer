@@ -1,5 +1,11 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import {
+  formatNicaNumber,
+  nicaRemainingLabelPlain,
+  nicaSpotWeightForSignup,
+  volunteerSpotsForBeneficiary
+} from './nicaSpotMath';
 import { formatEventDateInPacific, isFlexibleTime } from './utils/timeDisplay';
 
 function hoursForSignup(signup) {
@@ -26,8 +32,6 @@ export function buildNicaTeamExport(beneficiary, affiliationsList, volunteersLis
 
   const rows = [];
   for (const v of volunteersList) {
-    const profileRole = v.role;
-    if (profileRole !== 'volunteer' && profileRole !== 'volunteer_leader') continue;
     if (!matchingAffiliationIds.has(v.team_club_affiliation_id || '')) continue;
 
     const teamName =
@@ -39,6 +43,7 @@ export function buildNicaTeamExport(beneficiary, affiliationsList, volunteersLis
       const role = s.role;
       const flex = role && isFlexibleTime(role);
       const hours = hoursForSignup(s);
+      const spotWeight = nicaSpotWeightForSignup(s);
       rows.push({
         email: v.email || '',
         first_name: v.first_name || '',
@@ -46,6 +51,8 @@ export function buildNicaTeamExport(beneficiary, affiliationsList, volunteersLis
         phone: v.phone != null && v.phone !== '' ? String(v.phone) : '',
         team_club_affiliation: teamName,
         signed_up_role: role?.name || '',
+        spotWeight,
+        spotWeightDisplay: formatNicaNumber(spotWeight),
         event_date: role?.event_date || '',
         hours,
         hoursDisplay: flex ? '—' : (Number.isFinite(hours) ? String(hours) : '0')
@@ -63,16 +70,15 @@ export function buildNicaTeamExport(beneficiary, affiliationsList, volunteersLis
     return String(a.signed_up_role).localeCompare(String(b.signed_up_role), undefined, { sensitivity: 'base' });
   });
 
-  const distinctEmails = new Set(rows.map((r) => r.email.toLowerCase().trim()).filter(Boolean));
-  const totalVolunteers = distinctEmails.size;
-  const totalRoles = rows.length;
+  const volunteerSpots = volunteerSpotsForBeneficiary(beneficiary, affiliationsList, volunteersList);
   const totalHours = Math.round(rows.reduce((sum, r) => sum + (Number.isFinite(r.hours) ? r.hours : 0), 0) * 100) / 100;
 
   return {
     rows,
     summary: {
-      totalVolunteers,
-      totalRoles,
+      volunteerSpots,
+      remainingLabel: nicaRemainingLabelPlain(volunteerSpots),
+      confirmedSignups: rows.length,
       totalHours
     }
   };
@@ -111,6 +117,7 @@ export function generateNicaTeamVolunteerPdfBlob(beneficiary, affiliationsList, 
     r.phone,
     r.team_club_affiliation,
     r.signed_up_role,
+    r.spotWeightDisplay,
     formatEventDateInPacific(r.event_date, 'short'),
     r.hoursDisplay
   ]);
@@ -123,6 +130,7 @@ export function generateNicaTeamVolunteerPdfBlob(beneficiary, affiliationsList, 
       'phone',
       'team_club_affiliation',
       'signed_up_role',
+      'spot_wt',
       'event_date',
       'hours'
     ]
@@ -130,14 +138,15 @@ export function generateNicaTeamVolunteerPdfBlob(beneficiary, affiliationsList, 
 
   let finalY = 90;
   if (tableBody.length) {
-    const c0 = col(0.17);
-    const c1 = col(0.09);
-    const c2 = col(0.09);
-    const c3 = col(0.11);
-    const c4 = col(0.14);
-    const c5 = col(0.21);
-    const c6 = col(0.1);
-    const c7 = tableWidth - c0 - c1 - c2 - c3 - c4 - c5 - c6;
+    const c0 = col(0.155);
+    const c1 = col(0.085);
+    const c2 = col(0.085);
+    const c3 = col(0.095);
+    const c4 = col(0.125);
+    const c5 = col(0.18);
+    const c6 = col(0.055);
+    const c7 = col(0.095);
+    const c8 = tableWidth - c0 - c1 - c2 - c3 - c4 - c5 - c6 - c7;
     autoTable(doc, {
       startY: 56,
       margin: { left: sideMargin, right: sideMargin },
@@ -155,7 +164,8 @@ export function generateNicaTeamVolunteerPdfBlob(beneficiary, affiliationsList, 
         4: { cellWidth: c4 },
         5: { cellWidth: c5 },
         6: { cellWidth: c6 },
-        7: { cellWidth: c7 }
+        7: { cellWidth: c7 },
+        8: { cellWidth: c8 }
       }
     });
     finalY = doc.lastAutoTable.finalY;
@@ -174,25 +184,27 @@ export function generateNicaTeamVolunteerPdfBlob(beneficiary, affiliationsList, 
   }
   const gap = 18;
 
-  const summaryTableW = Math.min(420, tableWidth);
+  const summaryTableW = Math.min(520, tableWidth);
   autoTable(doc, {
     startY: finalY + gap,
     margin: { left: sideMargin, right: sideMargin },
     tableWidth: summaryTableW,
     body: [
-      ['Total Volunteers', 'Roles', 'Volunteer hours'],
+      ['Volunteer spots (NICA)', 'Remaining (of 10)', 'Confirmed signups', 'Volunteer hours'],
       [
-        String(summary.totalVolunteers),
-        String(summary.totalRoles),
+        formatNicaNumber(summary.volunteerSpots),
+        summary.remainingLabel,
+        String(summary.confirmedSignups),
         summary.totalHours.toFixed(2)
       ]
     ],
     theme: 'grid',
     styles: { fontSize: 9, cellPadding: 6 },
     columnStyles: {
-      0: { cellWidth: summaryTableW / 3 },
-      1: { cellWidth: summaryTableW / 3 },
-      2: { cellWidth: summaryTableW / 3 }
+      0: { cellWidth: summaryTableW / 4 },
+      1: { cellWidth: summaryTableW / 4 },
+      2: { cellWidth: summaryTableW / 4 },
+      3: { cellWidth: summaryTableW / 4 }
     },
     bodyStyles: { fillColor: [255, 255, 255] },
     didParseCell(data) {
