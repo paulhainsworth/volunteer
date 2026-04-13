@@ -70,7 +70,17 @@ export function buildNicaTeamExport(beneficiary, affiliationsList, volunteersLis
     return String(a.signed_up_role).localeCompare(String(b.signed_up_role), undefined, { sensitivity: 'base' });
   });
 
-  const volunteerSpots = volunteerSpotsForBeneficiary(beneficiary, affiliationsList, volunteersList);
+  /** Sum of `spot_wt` in this PDF — must match admin NICA table (same math as volunteerSpotsForBeneficiary). */
+  const volunteerSpotsFromRows = rows.reduce((sum, r) => sum + (Number.isFinite(r.spotWeight) ? r.spotWeight : 0), 0);
+  const volunteerSpotsTable = volunteerSpotsForBeneficiary(beneficiary, affiliationsList, volunteersList);
+  if (rows.length > 0 && Math.abs(volunteerSpotsFromRows - volunteerSpotsTable) > 0.02) {
+    console.warn('[NICA PDF] Spot total mismatch', {
+      beneficiary: beneficiary.label,
+      fromRows: volunteerSpotsFromRows,
+      fromTableFn: volunteerSpotsTable
+    });
+  }
+  const volunteerSpots = volunteerSpotsFromRows;
   const totalHours = Math.round(rows.reduce((sum, r) => sum + (Number.isFinite(r.hours) ? r.hours : 0), 0) * 100) / 100;
 
   return {
@@ -78,7 +88,7 @@ export function buildNicaTeamExport(beneficiary, affiliationsList, volunteersLis
     summary: {
       volunteerSpots,
       remainingLabel: nicaRemainingLabelPlain(volunteerSpots),
-      confirmedSignups: rows.length,
+      signupRowCount: rows.length,
       totalHours
     }
   };
@@ -109,6 +119,16 @@ export function generateNicaTeamVolunteerPdfBlob(beneficiary, affiliationsList, 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(13);
   doc.text(`2026 Berkeley Omnium — ${beneficiary.label} Volunteers`, pageW / 2, 42, { align: 'center' });
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(80, 86, 94);
+  doc.text(
+    'Volunteer spots = sum of spot_wt (some roles count as 2.5). Compare to Admin → Users → NICA Beneficiary Summary.',
+    pageW / 2,
+    56,
+    { align: 'center' }
+  );
+  doc.setTextColor(0, 0, 0);
 
   const tableBody = rows.map((r) => [
     r.email,
@@ -137,6 +157,7 @@ export function generateNicaTeamVolunteerPdfBlob(beneficiary, affiliationsList, 
   ];
 
   let finalY = 90;
+  const detailTableStartY = tableBody.length ? 68 : 56;
   if (tableBody.length) {
     const c0 = col(0.155);
     const c1 = col(0.085);
@@ -148,7 +169,7 @@ export function generateNicaTeamVolunteerPdfBlob(beneficiary, affiliationsList, 
     const c7 = col(0.095);
     const c8 = tableWidth - c0 - c1 - c2 - c3 - c4 - c5 - c6 - c7;
     autoTable(doc, {
-      startY: 56,
+      startY: detailTableStartY,
       margin: { left: sideMargin, right: sideMargin },
       tableWidth,
       head,
@@ -176,7 +197,7 @@ export function generateNicaTeamVolunteerPdfBlob(beneficiary, affiliationsList, 
     doc.text(
       'No volunteers with this team affiliation and at least one confirmed signup.',
       pageW / 2,
-      68,
+      78,
       { align: 'center' }
     );
     doc.setTextColor(0, 0, 0);
@@ -190,11 +211,11 @@ export function generateNicaTeamVolunteerPdfBlob(beneficiary, affiliationsList, 
     margin: { left: sideMargin, right: sideMargin },
     tableWidth: summaryTableW,
     body: [
-      ['Volunteer spots (NICA)', 'Remaining (of 10)', 'Confirmed signups', 'Volunteer hours'],
+      ['Volunteer spots (NICA)', 'Remaining (of 10)', 'Volunteers', 'Volunteer hours'],
       [
         formatNicaNumber(summary.volunteerSpots),
         summary.remainingLabel,
-        String(summary.confirmedSignups),
+        String(summary.signupRowCount),
         summary.totalHours.toFixed(2)
       ]
     ],

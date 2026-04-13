@@ -215,7 +215,7 @@ function buildPdfBase64(
     margin: { left: sideMargin, right: sideMargin },
     tableWidth: summaryTableW,
     body: [
-      ['Volunteer spots (NICA)', 'Remaining (of 10)', 'Confirmed signups', 'Volunteer hours'],
+      ['Volunteer spots (NICA)', 'Remaining (of 10)', 'Volunteers', 'Volunteer hours'],
       [
         fmtSpots(summary.volunteerSpots),
         summary.remainingLabel,
@@ -525,7 +525,7 @@ serve(async (req) => {
             <ul style="margin:0;padding-left:20px;color:#374151;line-height:1.8;">
               <li><strong>${formatNicaNumberDigest(volunteerSpots)}</strong> volunteer spots (same as admin NICA table; 10-spot goal)</li>
               <li>Remaining toward goal: <strong>${escapeHtml(remainingLabel)}</strong></li>
-              <li><strong>${confirmedSignups}</strong> confirmed signup rows (listing rows)</li>
+              <li><strong>${confirmedSignups}</strong> Volunteers (rows in the attached PDF table)</li>
               <li><strong>${totalHours.toFixed(2)}</strong> total volunteer hours (shift lengths)</li>
             </ul>
           </div>
