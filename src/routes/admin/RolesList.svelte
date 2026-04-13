@@ -77,7 +77,8 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
   let inlineSuggestionTimers = {};
 
   onMount(async () => {
-    if (!$auth.isAdmin) {
+    const a = await auth.ensureAdminRouteReady();
+    if (!a.isAdmin) {
       push('/volunteer');
       return;
     }

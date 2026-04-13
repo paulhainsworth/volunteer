@@ -36,7 +36,8 @@ Thanks,
 Berkeley Omnium Volunteer Team`;
 
   onMount(async () => {
-    if (!$auth.isAdmin) {
+    const a = await auth.ensureAdminRouteReady();
+    if (!a.isAdmin) {
       push('/volunteer');
       return;
     }

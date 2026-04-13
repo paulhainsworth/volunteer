@@ -70,7 +70,9 @@
           const { data: { session } } = await supabase.auth.getSession();
           if (session) {
             const { replace } = await import('svelte-spa-router');
-            const { profile } = await auth.refreshSession();
+            // Do not call refreshSession() here — it runs loadCurrentSession() stall recovery and can
+            // clear localStorage right after magic-link tokens were written, leaving a ghost "signed in" UI.
+            const { profile } = await auth.hydrateFromSession(session);
             const needsOnboarding = !profile?.emergency_contact_name;
             const fromMagicLink = hash.includes('type=magiclink');
             const postLogin =

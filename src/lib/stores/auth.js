@@ -1,4 +1,4 @@
-import { writable } from 'svelte/store';
+import { writable, get } from 'svelte/store';
 import { supabase, clearPersistedSupabaseAuthKeys } from '../supabaseClient';
 import { TimeoutError, withSupabaseReadTimeout, withTimeout } from '../utils/withTimeout';
 
@@ -32,6 +32,7 @@ function createAuthStore() {
     loading: true,
     isAdmin: false
   });
+  const getState = () => get({ subscribe });
   let authSubscriptionInitialized = false;
 
   const applySession = async (session) => {
@@ -87,17 +88,41 @@ function createAuthStore() {
     }
   };
 
+  /**
+   * Apply session + load profile. Does not run getSession() stall recovery — safe to call right
+   * after magic-link / OAuth redirect when loadCurrentSession() could falsely "stall" and wipe a
+   * fresh session from localStorage.
+   * @param {import('@supabase/supabase-js').Session} session
+   */
+  const applySessionWithProfile = async (session) => {
+    if (!session?.user) return applySession(null);
+    return applySession(session);
+  };
+
   const loadCurrentSession = async () => {
+    const h = typeof window !== 'undefined' ? window.location.hash || '' : '';
+    const hashMayStillBeProcessing =
+      h.length > 0 && /access_token|refresh_token|type=magiclink|type=recovery/i.test(h);
+
     const stallMarker = { __authStall: true };
+    const stallMs = hashMayStillBeProcessing ? Math.max(GET_SESSION_STALL_MS, 15000) : GET_SESSION_STALL_MS;
+
     const raced = await Promise.race([
       supabase.auth.getSession(),
-      new Promise((resolve) => setTimeout(() => resolve(stallMarker), GET_SESSION_STALL_MS)),
+      new Promise((resolve) => setTimeout(() => resolve(stallMarker), stallMs)),
     ]);
 
     let data;
     let error;
 
     if (raced && raced.__authStall) {
+      if (hashMayStillBeProcessing) {
+        console.warn(
+          '[auth] getSession slow while URL still has auth hash — skipping stall recovery to avoid wiping new magic-link session'
+        );
+        const direct = await supabase.auth.getSession();
+        ({ data, error } = direct);
+      } else {
       console.warn(
         '[auth] getSession stalled (bad refresh often hangs without rejecting); clearing local session'
       );
@@ -113,6 +138,7 @@ function createAuthStore() {
         ({ data, error } = { data: { session: null }, error: null });
       } else {
         ({ data, error } = retryAfterStall);
+      }
       }
     } else {
       ({ data, error } = raced);
@@ -202,6 +228,42 @@ function createAuthStore() {
 
     refreshSession: async () => {
       return loadCurrentSession();
+    },
+
+    /**
+     * Reload profile from DB for an existing session without running stall recovery (use after OAuth/magic link).
+     * @param {import('@supabase/supabase-js').Session | null} [knownSession]
+     */
+    hydrateFromSession: async (knownSession) => {
+      if (knownSession?.user) {
+        return applySessionWithProfile(knownSession);
+      }
+      const { data, error } = await supabase.auth.getSession();
+      if (error) {
+        console.error('[auth] hydrateFromSession getSession:', error);
+        return applySession(null);
+      }
+      return applySessionWithProfile(data.session);
+    },
+
+    /**
+     * Wait for auth bootstrap + profile row (magic link often has session before profiles loads).
+     * Call at the start of admin onMount guards.
+     */
+    ensureAdminRouteReady: async () => {
+      for (let i = 0; i < 80; i++) {
+        if (!getState().loading) break;
+        await new Promise((r) => setTimeout(r, 50));
+      }
+      let s = getState();
+      if (s.user && !s.profile) {
+        const { data, error } = await supabase.auth.getSession();
+        if (!error && data.session) {
+          await applySessionWithProfile(data.session);
+        }
+        s = getState();
+      }
+      return s;
     },
 
     signUp: async (email, password, firstName, lastName, role = 'volunteer') => {
