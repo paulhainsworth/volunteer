@@ -1,5 +1,5 @@
 import { writable } from 'svelte/store';
-import { supabase } from '../supabaseClient';
+import { supabase, clearPersistedSupabaseAuthKeys } from '../supabaseClient';
 import { TimeoutError, withSupabaseReadTimeout, withTimeout } from '../utils/withTimeout';
 
 /** Whole bootstrap (session + profile retries) — outer safety net only */
@@ -101,8 +101,19 @@ function createAuthStore() {
       console.warn(
         '[auth] getSession stalled (bad refresh often hangs without rejecting); clearing local session'
       );
+      clearPersistedSupabaseAuthKeys(window.localStorage);
+      clearPersistedSupabaseAuthKeys(window.sessionStorage);
       await supabase.auth.signOut({ scope: 'local' });
-      ({ data, error } = await supabase.auth.getSession());
+      const retryAfterStall = await Promise.race([
+        supabase.auth.getSession(),
+        new Promise((resolve) => setTimeout(() => resolve(stallMarker), GET_SESSION_STALL_MS)),
+      ]);
+      if (retryAfterStall && retryAfterStall.__authStall) {
+        console.warn('[auth] getSession stalled again after clear; continuing signed out');
+        ({ data, error } = { data: { session: null }, error: null });
+      } else {
+        ({ data, error } = retryAfterStall);
+      }
     } else {
       ({ data, error } = raced);
     }
