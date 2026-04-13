@@ -11,6 +11,11 @@ on:
   schedule:
     - cron: '*/15 * * * *'
   workflow_dispatch:
+    inputs:
+      force:
+        description: 'Skip 8am PT window and re-send for today (manual testing only)'
+        type: boolean
+        default: false
 
 jobs:
   ping:
@@ -22,8 +27,13 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
         run: |
           test -n "${SUPABASE_URL}" && test -n "${SUPABASE_SERVICE_ROLE_KEY}" || { echo "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in repo secrets"; exit 1; }
+          BODY='{"source":"github-actions"}'
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.force }}" = "true" ]; then
+            BODY='{"source":"github-actions","force":true}'
+          fi
+          echo "POST body: ${BODY}"
           curl -sS -f -X POST \
             "${SUPABASE_URL}/functions/v1/send-nica-coach-digest" \
             -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
             -H "Content-Type: application/json" \
-            -d '{"source":"github-actions"}'
+            -d "${BODY}"
