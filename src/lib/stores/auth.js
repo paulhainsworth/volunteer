@@ -6,6 +6,8 @@ import { TimeoutError, withSupabaseReadTimeout, withTimeout } from '../utils/wit
 const AUTH_BOOTSTRAP_TIMEOUT_MS = 120000;
 /** Profile row fetch only — keep bounded; session read is not wrapped (see loadCurrentSession) */
 const PROFILE_READ_TIMEOUT_MS = 12000;
+/** If refresh hangs without returning, getSession never rejects — race so we can clear local storage */
+const GET_SESSION_STALL_MS = 5000;
 
 /**
  * Stale or invalid refresh tokens in localStorage can make getSession/refresh hang or fail and
@@ -86,10 +88,24 @@ function createAuthStore() {
   };
 
   const loadCurrentSession = async () => {
-    // Do not wrap getSession() in withTimeout. If the race rejects early, the underlying
-    // Supabase promise keeps running and can block later auth calls (e.g. magic-link invoke),
-    // leaving the login button stuck on "Sending link...".
-    let { data, error } = await supabase.auth.getSession();
+    const stallMarker = { __authStall: true };
+    const raced = await Promise.race([
+      supabase.auth.getSession(),
+      new Promise((resolve) => setTimeout(() => resolve(stallMarker), GET_SESSION_STALL_MS)),
+    ]);
+
+    let data;
+    let error;
+
+    if (raced && raced.__authStall) {
+      console.warn(
+        '[auth] getSession stalled (bad refresh often hangs without rejecting); clearing local session'
+      );
+      await supabase.auth.signOut({ scope: 'local' });
+      ({ data, error } = await supabase.auth.getSession());
+    } else {
+      ({ data, error } = raced);
+    }
 
     if (error && shouldClearLocalSessionAfterAuthError(error)) {
       console.warn('[auth] Clearing local session after recoverable auth error:', error.message);
@@ -212,24 +228,46 @@ function createAuthStore() {
 
     signInWithMagicLink: async (email) => {
       const redirectTo = typeof window !== 'undefined' ? window.location.origin + '/' : '';
-      // 45s to allow Edge Function cold start on production
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
       const INVOKE_TIMEOUT_MS = 45000;
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Request timed out. The server may be waking up — please try again in a moment.')), INVOKE_TIMEOUT_MS)
-      );
-      const { data, error } = await Promise.race([
-        supabase.functions.invoke('send-magic-link', { body: { to: email, redirectTo } }),
-        timeoutPromise
-      ]);
-      if (error) {
-        if (data?.error) throw new Error(data.error);
-        const msg = error.message || '';
-        if (msg.includes('429') || msg.includes('non-2xx') || msg.includes('Too many')) {
-          throw new Error('Too many sign-in attempts. Please wait a few minutes and try again.');
+
+      // Use fetch + anon JWT instead of supabase.functions.invoke: a stuck GoTrue refresh can
+      // serialize/block all client requests, leaving the button on "Sending link..." forever.
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), INVOKE_TIMEOUT_MS);
+
+      try {
+        const res = await fetch(`${supabaseUrl}/functions/v1/send-magic-link`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${anonKey}`,
+            apikey: anonKey,
+          },
+          body: JSON.stringify({ to: email, redirectTo }),
+          signal: controller.signal,
+        });
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok) {
+          const msg = data?.error || res.statusText || 'Failed to send sign-in link';
+          if (res.status === 429 || String(msg).includes('429') || String(msg).toLowerCase().includes('too many')) {
+            throw new Error('Too many sign-in attempts. Please wait a few minutes and try again.');
+          }
+          throw new Error(typeof msg === 'string' ? msg : JSON.stringify(data));
         }
-        throw error;
+        if (data?.error) throw new Error(data.error);
+      } catch (e) {
+        if (e?.name === 'AbortError') {
+          throw new Error(
+            'Request timed out. The server may be waking up — please try again in a moment.'
+          );
+        }
+        throw e;
+      } finally {
+        clearTimeout(timeoutId);
       }
-      if (data?.error) throw new Error(data.error);
     },
 
     signOut: async () => {
