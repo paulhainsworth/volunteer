@@ -7,6 +7,22 @@ const AUTH_BOOTSTRAP_TIMEOUT_MS = 120000;
 /** Profile row fetch only — keep bounded; session read is not wrapped (see loadCurrentSession) */
 const PROFILE_READ_TIMEOUT_MS = 12000;
 
+/**
+ * Stale or invalid refresh tokens in localStorage can make getSession/refresh hang or fail and
+ * block other Supabase requests (e.g. public role listings). Clear local session so anon reads work.
+ * @param {unknown} error
+ */
+function shouldClearLocalSessionAfterAuthError(error) {
+  if (!error || typeof error !== 'object') return false;
+  const msg = String(/** @type {{ message?: string }} */ (error).message ?? '').toLowerCase();
+  const code = String(/** @type {{ code?: string }} */ (error).code ?? '').toLowerCase();
+  if (code === 'refresh_token_not_found' || code === 'invalid_grant') return true;
+  if (msg.includes('invalid refresh token')) return true;
+  if (msg.includes('refresh token')) return true;
+  if (msg.includes('jwt') && (msg.includes('expired') || msg.includes('invalid'))) return true;
+  return false;
+}
+
 function createAuthStore() {
   const { subscribe, set, update } = writable({
     user: null,
@@ -73,8 +89,28 @@ function createAuthStore() {
     // Do not wrap getSession() in withTimeout. If the race rejects early, the underlying
     // Supabase promise keeps running and can block later auth calls (e.g. magic-link invoke),
     // leaving the login button stuck on "Sending link...".
-    const { data, error } = await supabase.auth.getSession();
-    if (error) throw error;
+    let { data, error } = await supabase.auth.getSession();
+
+    if (error && shouldClearLocalSessionAfterAuthError(error)) {
+      console.warn('[auth] Clearing local session after recoverable auth error:', error.message);
+      await supabase.auth.signOut({ scope: 'local' });
+      const retry = await supabase.auth.getSession();
+      data = retry.data;
+      error = retry.error;
+    }
+
+    if (error) {
+      console.error('[auth] getSession failed; continuing signed out so public pages can load:', error);
+      if (shouldClearLocalSessionAfterAuthError(error)) {
+        try {
+          await supabase.auth.signOut({ scope: 'local' });
+        } catch {
+          /* ignore */
+        }
+      }
+      return applySession(null);
+    }
+
     return applySession(data.session);
   };
 
@@ -108,6 +144,9 @@ function createAuthStore() {
       const bootstrapPromise = loadCurrentSession().catch((error) => {
         console.error('Auth bootstrap failed:', error);
         if (!(error instanceof TimeoutError)) {
+          if (shouldClearLocalSessionAfterAuthError(error)) {
+            void supabase.auth.signOut({ scope: 'local' });
+          }
           setLoggedOutState();
         }
         throw error;
