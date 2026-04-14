@@ -344,36 +344,24 @@ function createAuthStore() {
     },
 
     signOut: async () => {
-      const SIGN_OUT_TIMEOUT = 15000; // 15s - Supabase server revoke can be slow
-      let timeoutId;
-      let timedOut = false;
-
-      const timeoutPromise = new Promise((_, reject) => {
-        timeoutId = setTimeout(() => {
-          timedOut = true;
-          reject(new Error('Sign out timed out'));
-        }, SIGN_OUT_TIMEOUT);
-      });
-
+      // Never await global signOut() (server refresh-token revoke) — it can hang when GoTrue is
+      // stuck, leaving the UI on "Signing out…". Local-only + wiping storage always finishes.
       try {
-        const { error } = await Promise.race([
-          supabase.auth.signOut(),
-          timeoutPromise
-        ]);
-
-        if (timeoutId) clearTimeout(timeoutId);
-
-        if (error) throw error;
+        await withTimeout(() => supabase.auth.signOut({ scope: 'local' }), {
+          timeoutMs: 5000,
+          label: 'auth.signOut.local',
+        });
       } catch (error) {
-        if (timeoutId) clearTimeout(timeoutId);
-        if (timedOut) {
-          console.warn('Sign out timed out, clearing local session');
+        if (error instanceof TimeoutError) {
+          console.warn('Local sign out stalled; clearing persisted session keys');
         } else {
           console.error('Sign out failed:', error);
         }
-        // Ensure local session is cleared so refresh doesn't show logged in
-        await supabase.auth.signOut({ scope: 'local' });
       } finally {
+        if (typeof window !== 'undefined') {
+          clearPersistedSupabaseAuthKeys(window.localStorage);
+          clearPersistedSupabaseAuthKeys(window.sessionStorage);
+        }
         set({ user: null, profile: null, loading: false, isAdmin: false });
       }
     },
