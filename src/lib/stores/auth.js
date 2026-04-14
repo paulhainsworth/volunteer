@@ -34,9 +34,12 @@ function createAuthStore() {
   });
   const getState = () => get({ subscribe });
   let authSubscriptionInitialized = false;
+  /** After first full `loadCurrentSession` bootstrap, further `initialize()` calls only hydrate (no stall recovery). */
+  let authFullBootstrapDone = false;
 
   const applySession = async (session) => {
     if (session?.user) {
+      const prev = getState();
       let profile = null;
       let retries = 0;
       const maxRetries = 5;
@@ -73,6 +76,12 @@ function createAuthStore() {
           }
           throw e;
         }
+      }
+
+      // If profile read failed but session is still the same user, keep last known profile so we
+      // don't flip isAdmin / nav to volunteer links (Layout uses profile.role + isAdmin).
+      if (!profile && prev.user?.id === session.user.id && prev.profile) {
+        profile = prev.profile;
       }
 
       set({
@@ -194,6 +203,17 @@ function createAuthStore() {
         authSubscriptionInitialized = true;
       }
 
+      // Profile / Onboarding call `initialize()` again after saves. Re-running full
+      // `loadCurrentSession()` repeats getSession stall recovery and can clear localStorage.
+      if (authFullBootstrapDone) {
+        const { data, error } = await supabase.auth.getSession();
+        if (error) {
+          console.error('[auth] initialize (re-entry) getSession:', error);
+          return applySession(null);
+        }
+        return applySessionWithProfile(data.session);
+      }
+
       const bootstrapPromise = loadCurrentSession().catch((error) => {
         console.error('Auth bootstrap failed:', error);
         if (!(error instanceof TimeoutError)) {
@@ -206,16 +226,19 @@ function createAuthStore() {
       });
 
       try {
-        return await withTimeout(bootstrapPromise, {
+        const result = await withTimeout(bootstrapPromise, {
           label: 'auth.initialize',
           timeoutMs: AUTH_BOOTSTRAP_TIMEOUT_MS
         });
+        authFullBootstrapDone = true;
+        return result;
       } catch (error) {
         if (error instanceof TimeoutError) {
           console.warn(
             'Auth bootstrap timed out; finishing load in background without clearing session.'
           );
           update((state) => ({ ...state, loading: false }));
+          authFullBootstrapDone = true;
           void loadCurrentSession()
             .then(() => {})
             .catch((err) => console.error('Auth bootstrap background retry failed:', err));

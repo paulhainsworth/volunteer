@@ -91,8 +91,8 @@
         success = 'Profile updated successfully!';
       }
 
-      // Refresh auth state
-      await auth.initialize();
+      // Reload profile without full auth bootstrap (initialize re-entry can run stall recovery).
+      await auth.hydrateFromSession();
     } catch (err) {
       error = err.message || 'Failed to update profile';
     } finally {

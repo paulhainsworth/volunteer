@@ -65,8 +65,8 @@
 
       if (updateError) throw updateError;
 
-      // Refresh auth state to get updated profile
-      await auth.initialize();
+      // Reload profile without full auth bootstrap
+      await auth.hydrateFromSession();
 
       const nextRoute =
         typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('postOnboardingRoute') : null;
