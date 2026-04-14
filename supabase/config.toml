@@ -14,3 +14,6 @@ verify_jwt = false
 
 [functions.send-nica-coach-digest]
 verify_jwt = false
+
+[functions.submit-kids-clinic-signup]
+verify_jwt = false
