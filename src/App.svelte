@@ -59,7 +59,12 @@
 
   onMount(() => {
     const hash = typeof window !== 'undefined' ? window.location.hash : '';
-    const hasAuthParams = hash && (hash.includes('access_token=') || hash.includes('type=magiclink'));
+    const search = typeof window !== 'undefined' ? window.location.search : '';
+    /** Capture before auth.initialize() — PKCE code may be stripped from the URL after exchange. */
+    const hadPkceCode = /[?&]code=/.test(search);
+    const hasAuthParams =
+      (hash && (hash.includes('access_token=') || hash.includes('type=magiclink'))) ||
+      hadPkceCode;
     // Run auth init without blocking mount so the login form can submit while bootstrap runs;
     // a timed-out getSession race previously left Supabase hung and froze magic-link sends.
     void (async () => {
@@ -68,7 +73,7 @@
         // Supabase parses auth tokens from the URL asynchronously. Wait for session
         // to be recovered before we clear the hash, or the tokens are lost.
         const { supabase } = await import('./lib/supabaseClient');
-        for (let i = 0; i < 20; i++) {
+        for (let i = 0; i < 40; i++) {
           const { data: { session } } = await supabase.auth.getSession();
           if (session) {
             const { replace } = await import('svelte-spa-router');
@@ -76,7 +81,7 @@
             // clear localStorage right after magic-link tokens were written, leaving a ghost "signed in" UI.
             const { profile } = await auth.hydrateFromSession(session);
             const needsOnboarding = !profile?.emergency_contact_name;
-            const fromMagicLink = hash.includes('type=magiclink');
+            const fromMagicLink = hash.includes('type=magiclink') || hadPkceCode;
             const postLogin =
               typeof window !== 'undefined'
                 ? new URLSearchParams(window.location.search).get('post_login')

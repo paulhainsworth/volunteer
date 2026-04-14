@@ -99,10 +99,19 @@ function createAuthStore() {
     return applySession(session);
   };
 
-  const loadCurrentSession = async () => {
-    const h = typeof window !== 'undefined' ? window.location.hash || '' : '';
-    const hashMayStillBeProcessing =
+  /** True while Supabase may still be exchanging magic-link / recovery tokens (hash or PKCE ?code=). */
+  const authUrlMayStillBeProcessing = () => {
+    if (typeof window === 'undefined') return false;
+    const h = window.location.hash || '';
+    const s = window.location.search || '';
+    const fromHash =
       h.length > 0 && /access_token|refresh_token|type=magiclink|type=recovery/i.test(h);
+    const fromPkce = /[?&]code=/.test(s);
+    return fromHash || fromPkce;
+  };
+
+  const loadCurrentSession = async () => {
+    const hashMayStillBeProcessing = authUrlMayStillBeProcessing();
 
     const stallMarker = { __authStall: true };
     const stallMs = hashMayStillBeProcessing ? Math.max(GET_SESSION_STALL_MS, 15000) : GET_SESSION_STALL_MS;
@@ -118,7 +127,7 @@ function createAuthStore() {
     if (raced && raced.__authStall) {
       if (hashMayStillBeProcessing) {
         console.warn(
-          '[auth] getSession slow while URL still has auth hash — skipping stall recovery to avoid wiping new magic-link session'
+          '[auth] getSession slow while URL still has auth hash or PKCE code — skipping stall recovery to avoid wiping new magic-link session'
         );
         const direct = await supabase.auth.getSession();
         ({ data, error } = direct);
