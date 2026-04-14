@@ -3,6 +3,9 @@
   import { auth } from '../stores/auth';
   import { theme } from '../stores/theme';
   import { push } from 'svelte-spa-router';
+  import { location } from 'svelte-spa-router';
+
+  $: isKidsLanding = $location === '/kids';
 
   let showMobileMenu = false;
   let signingOut = false;
@@ -36,7 +39,8 @@
   }
 </script>
 
-<div class="app-layout">
+<div class="app-layout" class:kids-landing={isKidsLanding}>
+  {#if !isKidsLanding}
   <nav class="navbar">
     <div class="nav-container">
       <div class="nav-brand">
@@ -103,14 +107,17 @@
       </div>
     </div>
   </nav>
+  {/if}
 
-  <main class="main-content">
+  <main class="main-content" class:main-content--kids={isKidsLanding}>
     <slot />
   </main>
 
+  {#if !isKidsLanding}
   <footer class="footer">
     <p>&copy; 2025 Berkeley Bicycle Club. All rights reserved.</p>
   </footer>
+  {/if}
 </div>
 
 <style>
@@ -285,6 +292,15 @@
     max-width: 1200px;
     width: 100%;
     margin: 0 auto;
+  }
+
+  .main-content--kids {
+    padding: 0;
+    max-width: none;
+  }
+
+  .kids-landing {
+    background: var(--bg-primary);
   }
 
   .footer {

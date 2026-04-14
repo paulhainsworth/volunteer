@@ -14,6 +14,16 @@
     <meta name="twitter:title" content="2026 Berkeley Omnium Volunteer Hub" />
   </head>
   <body>
+    <script>
+      (function () {
+        try {
+          var p = location.pathname.replace(/\/$/, '') || '/';
+          if (p === '/kids' && (!location.hash || location.hash === '#')) {
+            history.replaceState(null, '', '/#/kids');
+          }
+        } catch (e) {}
+      })();
+    </script>
     <div id="app"></div>
     <script type="module" src="/src/main.js"></script>
   </body>
