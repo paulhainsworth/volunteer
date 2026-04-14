@@ -3,7 +3,8 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-const storageKey = (() => {
+/** Same key GoTrue uses for persisted session JSON (read access_token for PostgREST without blocked client). */
+export const storageKey = (() => {
   if (!supabaseUrl) return undefined;
   try {
     return `sb-${new URL(supabaseUrl).hostname.split('.')[0]}-auth-token`;

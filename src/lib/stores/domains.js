@@ -1,6 +1,10 @@
 import { writable } from 'svelte/store';
 import { supabase } from '../supabaseClient';
+import { getUserPostgrestClient } from '../supabaseUserRest';
 import { withSupabaseReadTimeout } from '../utils/withTimeout';
+
+/** Avoid main supabase client when GoTrue refresh blocks the queue (same pattern as public reads). */
+const clientForReads = () => getUserPostgrestClient() ?? supabase;
 
 function createDomainsStore() {
   const { subscribe, set, update } = writable([]);
@@ -12,7 +16,7 @@ function createDomainsStore() {
       const { leaderId } = options;
 
       const { data, error } = await withSupabaseReadTimeout(async () => {
-        let query = supabase
+        let query = clientForReads()
           .from('volunteer_leader_domains')
           .select(`
             *,
@@ -46,7 +50,8 @@ function createDomainsStore() {
     },
 
     fetchDomain: async (id) => withSupabaseReadTimeout(async () => {
-      const { data, error } = await supabase
+      const db = clientForReads();
+      const { data, error } = await db
         .from('volunteer_leader_domains')
         .select(`
           *,
@@ -78,7 +83,7 @@ function createDomainsStore() {
       let confirmedCountByRole = {};
       if (roles.length > 0) {
         const roleIds = roles.map((r) => r.id);
-        const { data: signupRows } = await supabase
+        const { data: signupRows } = await db
           .from('signups')
           .select('role_id')
           .eq('status', 'confirmed')
