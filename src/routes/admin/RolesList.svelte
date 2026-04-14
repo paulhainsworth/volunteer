@@ -5,6 +5,7 @@ import { domains } from '../../lib/stores/domains';
 import { affiliations } from '../../lib/stores/affiliations';
 import { auth } from '../../lib/stores/auth';
 import { supabase } from '../../lib/supabaseClient';
+import { getUserPostgrestClient } from '../../lib/supabaseUserRest';
 import { sendWelcomeEmail } from '../../lib/volunteerSignup';
 import { notifySlackSignup } from '../../lib/notifySlackSignup';
 import { getEdgeInvokeErrorMessage } from '../../lib/edgeFunctionError';
@@ -19,6 +20,12 @@ import {
   normalizeCriticalPositionsInput
 } from '../../lib/utils/criticalSpots';
 import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
+
+  /** Same RLS as main client; avoids hung GoTrue blocking signups reads (empty list, no error). */
+  function clientForAuthedReads() {
+    // PostgrestClient vs SupabaseClient: same .from().select() chain; narrow for tooling.
+    return /** @type {typeof supabase} */ (getUserPostgrestClient() ?? supabase);
+  }
 
   export let params = {};
 
@@ -153,7 +160,7 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
 
   async function fetchRoleVolunteers(roleId) {
     try {
-      const { data, error: fetchError } = await supabase
+      const { data, error: fetchError } = await clientForAuthedReads()
         .from('signups')
         .select(`
           id,
@@ -551,7 +558,7 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
 
   async function fetchVolunteersForRoleIds(roleIds) {
     if (!roleIds?.length) return [];
-    const { data, error: fetchError } = await supabase
+    const { data, error: fetchError } = await clientForAuthedReads()
       .from('signups')
       .select(`
         volunteer:profiles!volunteer_id(id, first_name, last_name, email)
