@@ -1,6 +1,8 @@
 <script>
-  import { onDestroy } from 'svelte';
+  import { onDestroy, onMount } from 'svelte';
+  import { replace } from 'svelte-spa-router';
   import { supabase } from '../lib/supabaseClient';
+  import { isContactsFeatureAvailable } from '../lib/contactsAvailability';
 
   let query = '';
   let results = [];
@@ -65,6 +67,18 @@
       if (seq === searchSeq) loading = false;
     }
   }
+
+  function redirectIfContactsExpired() {
+    if (!isContactsFeatureAvailable()) {
+      replace('/');
+    }
+  }
+
+  onMount(() => {
+    redirectIfContactsExpired();
+    const intervalId = setInterval(redirectIfContactsExpired, 1000);
+    return () => clearInterval(intervalId);
+  });
 
   onDestroy(() => clearTimeout(debounceId));
 </script>
@@ -310,15 +324,6 @@
 
   :global([data-theme='dark']) .contact-link {
     color: #6ea8fe;
-  }
-
-  .contact-text {
-    color: #212529;
-    word-break: break-all;
-  }
-
-  :global([data-theme='dark']) .contact-text {
-    color: var(--text-color, #e9ecef);
   }
 
   .contact-missing {
