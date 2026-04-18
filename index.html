@@ -21,6 +21,9 @@
           if (p === '/kids' && (!location.hash || location.hash === '#')) {
             history.replaceState(null, '', '/#/kids');
           }
+          if (p === '/contacts' && (!location.hash || location.hash === '#')) {
+            history.replaceState(null, '', '/#/contacts');
+          }
         } catch (e) {}
       })();
     </script>
