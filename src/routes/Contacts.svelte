@@ -9,17 +9,20 @@
   let debounceId;
   let searchSeq = 0;
 
+  /** Derived for display only — do not schedule searches from reactive blocks (that can loop when results/loading update). */
   $: trimmed = (query || '').trim();
-  $: {
+
+  function scheduleSearchFromInput(event) {
+    const t = (event?.currentTarget?.value ?? query ?? '').trim();
     clearTimeout(debounceId);
-    if (trimmed.length < 3) {
+    if (t.length < 3) {
       searchSeq++;
       results = [];
       loading = false;
       error = '';
-    } else {
-      debounceId = setTimeout(() => void runSearch(trimmed), 250);
+      return;
     }
+    debounceId = setTimeout(() => void runSearch(t), 250);
   }
 
   function phoneTelHref(phone) {
@@ -74,6 +77,7 @@
       autocomplete="off"
       placeholder="Start typing a first name, last name, or email…"
       bind:value={query}
+      on:input={scheduleSearchFromInput}
       spellcheck="false"
     />
     <p class="search-hint">Type at least three characters to see results.</p>
