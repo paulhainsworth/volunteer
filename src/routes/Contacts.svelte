@@ -35,6 +35,13 @@
     return d.startsWith('1') && d.length > 10 ? `+${d}` : d;
   }
 
+  /** Opens system mail sheet (iOS/Android) or default mail client with To: prefilled. */
+  function mailtoHref(email) {
+    const e = (email || '').trim();
+    if (!e) return null;
+    return `mailto:${e}`;
+  }
+
   async function runSearch(q) {
     if (q.length < 3) {
       results = [];
@@ -95,6 +102,7 @@
       {:else}
         <ul class="contact-card-list" role="list">
           {#each results as row (row.id)}
+            {@const emailHref = mailtoHref(row.email)}
             <li>
               <article class="contact-card" aria-label="Volunteer contact">
                 <h2 class="contact-name">
@@ -119,7 +127,11 @@
                 </div>
                 <div class="contact-line">
                   <span class="label">Email</span>
-                  <span class="contact-text">{row.email || '—'}</span>
+                  {#if emailHref}
+                    <a class="contact-link" href={emailHref}>{row.email.trim()}</a>
+                  {:else}
+                    <span class="contact-missing">—</span>
+                  {/if}
                 </div>
               </article>
             </li>
@@ -289,10 +301,15 @@
   .contact-link {
     color: #0d6efd;
     text-decoration: none;
+    word-break: break-all;
   }
 
   .contact-link:hover {
     text-decoration: underline;
+  }
+
+  :global([data-theme='dark']) .contact-link {
+    color: #6ea8fe;
   }
 
   .contact-text {
