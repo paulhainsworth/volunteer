@@ -34,6 +34,7 @@
   // Board
   import Board from './routes/Board.svelte';
   import KidsClinic from './routes/KidsClinic.svelte';
+  import Contacts from './routes/Contacts.svelte';
 
   const routes = {
     '/': Home,
@@ -54,7 +55,8 @@
     '/admin/domains': Domains,
     '/admin/communications': Communications,
     '/board': Board,
-    '/kids': KidsClinic
+    '/kids': KidsClinic,
+    '/contacts': Contacts
   };
 
   onMount(() => {
