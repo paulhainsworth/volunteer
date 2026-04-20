@@ -7,6 +7,7 @@
   import { supabase } from '../../lib/supabaseClient';
   import { push } from 'svelte-spa-router';
   import { formatRoleScheduleDate, getRoleScheduleGroupKey } from '../../lib/utils/timeDisplay';
+  import { friendlyEmailDigestSettingsError } from '../../lib/utils/emailDigestSettingsError';
 
   let loading = true;
   let error = '';
@@ -76,7 +77,10 @@ Berkeley Omnium Volunteer Team`;
       adminDailySummaryEnabled = data?.admin_daily_volunteer_summary_enabled !== false;
     } catch (err) {
       console.error(err);
-      adminSummarySettingError = err.message || 'Could not load automated email settings';
+      adminSummarySettingError = friendlyEmailDigestSettingsError(
+        err,
+        'Could not load automated email settings'
+      );
       adminDailySummaryEnabled = true;
     } finally {
       loadingAdminSummarySetting = false;
@@ -97,7 +101,7 @@ Berkeley Omnium Volunteer Team`;
       if (uErr) throw uErr;
     } catch (err) {
       adminDailySummaryEnabled = prev;
-      adminSummarySettingError = err.message || 'Could not save';
+      adminSummarySettingError = friendlyEmailDigestSettingsError(err, 'Could not save');
     } finally {
       savingAdminSummaryToggle = false;
     }

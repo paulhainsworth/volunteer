@@ -4,6 +4,7 @@
   import { auth } from '../stores/auth';
   import { NICA_BENEFICIARIES } from '../nicaBeneficiaries';
   import { format } from 'date-fns';
+  import { friendlyEmailDigestSettingsError } from '../utils/emailDigestSettingsError';
 
   export let affiliations = [];
 
@@ -75,7 +76,7 @@
       digestEmailsEnabled = data?.nica_coach_daily_digest_enabled !== false;
     } catch (e) {
       console.error(e);
-      digestSettingError = e.message || 'Could not load digest email setting';
+      digestSettingError = friendlyEmailDigestSettingsError(e, 'Could not load digest email setting');
       digestEmailsEnabled = true;
     } finally {
       loadingDigestSetting = false;
@@ -96,7 +97,7 @@
       if (error) throw error;
     } catch (e) {
       digestEmailsEnabled = prev;
-      digestSettingError = e.message || 'Could not save';
+      digestSettingError = friendlyEmailDigestSettingsError(e, 'Could not save');
     } finally {
       savingDigestToggle = false;
     }
