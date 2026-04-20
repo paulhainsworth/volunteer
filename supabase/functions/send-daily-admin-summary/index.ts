@@ -269,6 +269,30 @@ serve(async (req) => {
     const body = await req.json().catch(() => ({}))
     const force = body?.force === true
     const source = body?.source || 'cron'
+
+    const { data: digestSettings, error: digestSettingsErr } = await supabaseAdmin
+      .from('email_digest_settings')
+      .select('admin_daily_volunteer_summary_enabled')
+      .eq('id', 1)
+      .maybeSingle()
+
+    if (digestSettingsErr) {
+      console.error('send-daily-admin-summary: email_digest_settings lookup failed', digestSettingsErr)
+    }
+
+    const adminSummaryEnabled = digestSettings?.admin_daily_volunteer_summary_enabled !== false
+
+    if (!adminSummaryEnabled) {
+      return new Response(
+        JSON.stringify({
+          skipped: true,
+          reason:
+            'Daily volunteer summary is disabled (Admin → Communications: automated admin summary email).',
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      )
+    }
+
     const now = new Date()
     const pacificHour = toPacificHour(now)
 

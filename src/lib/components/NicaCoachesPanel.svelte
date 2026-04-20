@@ -31,6 +31,11 @@
   let adding = false;
   let addError = '';
 
+  let digestEmailsEnabled = true;
+  let loadingDigestSetting = true;
+  let savingDigestToggle = false;
+  let digestSettingError = '';
+
   let showCoachModal = false;
   let editingCoach = null;
   let editForm = {
@@ -53,7 +58,49 @@
   onMount(() => {
     if (!form.email_end_date) form.email_end_date = defaultEndDate();
     loadCoaches();
+    loadDigestSetting();
   });
+
+  async function loadDigestSetting() {
+    loadingDigestSetting = true;
+    digestSettingError = '';
+    try {
+      const { data, error } = await supabase
+        .from('email_digest_settings')
+        .select('nica_coach_daily_digest_enabled')
+        .eq('id', 1)
+        .maybeSingle();
+
+      if (error) throw error;
+      digestEmailsEnabled = data?.nica_coach_daily_digest_enabled !== false;
+    } catch (e) {
+      console.error(e);
+      digestSettingError = e.message || 'Could not load digest email setting';
+      digestEmailsEnabled = true;
+    } finally {
+      loadingDigestSetting = false;
+    }
+  }
+
+  async function saveDigestSetting(next) {
+    savingDigestToggle = true;
+    digestSettingError = '';
+    const prev = digestEmailsEnabled;
+    digestEmailsEnabled = next;
+    try {
+      const { error } = await supabase
+        .from('email_digest_settings')
+        .update({ nica_coach_daily_digest_enabled: next })
+        .eq('id', 1);
+
+      if (error) throw error;
+    } catch (e) {
+      digestEmailsEnabled = prev;
+      digestSettingError = e.message || 'Could not save';
+    } finally {
+      savingDigestToggle = false;
+    }
+  }
 
   async function loadCoaches() {
     loadingCoaches = true;
@@ -240,6 +287,31 @@
 </script>
 
 <div class="nica-coaches-card">
+  <div class="digest-toggle-row" class:digest-toggle-row--disabled={loadingDigestSetting}>
+    <label class="digest-toggle-label" for="nc-digest-enabled">
+      <input
+        id="nc-digest-enabled"
+        type="checkbox"
+        checked={digestEmailsEnabled}
+        disabled={loadingDigestSetting || savingDigestToggle}
+        on:change={(e) => saveDigestSetting(/** @type {HTMLInputElement} */ (e.currentTarget).checked)}
+      />
+      <span class="digest-toggle-text">
+        <span class="digest-toggle-title">Daily signup summary emails to team coaches</span>
+        <span class="digest-toggle-help">
+          When enabled, NICA team coaches below receive the 8:00 a.m. PT digest (PDF + counts). Turn off to stop all of
+          those emails; the schedule still runs but nothing is sent.
+        </span>
+      </span>
+    </label>
+    {#if savingDigestToggle}
+      <span class="digest-toggle-saving" aria-live="polite">Saving…</span>
+    {/if}
+  </div>
+  {#if digestSettingError}
+    <p class="form-error" role="alert">{digestSettingError}</p>
+  {/if}
+
   <p class="nica-coaches-lead">
     Add coaches who should receive a <strong>daily 8:00 a.m. PT</strong> email with the NICA export PDF for their team
     and a short summary (volunteers, roles, hours). Coaches do not need an account. Set an
@@ -419,6 +491,67 @@
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     padding: 1.25rem;
     margin-bottom: 1.5rem;
+  }
+
+  .digest-toggle-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.85rem 1rem;
+    margin: 0 0 1rem;
+    background: #f8fafc;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+  }
+
+  .digest-toggle-row--disabled {
+    opacity: 0.75;
+  }
+
+  .digest-toggle-label {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.65rem;
+    margin: 0;
+    cursor: pointer;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .digest-toggle-label input {
+    margin-top: 0.2rem;
+    flex-shrink: 0;
+    width: 1.1rem;
+    height: 1.1rem;
+    cursor: pointer;
+  }
+
+  .digest-toggle-label input:disabled {
+    cursor: not-allowed;
+  }
+
+  .digest-toggle-text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .digest-toggle-title {
+    font-weight: 600;
+    color: #111827;
+    font-size: 0.95rem;
+  }
+
+  .digest-toggle-help {
+    font-size: 0.85rem;
+    color: #4b5563;
+    line-height: 1.45;
+  }
+
+  .digest-toggle-saving {
+    font-size: 0.85rem;
+    color: #6b7280;
+    flex-shrink: 0;
   }
 
   .nica-coaches-lead {

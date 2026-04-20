@@ -348,6 +348,29 @@ serve(async (req) => {
     const body = await req.json().catch(() => ({}))
     const force = body?.force === true
     const now = new Date()
+
+    const { data: digestSettings, error: digestSettingsErr } = await supabaseAdmin
+      .from('email_digest_settings')
+      .select('nica_coach_daily_digest_enabled')
+      .eq('id', 1)
+      .maybeSingle()
+
+    if (digestSettingsErr) {
+      console.error('send-nica-coach-digest: email_digest_settings lookup failed', digestSettingsErr)
+    }
+
+    const digestEnabled = digestSettings?.nica_coach_daily_digest_enabled !== false
+
+    if (!digestEnabled) {
+      return new Response(
+        JSON.stringify({
+          skipped: true,
+          reason: 'NICA coach daily digest emails are disabled in Admin → Users → NICA Coaches',
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      )
+    }
+
     const pacificHour = toPacificHour(now)
 
     if (!force && pacificHour !== 8) {

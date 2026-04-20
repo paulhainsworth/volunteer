@@ -10,6 +10,10 @@
   let loading = true;
   let error = '';
   let success = '';
+  let adminDailySummaryEnabled = true;
+  let loadingAdminSummarySetting = true;
+  let savingAdminSummaryToggle = false;
+  let adminSummarySettingError = '';
   /** Populated when a batch has per-recipient failures (diagnostics only). */
   let sendFailureRows = [];
 
@@ -45,7 +49,8 @@ Berkeley Omnium Volunteer Team`;
     try {
       await Promise.all([
         roles.fetchRoles(),
-        volunteers.fetchVolunteers()
+        volunteers.fetchVolunteers(),
+        loadAdminDailySummarySetting()
       ]);
       const waiverSettings = await waiverStore.fetchCurrentWaiver();
       currentWaiverVersion = waiverSettings?.version ?? 1;
@@ -55,6 +60,47 @@ Berkeley Omnium Volunteer Team`;
       loading = false;
     }
   });
+
+  async function loadAdminDailySummarySetting() {
+    loadingAdminSummarySetting = true;
+    adminSummarySettingError = '';
+    try {
+      const { data, error: qErr } = await supabase
+        .from('email_digest_settings')
+        .select('admin_daily_volunteer_summary_enabled')
+        .eq('id', 1)
+        .maybeSingle();
+
+      if (qErr) throw qErr;
+      adminDailySummaryEnabled = data?.admin_daily_volunteer_summary_enabled !== false;
+    } catch (err) {
+      console.error(err);
+      adminSummarySettingError = err.message || 'Could not load automated email settings';
+      adminDailySummaryEnabled = true;
+    } finally {
+      loadingAdminSummarySetting = false;
+    }
+  }
+
+  async function saveAdminDailySummarySetting(next) {
+    savingAdminSummaryToggle = true;
+    adminSummarySettingError = '';
+    const prev = adminDailySummaryEnabled;
+    adminDailySummaryEnabled = next;
+    try {
+      const { error: uErr } = await supabase
+        .from('email_digest_settings')
+        .update({ admin_daily_volunteer_summary_enabled: next })
+        .eq('id', 1);
+
+      if (uErr) throw uErr;
+    } catch (err) {
+      adminDailySummaryEnabled = prev;
+      adminSummarySettingError = err.message || 'Could not save';
+    } finally {
+      savingAdminSummaryToggle = false;
+    }
+  }
 
   function insertMergeField(field) {
     const textarea = document.getElementById('body');
@@ -413,9 +459,36 @@ Berkeley Omnium Volunteer Team`;
     <div class="alert alert-success">{success}</div>
   {/if}
 
+  {#if adminSummarySettingError}
+    <div class="alert alert-error">{adminSummarySettingError}</div>
+  {/if}
+
   {#if loading}
     <div class="loading">Loading...</div>
   {:else}
+    <div class="automated-email-card" class:automated-email-card--muted={loadingAdminSummarySetting}>
+      <label class="automated-email-label" for="comm-admin-daily-summary">
+        <input
+          id="comm-admin-daily-summary"
+          type="checkbox"
+          checked={adminDailySummaryEnabled}
+          disabled={loadingAdminSummarySetting || savingAdminSummaryToggle}
+          on:change={(e) =>
+            saveAdminDailySummarySetting(/** @type {HTMLInputElement} */ (e.currentTarget).checked)}
+        />
+        <span class="automated-email-text">
+          <span class="automated-email-title">Daily volunteer summary email (admins)</span>
+          <span class="automated-email-help">
+            The 8:00 a.m. PT email with yesterday’s signups and open critical roles (and Slack, if configured). Turn off
+            to stop those sends; the job still runs but skips email and Slack.
+          </span>
+        </span>
+      </label>
+      {#if savingAdminSummaryToggle}
+        <span class="automated-email-saving" aria-live="polite">Saving…</span>
+      {/if}
+    </div>
+
     <div class="email-composer">
       <div class="form-section">
         <h3>Recipients</h3>
@@ -674,6 +747,67 @@ Berkeley Omnium Volunteer Team`;
     text-align: center;
     padding: 3rem;
     color: #6c757d;
+  }
+
+  .automated-email-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 1rem 1.15rem;
+    margin-bottom: 1.5rem;
+    background: #f8fafc;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+  }
+
+  .automated-email-card--muted {
+    opacity: 0.8;
+  }
+
+  .automated-email-label {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.65rem;
+    margin: 0;
+    cursor: pointer;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .automated-email-label input {
+    margin-top: 0.2rem;
+    flex-shrink: 0;
+    width: 1.1rem;
+    height: 1.1rem;
+    cursor: pointer;
+  }
+
+  .automated-email-label input:disabled {
+    cursor: not-allowed;
+  }
+
+  .automated-email-text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .automated-email-title {
+    font-weight: 600;
+    color: #111827;
+    font-size: 0.98rem;
+  }
+
+  .automated-email-help {
+    font-size: 0.88rem;
+    color: #4b5563;
+    line-height: 1.45;
+  }
+
+  .automated-email-saving {
+    font-size: 0.85rem;
+    color: #6b7280;
+    flex-shrink: 0;
   }
 
   .email-composer {
