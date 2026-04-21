@@ -6,7 +6,7 @@ import {
   nicaSpotWeightForSignup,
   volunteerSpotsForBeneficiary
 } from './nicaSpotMath';
-import { formatEventDateInPacific, isFlexibleTime } from './utils/timeDisplay';
+import { formatRoleScheduleDate, getRoleScheduleSortTime, isFlexibleTime } from './utils/timeDisplay';
 
 function hoursForSignup(signup) {
   const role = signup?.role;
@@ -53,7 +53,8 @@ export function buildNicaTeamExport(beneficiary, affiliationsList, volunteersLis
         signed_up_role: role?.name || '',
         spotWeight,
         spotWeightDisplay: formatNicaNumber(spotWeight),
-        event_date: role?.event_date || '',
+        schedule_sort: role ? getRoleScheduleSortTime(role) : Infinity,
+        schedule_display: role ? formatRoleScheduleDate(role, 'short') : '',
         hours,
         hoursDisplay: flex ? '—' : (Number.isFinite(hours) ? String(hours) : '0')
       });
@@ -65,8 +66,8 @@ export function buildNicaTeamExport(beneficiary, affiliationsList, volunteersLis
     if (ln !== 0) return ln;
     const fn = (a.first_name || '').localeCompare(b.first_name || '', undefined, { sensitivity: 'base' });
     if (fn !== 0) return fn;
-    const d = String(a.event_date).localeCompare(String(b.event_date));
-    if (d !== 0) return d;
+    const ds = a.schedule_sort - b.schedule_sort;
+    if (ds !== 0) return ds;
     return String(a.signed_up_role).localeCompare(String(b.signed_up_role), undefined, { sensitivity: 'base' });
   });
 
@@ -138,7 +139,7 @@ export function generateNicaTeamVolunteerPdfBlob(beneficiary, affiliationsList, 
     r.team_club_affiliation,
     r.signed_up_role,
     r.spotWeightDisplay,
-    formatEventDateInPacific(r.event_date, 'short'),
+    r.schedule_display,
     r.hoursDisplay
   ]);
 

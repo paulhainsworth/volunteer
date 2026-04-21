@@ -9,7 +9,11 @@
     getCriticalPositionsFilled,
     getCriticalPositionsRequired
   } from '../../lib/utils/criticalSpots';
-  import { formatTimeRange } from '../../lib/utils/timeDisplay';
+  import {
+    formatRoleScheduleDate,
+    formatTimeRange,
+    getApproxDaysUntilScheduleEnd
+  } from '../../lib/utils/timeDisplay';
 
   let loading = true;
   let error = '';
@@ -42,25 +46,36 @@
   }
 
   function getCriticalRoles() {
-    return $roles.filter(role => {
+    return $roles.filter((role) => {
+      if (!role.event_date && !role.completion_month) return false;
       const fillPercentage = (role.positions_filled / role.positions_total) * 100;
-      const eventDate = new Date(role.event_date);
-      const daysUntil = Math.ceil((eventDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
-      
+      const daysUntil = getApproxDaysUntilScheduleEnd(role);
       return fillPercentage < 50 && daysUntil <= 14 && daysUntil >= 0;
-    }).sort((a, b) => new Date(a.event_date).getTime() - new Date(b.event_date).getTime());
+    }).sort((a, b) => {
+      const da = a.event_date || a.completion_month || '';
+      const db = b.event_date || b.completion_month || '';
+      return String(da).localeCompare(String(db));
+    });
   }
 
   function getCriticalFlaggedUnfulfilled() {
     return $roles
       .filter((role) => getCriticalOpenSpots(role) > 0)
-      .sort((a, b) => new Date(a.event_date).getTime() - new Date(b.event_date).getTime());
+      .sort((a, b) => {
+        const da = a.event_date || a.completion_month || '';
+        const db = b.event_date || b.completion_month || '';
+        return String(da).localeCompare(String(db));
+      });
   }
 
   function getUpcomingEvents() {
-    const eventDates = [...new Set($roles.map(r => r.event_date))];
-    return eventDates
-      .filter(date => new Date(date) >= new Date())
+    const keys = new Set();
+    $roles.forEach((r) => {
+      if (r.event_date) keys.add(`d:${r.event_date}`);
+    });
+    return [...keys]
+      .map((k) => k.slice(2))
+      .filter((date) => new Date(date) >= new Date(new Date().toDateString()))
       .sort((a, b) => new Date(a).getTime() - new Date(b).getTime())
       .slice(0, 5);
   }
@@ -188,19 +203,21 @@
                 {@const criticalFilled = getCriticalPositionsFilled(role)}
                 {@const criticalOpen = getCriticalOpenSpots(role)}
                 {@const fillPercent = criticalRequired > 0 ? Math.round((criticalFilled / criticalRequired) * 100) : 0}
-                {@const daysUntil = Math.ceil((new Date(role.event_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))}
+                {@const daysUntil = getApproxDaysUntilScheduleEnd(role)}
                 
                 <tr>
                   <td>
                     <strong>{role.name}</strong>
                     <div class="role-subtext">Critical requirement: {criticalRequired} of {role.positions_total} spots</div>
-                    {#if daysUntil <= 3}
+                    {#if typeof daysUntil === 'number' && daysUntil <= 3}
                       <span class="urgent-tag">Urgent</span>
                     {/if}
                   </td>
                   <td>
-                    {format(new Date(role.event_date), 'MMM d, yyyy')}
-                    <small>({daysUntil} days)</small>
+                    {formatRoleScheduleDate(role, 'long')}
+                    {#if typeof daysUntil === 'number' && Number.isFinite(daysUntil)}
+                      <small>({daysUntil} days)</small>
+                    {/if}
                   </td>
                   <td>{formatTimeRange(role)}</td>
                   <td>
@@ -243,18 +260,20 @@
             <tbody>
               {#each criticalRoles as role (role.id)}
                 {@const fillPercent = Math.round((role.positions_filled / role.positions_total) * 100)}
-                {@const daysUntil = Math.ceil((new Date(role.event_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))}
+                {@const daysUntil = getApproxDaysUntilScheduleEnd(role)}
                 
                 <tr>
                   <td>
                     <strong>{role.name}</strong>
-                    {#if daysUntil <= 3}
+                    {#if typeof daysUntil === 'number' && daysUntil <= 3}
                       <span class="urgent-tag">Urgent</span>
                     {/if}
                   </td>
                   <td>
-                    {format(new Date(role.event_date), 'MMM d, yyyy')}
-                    <small>({daysUntil} days)</small>
+                    {formatRoleScheduleDate(role, 'long')}
+                    {#if typeof daysUntil === 'number' && Number.isFinite(daysUntil)}
+                      <small>({daysUntil} days)</small>
+                    {/if}
                   </td>
                   <td>{formatTimeRange(role)}</td>
                   <td>

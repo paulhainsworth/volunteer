@@ -9,6 +9,10 @@ import {
   hasCriticalRequirement
 } from '../utils/criticalSpots';
 import { withSupabaseReadTimeout } from '../utils/withTimeout';
+import {
+  getApproxDaysUntilScheduleEnd,
+  isRoleScheduleInPast
+} from '../utils/timeDisplay';
 
 function createRolesStore() {
   const { subscribe, set, update } = writable([]);
@@ -221,17 +225,13 @@ export const dashboardStats = derived(roles, $roles => {
   const filledPositions = $roles.reduce((sum, role) => sum + role.positions_filled, 0);
   const totalRoles = $roles.length;
   
-  const upcomingRoles = $roles.filter(role => 
-    new Date(role.event_date) >= new Date()
-  );
-  
+  const upcomingRoles = $roles.filter((role) => !isRoleScheduleInPast(role));
+
   // Time-based "needs attention" (legacy): <50% filled, within 7 days
-  const needsAttentionRoles = upcomingRoles.filter(role => {
+  const needsAttentionRoles = upcomingRoles.filter((role) => {
     const fillPercentage = (role.positions_filled / role.positions_total) * 100;
-    const daysUntil = Math.ceil(
-      (new Date(role.event_date) - new Date()) / (1000 * 60 * 60 * 24)
-    );
-    return fillPercentage < 50 && daysUntil <= 7;
+    const daysUntil = getApproxDaysUntilScheduleEnd(role);
+    return fillPercentage < 50 && daysUntil <= 7 && daysUntil >= 0;
   });
 
   const criticalFlaggedRoles = $roles.filter((role) => hasCriticalRequirement(role));

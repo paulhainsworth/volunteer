@@ -8,7 +8,19 @@
   import { notifySlackSignup } from '../../lib/notifySlackSignup';
   import { push } from 'svelte-spa-router';
   import { format } from 'date-fns';
-  import { formatEventDateInPacific, formatTimeRange, getTodayDateInPacific, isFlexibleTime } from '../../lib/utils/timeDisplay';
+  import {
+    formatRoleScheduleDate,
+    formatTimeRange,
+    getTodayDateInPacific,
+    isFlexibleTime
+  } from '../../lib/utils/timeDisplay';
+
+  function upcomingVolunteerRolesOrFilter() {
+    const today = getTodayDateInPacific();
+    if (!today) return '';
+    const monthStart = `${today.slice(0, 7)}-01`;
+    return `event_date.gte.${today},and(event_date.is.null,completion_month.gte.${monthStart}),and(event_date.is.null,completion_month.is.null)`;
+  }
   import { NICA_BENEFICIARIES } from '../../lib/nicaBeneficiaries';
   import {
     formatNicaNumber,
@@ -332,9 +344,10 @@
       const { data: rolesData, error: rolesError } = await supabase
         .from('volunteer_roles')
         .select('*')
-        .gte('event_date', getTodayDateInPacific())
-        .order('event_date', { ascending: true })
-        .order('start_time', { ascending: true });
+        .or(upcomingVolunteerRolesOrFilter())
+        .order('event_date', { ascending: true, nullsFirst: false })
+        .order('completion_month', { ascending: true, nullsFirst: false })
+        .order('start_time', { ascending: true, nullsFirst: false });
 
       if (rolesError) throw rolesError;
 
@@ -526,9 +539,10 @@
     const { data: rolesData, error: rolesError } = await supabase
       .from('volunteer_roles')
       .select('*')
-      .gte('event_date', getTodayDateInPacific())
-      .order('event_date', { ascending: true })
-      .order('start_time', { ascending: true });
+      .or(upcomingVolunteerRolesOrFilter())
+      .order('event_date', { ascending: true, nullsFirst: false })
+      .order('completion_month', { ascending: true, nullsFirst: false })
+      .order('start_time', { ascending: true, nullsFirst: false });
 
     if (!rolesError && rolesData && rolesData.length > 0) {
       const roleIds = rolesData.map((r) => r.id);
@@ -1255,7 +1269,7 @@
                   <div class="signup-item">
                     <span class="signup-name">{signup.role.name}</span>
                     <span class="signup-date">
-                      {formatEventDateInPacific(signup.role.event_date, 'short').replace(/^[A-Za-z]+, /, '')}
+                      {formatRoleScheduleDate(signup.role, 'short').replace(/^[A-Za-z]+, /, '')}
                     </span>
                   </div>
                 {/each}
@@ -1416,7 +1430,7 @@
                     <div class="signup-info">
                       <strong>{signup.role.name}</strong>
                       <span class="signup-meta">
-                        {formatEventDateInPacific(signup.role.event_date, 'long')} •
+                        {formatRoleScheduleDate(signup.role, 'long')} •
                         {formatTimeRange(signup.role)}
                       </span>
                     </div>
@@ -1451,7 +1465,7 @@
                     {#each availableRoles.filter(r => !userSignups.some(s => s.role_id === r.id)) as role (role.id)}
                       {@const isFull = (role.positions_filled || 0) >= role.positions_total}
                       <option value={role.id} disabled={isFull}>
-                        {role.name} ({role.positions_filled || 0}/{role.positions_total} filled) - {formatEventDateInPacific(role.event_date, 'short').replace(/^[A-Za-z]+, /, '')}
+                        {role.name} ({role.positions_filled || 0}/{role.positions_total} filled) - {formatRoleScheduleDate(role, 'short').replace(/^[A-Za-z]+, /, '')}
                       </option>
                     {/each}
                   </select>
@@ -1610,7 +1624,7 @@
             {#each availableRoles as role (role.id)}
               {@const isFull = (role.positions_filled || 0) >= role.positions_total}
               <option value={role.id} disabled={isFull}>
-                {role.name} ({role.positions_filled || 0}/{role.positions_total} filled) - {formatEventDateInPacific(role.event_date, 'short').replace(/^[A-Za-z]+, /, '')}
+                {role.name} ({role.positions_filled || 0}/{role.positions_total} filled) - {formatRoleScheduleDate(role, 'short').replace(/^[A-Za-z]+, /, '')}
               </option>
             {/each}
           </select>

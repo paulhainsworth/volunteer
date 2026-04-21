@@ -19,7 +19,11 @@ import {
   getCriticalPositionsRequired,
   normalizeCriticalPositionsInput
 } from '../../lib/utils/criticalSpots';
-import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
+import {
+  flexibleSentinel,
+  isFlexibleTime,
+  formatRoleScheduleDate
+} from '../../lib/utils/timeDisplay';
 
   /** Same RLS as main client; avoids hung GoTrue blocking signups reads (empty list, no error). */
   function clientForAuthedReads() {
@@ -688,8 +692,32 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
       return value;
     };
 
+    const event_date = (formData.event_date && String(formData.event_date).trim()) || null;
+    let completion_month = null;
+    const cmRaw = formData.completion_month;
+    if (!event_date && cmRaw && String(cmRaw).trim()) {
+      const cm = String(cmRaw).trim();
+      if (/^\d{4}-\d{2}$/.test(cm)) {
+        completion_month = `${cm}-01`;
+      } else if (/^\d{4}-\d{2}-\d{2}$/.test(cm)) {
+        completion_month = `${cm.slice(0, 8)}01`;
+      }
+    }
+
+    const flex = flexibleSentinel();
+    let start_time = (formData.start_time && String(formData.start_time).trim()) || null;
+    let end_time = (formData.end_time && String(formData.end_time).trim()) || null;
+    if (!start_time && !end_time) {
+      start_time = flex.start_time;
+      end_time = flex.end_time;
+    }
+
     return {
       ...formData,
+      event_date,
+      completion_month,
+      start_time,
+      end_time,
       positions_total: Number(formData.positions_total) || 0,
       domain_id: sanitizeSelect(formData.domain_id),
       leader_id: sanitizeSelect(formData.leader_id),
@@ -904,9 +932,10 @@ import { flexibleSentinel, isFlexibleTime } from '../../lib/utils/timeDisplay';
     const rows = $roles.map(role => {
       const start = isFlexibleTime(role) ? 'Flexible' : (role.start_time || '');
       const end = isFlexibleTime(role) ? 'Flexible' : (role.end_time || '');
+      const dateCell = formatRoleScheduleDate(role, 'long');
       return [
         role.name,
-        format(new Date(role.event_date), 'yyyy-MM-dd'),
+        dateCell,
         start,
         end,
         role.location || '',

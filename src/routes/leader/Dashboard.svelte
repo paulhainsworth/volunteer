@@ -4,7 +4,12 @@
   import { affiliations } from '../../lib/stores/affiliations';
   import { supabase } from '../../lib/supabaseClient';
   import { push } from 'svelte-spa-router';
-  import { formatTimeRange, isFlexibleTime, formatEventDateInPacific, parseEventDate } from '../../lib/utils/timeDisplay';
+  import {
+    formatRoleScheduleDate,
+    formatTimeRange,
+    getRoleScheduleSortTime,
+    isFlexibleTime
+  } from '../../lib/utils/timeDisplay';
 
   let loading = true;
   let error = '';
@@ -184,7 +189,7 @@ const shareTimers = {};
   }
 
   function formatShift(role) {
-    const datePart = role.event_date ? formatEventDateInPacific(role.event_date, 'short') : 'TBD';
+    const datePart = formatRoleScheduleDate(role, 'short');
     const timePart = formatTimeRange(role);
     return [datePart, timePart].filter(Boolean).join(' • ') || '—';
   }
@@ -197,16 +202,10 @@ const shareTimers = {};
   }
 
   function compareRoles(a, b) {
-    const dateA = parseEventDate(a.event_date);
-    const dateB = parseEventDate(b.event_date);
-    if (dateA && dateB) {
-      if (dateA.getTime() !== dateB.getTime()) {
-        return dateA.getTime() - dateB.getTime();
-      }
-    } else if (dateA) {
-      return -1;
-    } else if (dateB) {
-      return 1;
+    const ta = getRoleScheduleSortTime(a);
+    const tb = getRoleScheduleSortTime(b);
+    if (ta !== tb) {
+      return ta - tb;
     }
 
     if (isFlexibleTime(a) && !isFlexibleTime(b)) return 1;

@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { push } from 'svelte-spa-router';
   import { domains } from '../../lib/stores/domains';
-  import { formatTimeRange, calculateDuration, formatEventDateInPacific } from '../../lib/utils/timeDisplay';
+  import { formatTimeRange, calculateDuration, formatRoleScheduleDate } from '../../lib/utils/timeDisplay';
 
   export let params = {};
 
@@ -118,7 +118,7 @@
               <ul class="details">
                 <li>
                   <span class="label">Date</span>
-                  <span>{role.event_date ? formatEventDateInPacific(role.event_date, 'long') : 'TBD'}</span>
+                  <span>{formatRoleScheduleDate(role, 'long')}</span>
                 </li>
                 <li>
                   <span class="label">Time</span>

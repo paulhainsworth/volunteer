@@ -34,6 +34,103 @@ export function parseEventDate(dateString) {
 }
 
 /**
+ * Month-only scheduling (completion_month stores YYYY-MM-01).
+ * style short => "Jun 2026", long => "June 2026"
+ */
+export function formatCompletionMonthInPacific(dateString, style = 'short') {
+  const d = parseEventDate(dateString);
+  if (!d) return 'Flexible';
+  const opts =
+    style === 'long'
+      ? { month: 'long', year: 'numeric', timeZone: PACIFIC_TZ }
+      : { month: 'short', year: 'numeric', timeZone: PACIFIC_TZ };
+  return new Intl.DateTimeFormat('en-US', opts).format(d);
+}
+
+/**
+ * Date line for a role: specific event date, completion month, or "Flexible".
+ */
+export function formatRoleScheduleDate(role, style = 'short') {
+  if (!role) return 'Flexible';
+  if (role.event_date) return formatEventDateInPacific(role.event_date, style);
+  if (role.completion_month) return formatCompletionMonthInPacific(role.completion_month, style);
+  return 'Flexible';
+}
+
+/** Sort key (ms); roles without a date or month sort last. */
+export function getRoleScheduleSortTime(role) {
+  if (!role) return Number.POSITIVE_INFINITY;
+  if (role.event_date) {
+    const t = parseEventDate(role.event_date)?.getTime();
+    return t == null ? Number.POSITIVE_INFINITY : t;
+  }
+  if (role.completion_month) {
+    const t = parseEventDate(role.completion_month)?.getTime();
+    return t == null ? Number.POSITIVE_INFINITY : t;
+  }
+  return Number.POSITIVE_INFINITY;
+}
+
+function lastDayOfMonthUtc(y, mZeroIndexed) {
+  return new Date(Date.UTC(y, mZeroIndexed + 1, 0));
+}
+
+function formatYmdUtc(d) {
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(d.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/** True if the role's schedule (date or completion month) is strictly before today in Pacific. */
+export function isRoleScheduleInPast(role) {
+  const today = getTodayDateInPacific();
+  if (!today || !role) return false;
+  if (role.event_date) {
+    return String(role.event_date).slice(0, 10) < today;
+  }
+  if (role.completion_month) {
+    const d = parseEventDate(role.completion_month);
+    if (!d) return false;
+    const y = d.getUTCFullYear();
+    const m = d.getUTCMonth();
+    const last = lastDayOfMonthUtc(y, m);
+    return formatYmdUtc(last) < today;
+  }
+  return false;
+}
+
+/**
+ * Approximate calendar days until the role's scheduled day (event) or end of completion month.
+ * Fully flexible roles return Infinity.
+ */
+export function getApproxDaysUntilScheduleEnd(role) {
+  if (!role) return Number.POSITIVE_INFINITY;
+  if (role.event_date) {
+    const t = parseEventDate(role.event_date)?.getTime();
+    if (t == null) return Number.POSITIVE_INFINITY;
+    return Math.ceil((t - Date.now()) / (1000 * 60 * 60 * 24));
+  }
+  if (role.completion_month) {
+    const d = parseEventDate(role.completion_month);
+    if (!d) return Number.POSITIVE_INFINITY;
+    const y = d.getUTCFullYear();
+    const m = d.getUTCMonth();
+    const last = lastDayOfMonthUtc(y, m);
+    return Math.ceil((last.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+  }
+  return Number.POSITIVE_INFINITY;
+}
+
+/** Stable key for grouping roles by schedule in admin comms (date / month / flexible). */
+export function getRoleScheduleGroupKey(role) {
+  if (!role) return 'flexible';
+  if (role.event_date) return `d:${String(role.event_date).slice(0, 10)}`;
+  if (role.completion_month) return `m:${String(role.completion_month).slice(0, 10)}`;
+  return 'flexible';
+}
+
+/**
  * Format an event_date (YYYY-MM-DD) in Pacific time for display.
  * style: 'short' => "Sun, Apr 19"  |  'long' => "Sunday, April 19, 2026"
  */
@@ -64,8 +161,9 @@ function normalizeTime(t) {
 /** True if role has flexible times (stored as 00:00/00:00 in DB, or "flexible" from CSV parse). */
 export function isFlexibleTime(role) {
   if (!role) return false;
-  const start = String(role.start_time || '').trim().toLowerCase();
-  const end = String(role.end_time || '').trim().toLowerCase();
+  const start = String(role.start_time ?? '').trim().toLowerCase();
+  const end = String(role.end_time ?? '').trim().toLowerCase();
+  if (!start && !end) return true;
   if (start === 'flexible' || end === 'flexible') return true;
   return normalizeTime(role.start_time) === FLEXIBLE_START && normalizeTime(role.end_time) === FLEXIBLE_END;
 }
@@ -84,14 +182,14 @@ export function formatTime(time) {
   return `${displayHour}:${mins} ${ampm}`;
 }
 
-/** "TBD" when no times set, "Flexible" for 00:00/00:00, or "7:00 AM – 9:00 AM". Use for display in UI. */
+/** "Flexible" when no times or 00:00/00:00, or "7:00 AM – 9:00 AM". Use for display in UI. */
 export function formatTimeRange(role) {
   if (!role) return '';
   const s = role.start_time ?? '';
   const e = role.end_time ?? '';
-  if (!s && !e) return 'TBD';
+  if (!s && !e) return 'Flexible';
   if (isFlexibleTime(role)) return 'Flexible';
-  if (!s || !e) return 'TBD';
+  if (!s || !e) return 'Flexible';
   return `${formatTime(s)} – ${formatTime(e)}`;
 }
 

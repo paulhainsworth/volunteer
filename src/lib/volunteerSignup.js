@@ -6,7 +6,7 @@ import { supabase } from './supabaseClient';
 import { auth } from './stores/auth';
 import { signups } from './stores/signups';
 import { waiver as waiverStore } from './stores/waiver';
-import { formatEventDateInPacific, formatTimeRange } from './utils/timeDisplay';
+import { formatRoleScheduleDate, formatTimeRange } from './utils/timeDisplay';
 
 const SITE_URL = typeof window !== 'undefined' ? `${window.location.origin}/#` : '';
 
@@ -142,7 +142,7 @@ export async function createVolunteerAndSignup(pii, roleId) {
 }
 
 export async function sendRoleConfirmationEmail({ to, first_name, role, roleId }) {
-  const roleDate = formatEventDateInPacific(role.event_date, 'long');
+  const roleDate = formatRoleScheduleDate(role, 'long');
   const roleTime = formatTimeRange(role);
   const roleUrl = `${SITE_URL}/signup/${roleId}`;
 
@@ -180,7 +180,7 @@ export async function sendParentGuardianConfirmationEmail({
   roleId
 }) {
   const volunteerName = [volunteer_first_name, volunteer_last_name].filter(Boolean).join(' ').trim() || 'the volunteer';
-  const roleDate = formatEventDateInPacific(role.event_date, 'long');
+  const roleDate = formatRoleScheduleDate(role, 'long');
   const roleTime = formatTimeRange(role);
   const roleUrl = `${SITE_URL}/signup/${roleId}`;
 

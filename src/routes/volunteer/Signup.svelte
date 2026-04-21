@@ -5,7 +5,7 @@
   import { waiver as waiverStore } from '../../lib/stores/waiver';
   import { auth } from '../../lib/stores/auth';
   import { push } from 'svelte-spa-router';
-  import { formatTimeRange, calculateDuration, formatEventDateInPacific } from '../../lib/utils/timeDisplay';
+  import { formatTimeRange, calculateDuration, formatRoleScheduleDate } from '../../lib/utils/timeDisplay';
   import {
     createVolunteerAndSignup,
     sendRoleConfirmationEmail,
@@ -359,7 +359,7 @@
         <div class="summary-details">
           <div class="detail">
             <strong>Date:</strong>
-            {role.event_date ? formatEventDateInPacific(role.event_date, 'long') : 'TBD'}
+            {formatRoleScheduleDate(role, 'long')}
           </div>
           
           <div class="detail">
