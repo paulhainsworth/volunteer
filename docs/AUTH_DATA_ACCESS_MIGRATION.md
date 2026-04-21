@@ -2,7 +2,7 @@
 
 **Status:** Canonical architecture and migration plan (iterate here).
 
-**Companion docs:** [ARCHITECTURE.md](../ARCHITECTURE.md), [SECURITY.md](../SECURITY.md), [PHASE1_IMPLEMENTATION_CHECKLIST.md](./PHASE1_IMPLEMENTATION_CHECKLIST.md), [TARGET_ARCHITECTURE_OPTION_B_SPEC.md](./TARGET_ARCHITECTURE_OPTION_B_SPEC.md), [RLS_EXPOSURE_INVENTORY.md](./RLS_EXPOSURE_INVENTORY.md).
+**Companion docs:** [ARCHITECTURE.md](../ARCHITECTURE.md) (especially **§7.1–§7.3** — Phase 1 implementation + double-hash incident), [SECURITY.md](../SECURITY.md), [PHASE1_IMPLEMENTATION_CHECKLIST.md](./PHASE1_IMPLEMENTATION_CHECKLIST.md), [TARGET_ARCHITECTURE_OPTION_B_SPEC.md](./TARGET_ARCHITECTURE_OPTION_B_SPEC.md), [RLS_EXPOSURE_INVENTORY.md](./RLS_EXPOSURE_INVENTORY.md).
 
 ---
 
@@ -177,6 +177,7 @@ Instrument: callback entered, session ok/missing, profile ok/missing/error, refr
 | Removing storage clears reintroduces magic-link / stale-refresh hangs | **Narrow, measured** recovery + callback-aware stall handling; instrument |
 | Callback route added but tokens still land on `/` first | Validate real redirects; minimal pre-router redirect if needed |
 | Over-migrating public reads | Keep intentional anon reads until justified |
+| **`redirectTo`** includes a **hash route** (e.g. `/#/auth/callback`) | Supabase **appends** `#access_token=…`, producing **`#/auth/callback#access_token=…`** — normalize early (see §11.7) or use a **`redirectTo`** without a pre-set hash fragment. |
 
 ---
 
@@ -220,6 +221,21 @@ Acceptable if functions default to user-context + RLS; service role **narrow**.
 
 Reserve unless product demands full BFF.
 
+### 11.7 Double-hash URL when `redirectTo` contains a hash route
+
+Supabase constructs magic links by **appending** `#access_token=…` (and related query-style fields) to whatever **`redirectTo`** the client sends.
+
+If **`redirectTo`** is already a hash-routed SPA URL — for example **`https://app.example.com/#/auth/callback`** — the final link contains **two `#` delimiters**:
+
+`https://app.example.com/#/auth/callback#access_token=…`
+
+That URL shape can prevent **`detectSessionInUrl`** from establishing a session reliably and can interact badly with hash routers and with early **storage / hash** logic in the client. **Dedicated callback handling alone does not fix this**; the app must either:
+
+- **Normalize** the URL **before** the Supabase client finishes consuming the fragment (this repo: **`index.html`** + **`src/normalizeMagicLinkHash.js`** via **`location.replace`** to a **single** fragment `#access_token=…`), or  
+- Use a **`redirectTo`** **without** embedding the SPA route in the fragment (e.g. **`origin + '/'`** only), accepting a different first-paint route.
+
+**Operational check:** After changing **`redirectTo`**, click a **real** magic link and confirm the **address bar fragment** and that the user ends **signed in**. The first test with **`/#/auth/callback`** failed until normalization; the second test passed.
+
 ---
 
 ## Changelog
@@ -228,3 +244,4 @@ Reserve unless product demands full BFF.
 |------|--------|
 | 2026-04-20 | Initial drafts. |
 | 2026-04-20 | Final: non-goals, first-vs-later table, softened storage language, callback landing §6.2, conditional `getUserPostgrestClient` removal, mandatory RLS, §11 rename, risks rows, executive summary. |
+| 2026-04-21 | §11.7 double-hash `redirectTo` + token append; risk row; cross-ref to `ARCHITECTURE.md` §7.1–7.3 (Phase 1 implementation + incident). |

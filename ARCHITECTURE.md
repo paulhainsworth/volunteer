@@ -312,6 +312,8 @@ Guards that only run **`onMount`** once may redirect using **stale** state if au
 
 ## 7. Magic-link callback shape (production checklist)
 
+**Narrative:** Phase 1 implementation summary, failure-mode mapping, and the **double-hash `redirectTo` incident** are in **§7.1–§7.3** below. The migration memo’s **§11.7** states the same **`redirectTo` + token-append** rule in proposal form.
+
 **These items must be verified in Supabase Dashboard + production DNS; the repo alone does not pin every value.**
 
 | Question | Where to verify / code default |
@@ -324,6 +326,42 @@ Guards that only run **`onMount`** once may redirect using **stale** state if au
 | Dedicated callback route | **`/#/auth/callback`** is registered in `App.svelte` (`AuthCallback.svelte`). **Landing** may still be `/` with `#access_token=…` depending on Supabase redirect + hash behavior—validate in prod (see `AUTH_DATA_ACCESS_MIGRATION.md` §6.2). |
 | Email scanners (Gmail/Outlook) | **Not controlled in code**—can strip or prefetch links; document in support playbooks. |
 | Mobile clients | Same as above—report failures with **client, OS, mail app**. |
+
+### 7.1 Phase 1 auth spine — what was implemented
+
+Phase 1 (Option A–style spine, toward Option B) added concrete code paths and state, not only documentation:
+
+| Area | Implementation |
+|------|------------------|
+| **Callback target** | **`auth.signInWithMagicLink`** sends **`redirectTo`** = `origin + '/#/auth/callback'` so emails point at a **named route** (`AuthCallback.svelte` in `App.svelte`). |
+| **Single completion path** | **`src/lib/auth/completeMagicLinkAfterRedirect.js`** — after **`auth.initialize()`**, poll **`getSession`**, **`hydrateFromSession`**, then **`replace(...)`** to onboarding, waiver, **`/my-signups`**, or **`/`** (same rules as before, one module). |
+| **Explicit store shape** | **`auth.js`** uses **`withDerived`**: **`authSession`**, **`profileState`**, **`adminReady`**, **`sessionWarning`**, **`bootstrapTimedOut`**. **`Layout`** uses **`adminReady`** for admin nav; banner + **Retry** / **Dismiss** for degraded or slow bootstrap. |
+| **Instrumented recovery** | **`authRecoveryLog`** + reasons on **`clearPersistedSupabaseAuthKeys`**; **`authObs`** (dev) and events in the magic-link loop. |
+| **Bounded `getSession` on hydrate** | **`hydrateFromSession`** wraps **`getSession`** in a timeout, then optional fallback + **`sessionWarning`** if GoTrue is slow. |
+| **Double-hash fix** | **`index.html`** (inline) and **`src/normalizeMagicLinkHash.js`** (imported first in **`main.js`**) — if the URL is **`#/auth/callback#access_token=…`**, **`location.replace`** to **`#access_token=…`** so **`detectSessionInUrl`** and the router see the same shape as the legacy **`redirectTo: origin + '/'`** flow. |
+
+### 7.2 How this addresses common login / auth failure modes
+
+| Failure mode | How Phase 1 helps |
+|--------------|-------------------|
+| **Split-brain** (nav shows signed-in, queries fail or disagree) | One completion pipeline (**`completeMagicLinkAfterRedirect`**), explicit **`profileState` / `sessionWarning` / `adminReady`**, and a path to **remove `getUserPostgrestClient`** only after timeout + UX (migration doc). |
+| **Opaque magic-link failures** | Dedicated **`/auth/callback`** shell + **`authObs`** breadcrumbs; **`authRecoveryLog`** attributes storage clears. |
+| **Hung GoTrue / slow `getSession`** | Stall logic unchanged but visible; **`hydrateFromSession`** timeout + banner; **`bootstrapTimedOut`** when outer bootstrap hits the safety net. |
+| **Wrong or fragile redirect URL** | Still requires **Supabase allow-list** and **real** redirect validation; code documents the **double-hash** case (§7 table + §7.3). |
+
+### 7.3 Double-hash URL — why the first magic-link test failed, and what fixed it
+
+**What happened:** Supabase builds the email link by taking **`redirectTo`** and **appending** a fragment with **`#access_token=…`** (and related fields). If **`redirectTo`** is already a hash-route SPA URL, e.g. **`https://localhost:5173/#/auth/callback`**, the result is **two `#` segments** in one URL:
+
+`https://localhost:5173/#/auth/callback#access_token=…&…&type=magiclink`
+
+That shape interferes with **`detectSessionInUrl`**, hash routing, and the early **`supabaseClient.js`** logic that keys off the fragment. **Tokens can appear in the address bar while the session never becomes active** — e.g. nav still shows **Sign In**.
+
+**Why the new architecture did not “fix” that by itself:** The Phase 1 work (callback route, shared completion helper, store fields) assumes **tokens are consumable** once the URL loads. It does not change Supabase’s rule for concatenating **`redirectTo` + token fragment**. The failure was an **integration bug** between **`redirectTo` shape** and **Supabase’s link format**, not a missing `AuthCallback` component alone.
+
+**What fixed it:** **Normalize** before bootstrap: collapse **`#/auth/callback#access_token=…`** to **`#access_token=…`** via **`location.replace`** in **`index.html`** and **`normalizeMagicLinkHash.js`**. After that, the flow matches the **legacy** behavior that used **`redirectTo: origin + '/'`** (single fragment). A **second** end-to-end test then showed **session established** and redirect to **`/my-signups`** (or onboarding) as intended.
+
+**Lesson:** Always **validate the real browser URL** after clicking a production magic link when changing **`redirectTo`** (see **`AUTH_DATA_ACCESS_MIGRATION.md`** §6.2, §11.7).
 
 ---
 
