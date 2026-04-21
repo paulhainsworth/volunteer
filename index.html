@@ -17,6 +17,16 @@
     <script>
       (function () {
         try {
+          /** Magic link: Supabase appends #access_token=… to redirectTo. If redirectTo is
+           *  origin/#/auth/callback, the result is #/auth/callback#access_token=… (invalid double
+           *  fragment). Collapse to #access_token=… so GoTrue + the SPA can parse (see ARCHITECTURE §7). */
+          var h = location.hash;
+          if (h.indexOf('#/auth/callback#') === 0) {
+            var tail = h.slice('#/auth/callback#'.length);
+            if (tail.indexOf('access_token=') !== -1 || tail.indexOf('type=') !== -1) {
+              location.replace(location.origin + location.pathname + location.search + '#' + tail);
+            }
+          }
           var p = location.pathname.replace(/\/$/, '') || '/';
           if (p === '/kids' && (!location.hash || location.hash === '#')) {
             history.replaceState(null, '', '/#/kids');

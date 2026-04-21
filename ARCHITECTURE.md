@@ -320,6 +320,7 @@ Guards that only run **`onMount`** once may redirect using **stale** state if au
 | Client `redirectTo` for login | **`auth.signInWithMagicLink`** uses `window.location.origin + '/#/auth/callback'` — so **whatever origin the user is on** (apex vs `www`) is what gets sent to **`send-magic-link`**. The exact string must be on the Supabase redirect allow list. |
 | Apex vs `www` | **Confirm** DNS and canonical host; mismatch between email links and stored session origin can cause confusing logins. **Search the repo** for `berkeleyomnium` / `www.` in env and docs. |
 | Fragment `#access_token=...` vs `?code=` PKCE | Depends on **Supabase project settings** and **client** (`detectSessionInUrl: true` in `supabaseClient.js`). **App checks both** hash and query in `App.svelte`. |
+| Double hash `#/auth/callback#access_token=…` | If **`redirectTo`** is `origin/#/auth/callback`, Supabase **appends** `#access_token=…`, producing two `#` in the URL. **`index.html` + `src/normalizeMagicLinkHash.js`** collapse this to `#access_token=…` via **`location.replace`** before bootstrap. |
 | Dedicated callback route | **`/#/auth/callback`** is registered in `App.svelte` (`AuthCallback.svelte`). **Landing** may still be `/` with `#access_token=…` depending on Supabase redirect + hash behavior—validate in prod (see `AUTH_DATA_ACCESS_MIGRATION.md` §6.2). |
 | Email scanners (Gmail/Outlook) | **Not controlled in code**—can strip or prefetch links; document in support playbooks. |
 | Mobile clients | Same as above—report failures with **client, OS, mail app**. |
