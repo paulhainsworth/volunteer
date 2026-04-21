@@ -4,7 +4,15 @@
   import { auth } from '../../lib/stores/auth';
   import { push } from 'svelte-spa-router';
   import { getCriticalOpenSpots } from '../../lib/utils/criticalSpots';
-  import { formatTimeRange, calculateDuration, isFlexibleTime, formatEstimateDuration, formatEventDateInPacific, parseEventDate } from '../../lib/utils/timeDisplay';
+  import {
+    formatTimeRange,
+    calculateDuration,
+    isFlexibleTime,
+    formatEstimateDuration,
+    formatRoleScheduleDate,
+    getApproxDaysUntilScheduleEnd,
+    getRoleScheduleSortTime
+  } from '../../lib/utils/timeDisplay';
   import {
     createVolunteerAndSignup,
     sendRoleConfirmationEmail,
@@ -195,7 +203,7 @@
 
   function getDomainSortKey(domainEntry) {
     return domainEntry.roles.reduce((best, role) => {
-      const time = parseEventDate(role.event_date)?.getTime() ?? Infinity;
+      const time = getRoleScheduleSortTime(role);
       const tieBreaker = isFlexibleTime(role) ? 1 : 0;
       const start = role.start_time || '';
       const candidate = { time, tieBreaker, start };
@@ -247,13 +255,12 @@
     return null;
   }
 
-  // Format date in Pacific (America/Los_Angeles); blank → TBD
-  function formatDateForDisplay(dateString) {
-    return formatEventDateInPacific(dateString, 'long');
+  function formatDateForDisplay(role) {
+    return formatRoleScheduleDate(role, 'long');
   }
 
-  function formatDateCompact(dateString) {
-    return formatEventDateInPacific(dateString, 'short');
+  function formatDateCompact(role) {
+    return formatRoleScheduleDate(role, 'short');
   }
 
   // Toggle domain expansion
@@ -318,9 +325,7 @@
       if (filterStatus === 'available' && total > 0 && filled >= total) return false;
       if (filterStatus === 'urgent') {
         const percentage = total > 0 ? (filled / total) * 100 : 0;
-        const daysUntil = role.event_date
-          ? Math.ceil(((parseEventDate(role.event_date)?.getTime() ?? 0) - new Date().getTime()) / (1000 * 60 * 60 * 24))
-          : Infinity;
+        const daysUntil = getApproxDaysUntilScheduleEnd(role);
         if (percentage >= 50 || daysUntil > 7) return false;
       }
 
@@ -331,8 +336,8 @@
     })
     .sort((a, b) => {
       if (sortBy === 'date') {
-        const timeA = parseEventDate(a.event_date)?.getTime() ?? Infinity;
-        const timeB = parseEventDate(b.event_date)?.getTime() ?? Infinity;
+        const timeA = getRoleScheduleSortTime(a);
+        const timeB = getRoleScheduleSortTime(b);
         const dateCompare = timeA - timeB;
         if (dateCompare !== 0) return dateCompare;
         if (isFlexibleTime(a) && !isFlexibleTime(b)) return 1;
@@ -408,8 +413,8 @@
         .sort((a, b) => {
           const c = getCriticalOpenSpots(b) - getCriticalOpenSpots(a);
           if (c !== 0) return c;
-          const ta = parseEventDate(a.event_date)?.getTime() ?? 0;
-          const tb = parseEventDate(b.event_date)?.getTime() ?? 0;
+          const ta = getRoleScheduleSortTime(a);
+          const tb = getRoleScheduleSortTime(b);
           if (ta !== tb) return ta - tb;
           return (a.name || '').localeCompare(b.name || '');
         })
@@ -742,7 +747,7 @@
                 <div class="role-details-compact">
                   <div class="detail-inline">
                     <span class="icon">📅</span>
-                    <span>{formatDateCompact(role.event_date)}</span>
+                    <span>{formatDateCompact(role)}</span>
                   </div>
 
                   <div class="detail-inline">
@@ -850,7 +855,7 @@
                     <div class="role-details-compact">
                       <div class="detail-inline">
                         <span class="icon">📅</span>
-                        <span>{formatDateCompact(role.event_date)}</span>
+                        <span>{formatDateCompact(role)}</span>
                       </div>
                       
                       <div class="detail-inline">
@@ -935,7 +940,7 @@
             <span class="icon">📅</span>
             <div>
               <strong>Date</strong>
-              <p>{formatDateForDisplay(selectedRole.event_date)}</p>
+              <p>{formatDateForDisplay(selectedRole)}</p>
             </div>
           </div>
           

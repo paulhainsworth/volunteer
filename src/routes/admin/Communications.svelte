@@ -7,6 +7,7 @@
   import { supabase } from '../../lib/supabaseClient';
   import { push } from 'svelte-spa-router';
   import { friendlyEmailDigestSettingsError } from '../../lib/utils/emailDigestSettingsError';
+  import { formatRoleScheduleDate, getRoleScheduleGroupKey } from '../../lib/utils/timeDisplay';
 
   let loading = true;
   let error = '';
@@ -404,7 +405,7 @@ Berkeley Omnium Volunteer Team`;
       return signups.map((s) => s.volunteer).filter(Boolean);
     }
     if (recipientType === 'date' && selectedDate) {
-      const dateRoles = $roles.filter((r) => r.event_date === selectedDate);
+      const dateRoles = $roles.filter((r) => getRoleScheduleGroupKey(r) === selectedDate);
       const byId = new Map();
       dateRoles.forEach((role) => {
         role.signups?.forEach((signup) => {
@@ -418,7 +419,16 @@ Berkeley Omnium Volunteer Team`;
     return [];
   })();
   $: recipientCount = recipients.length;
-  $: eventDates = [...new Set($roles.map((r) => r.event_date))].sort();
+  $: scheduleKeys = [...new Set($roles.map(getRoleScheduleGroupKey))].sort((a, b) => {
+    if (a === 'flexible') return 1;
+    if (b === 'flexible') return -1;
+    return a.localeCompare(b);
+  });
+
+  function labelScheduleKey(key) {
+    const sample = $roles.find((r) => getRoleScheduleGroupKey(r) === key);
+    return sample ? formatRoleScheduleDate(sample, 'long') : key;
+  }
 </script>
 
 <div class="communications-page">
@@ -523,7 +533,7 @@ Berkeley Omnium Volunteer Team`;
               <option value="">Select a role...</option>
               {#each $roles as role}
                 <option value={role.id}>
-                  {role.name} - {role.event_date} ({role.positions_filled} volunteers)
+                  {role.name} - {formatRoleScheduleDate(role, 'short')} ({role.positions_filled} volunteers)
                 </option>
               {/each}
             </select>
@@ -537,14 +547,14 @@ Berkeley Omnium Volunteer Team`;
               bind:group={recipientType}
               value="date"
             />
-            Volunteers for specific date
+            Volunteers for schedule (date, month, or flexible)
           </label>
           
           {#if recipientType === 'date'}
             <select bind:value={selectedDate} class="select-input">
-              <option value="">Select a date...</option>
-              {#each eventDates as date}
-                <option value={date}>{date}</option>
+              <option value="">Select a schedule...</option>
+              {#each scheduleKeys as sk}
+                <option value={sk}>{labelScheduleKey(sk)}</option>
               {/each}
             </select>
           {/if}

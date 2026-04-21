@@ -3,7 +3,7 @@
   import { roles } from '../lib/stores/roles';
   import { push } from 'svelte-spa-router';
   import { onMount } from 'svelte';
-  import { formatEventDateInPacific } from '../lib/utils/timeDisplay';
+  import { formatRoleScheduleDate } from '../lib/utils/timeDisplay';
 
   let homeRoles = [];
   let rolesLoading = true;
@@ -102,11 +102,7 @@
           {#each homeRoles as role (role.id)}
             <a href="#/volunteer?info={role.id}" class="role-card">
               <h3 class="role-card-name">{role.name}</h3>
-              {#if role.event_date}
-                <p class="role-card-date">{formatEventDateInPacific(role.event_date, 'short')}</p>
-              {:else}
-                <p class="role-card-date">TBD</p>
-              {/if}
+              <p class="role-card-date">{formatRoleScheduleDate(role, 'short')}</p>
               {#if role.domain?.name}
                 <p class="role-card-domain">{role.domain.name}</p>
               {/if}

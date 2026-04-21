@@ -6,7 +6,12 @@
   import { push } from 'svelte-spa-router';
   import { waiver as waiverStore } from '../../lib/stores/waiver';
   import ContactLeader from '../../lib/components/ContactLeader.svelte';
-  import { formatTimeRange, calculateDuration, formatEventDateInPacific } from '../../lib/utils/timeDisplay';
+  import {
+    formatTimeRange,
+    calculateDuration,
+    formatRoleScheduleDate,
+    isRoleScheduleInPast
+  } from '../../lib/utils/timeDisplay';
 
   let loading = true;
   let error = '';
@@ -150,7 +155,7 @@
         volunteer_name: `${volunteer.first_name} ${volunteer.last_name}`,
         volunteer_email: volunteer.email,
         role_name: role.name,
-        role_date: formatEventDateInPacific(role.event_date, 'long'),
+        role_date: formatRoleScheduleDate(role, 'long'),
         role_time: formatTimeRange(role),
         role_location: role.location || 'N/A'
       };
@@ -221,8 +226,20 @@
 
   function downloadCalendar(signup) {
     const role = signup.role;
-    const startDate = new Date(`${role.event_date}T${role.start_time}`);
-    const endDate = new Date(`${role.event_date}T${role.end_time}`);
+    const day = role.event_date || role.completion_month;
+    if (!day) {
+      alert('This role has no calendar date. Add it manually if needed.');
+      return;
+    }
+    const padTime = (t) => (t && String(t).trim() ? String(t).trim().slice(0, 5) : '09:00');
+    const start = padTime(role.start_time);
+    const end = padTime(role.end_time);
+    const startDate = new Date(`${day}T${start}`);
+    const endDate = new Date(`${day}T${end}`);
+    if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+      alert('Could not build a calendar entry for this role.');
+      return;
+    }
 
     const icsContent = `BEGIN:VCALENDAR
 VERSION:2.0
@@ -262,8 +279,8 @@ END:VCALENDAR`;
     return null;
   }
 
-  $: upcomingSignups = mySignups.filter(s => !s.role.event_date || new Date(s.role.event_date) >= new Date());
-  $: pastSignups = mySignups.filter(s => s.role.event_date && new Date(s.role.event_date) < new Date());
+  $: upcomingSignups = mySignups.filter((s) => !isRoleScheduleInPast(s.role));
+  $: pastSignups = mySignups.filter((s) => isRoleScheduleInPast(s.role));
   $: totalHours = mySignups.reduce((sum, signup) => {
     const d = calculateDuration(signup.role.start_time, signup.role.end_time);
     return sum + (d ?? 0);
@@ -323,7 +340,7 @@ END:VCALENDAR`;
               <div class="signup-details">
                 <div class="detail">
                   <span class="icon">📅</span>
-                  <span>{role.event_date ? formatEventDateInPacific(role.event_date, 'long') : 'TBD'}</span>
+                  <span>{formatRoleScheduleDate(role, 'long')}</span>
                 </div>
                 
                 <div class="detail">
@@ -400,7 +417,7 @@ END:VCALENDAR`;
               <div class="signup-details">
                 <div class="detail">
                   <span class="icon">📅</span>
-                  <span>{role.event_date ? formatEventDateInPacific(role.event_date, 'long') : 'TBD'}</span>
+                  <span>{formatRoleScheduleDate(role, 'long')}</span>
                 </div>
                 
                 <div class="detail">
@@ -435,7 +452,7 @@ END:VCALENDAR`;
         <div class="role-info-box">
           <div class="detail">
             <span class="icon">📅</span>
-            <span>{cancellingSignup.role.event_date ? formatEventDateInPacific(cancellingSignup.role.event_date, 'long') : 'TBD'}</span>
+            <span>{formatRoleScheduleDate(cancellingSignup.role, 'long')}</span>
           </div>
           <div class="detail">
             <span class="icon">🕐</span>
@@ -508,7 +525,7 @@ END:VCALENDAR`;
         <div class="role-context">
           <h3>Your Signup:</h3>
           <p><strong>{contactLeaderSignup.role.name}</strong></p>
-          <p>{contactLeaderSignup.role.event_date ? formatEventDateInPacific(contactLeaderSignup.role.event_date, 'long') : 'TBD'} • {formatTimeRange(contactLeaderSignup.role)}</p>
+          <p>{formatRoleScheduleDate(contactLeaderSignup.role, 'long')} • {formatTimeRange(contactLeaderSignup.role)}</p>
         </div>
 
         {#if leader}

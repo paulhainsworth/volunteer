@@ -6,6 +6,7 @@
   import { getEdgeInvokeErrorMessage } from '../../lib/edgeFunctionError';
   import { push } from 'svelte-spa-router';
   import { get } from 'svelte/store';
+  import { formatRoleScheduleDate } from '../../lib/utils/timeDisplay';
 
   let loading = true;
   let error = '';
@@ -403,8 +404,9 @@ onMount(() => {
   async function fetchAllRoles() {
     let query = supabase
       .from('volunteer_roles')
-      .select('id, name, event_date, domain_id')
-      .order('event_date', { ascending: true })
+      .select('id, name, event_date, completion_month, domain_id')
+      .order('event_date', { ascending: true, nullsFirst: false })
+      .order('completion_month', { ascending: true, nullsFirst: false })
       .order('name', { ascending: true });
 
     if (!isAdminUser) {
@@ -645,7 +647,7 @@ onMount(() => {
                 <div class="role-item assigned">
                   <div class="role-info">
                     <strong>{role.name}</strong>
-                    <span class="role-date">{role.event_date}</span>
+                    <span class="role-date">{formatRoleScheduleDate(role, 'short')}</span>
                   </div>
                   <button
                     class="btn-remove"
@@ -670,7 +672,7 @@ onMount(() => {
                 <div class="role-item unassigned">
                   <div class="role-info">
                     <strong>{role.name}</strong>
-                    <span class="role-date">{role.event_date}</span>
+                    <span class="role-date">{formatRoleScheduleDate(role, 'short')}</span>
                   </div>
                   <button
                     class="btn-add"

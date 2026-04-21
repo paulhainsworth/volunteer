@@ -68,6 +68,7 @@ function createDomainsStore() {
             description,
             location,
             event_date,
+            completion_month,
             start_time,
             end_time,
             positions_total,

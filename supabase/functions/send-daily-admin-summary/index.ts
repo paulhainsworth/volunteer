@@ -47,6 +47,7 @@ type OpenCriticalRole = {
   id: string
   name: string
   event_date: string | null
+  completion_month: string | null
   positions_total: number
   critical_positions_required: number
   positions_filled: number
@@ -112,6 +113,19 @@ function formatEventDate(dateString: string | null) {
   }).format(parsed)
 }
 
+function formatRoleScheduleLabel(role: { event_date?: string | null; completion_month?: string | null }) {
+  if (role.event_date) return formatEventDate(role.event_date)
+  if (role.completion_month) {
+    const parsed = new Date(`${role.completion_month}T12:00:00.000Z`)
+    return new Intl.DateTimeFormat('en-US', {
+      timeZone: PACIFIC_TZ,
+      month: 'short',
+      year: 'numeric',
+    }).format(parsed)
+  }
+  return 'Flexible'
+}
+
 function escapeHtml(value: string) {
   return value
     .replace(/&/g, '&amp;')
@@ -125,7 +139,7 @@ function buildEmailHtml(metrics: SummaryMetrics, roles: OpenCriticalRole[]) {
   const roleItems = roles.length
     ? roles
         .map((role) => {
-          const dateLabel = formatEventDate(role.event_date)
+          const dateLabel = formatRoleScheduleLabel(role)
           return `
             <li style="margin: 0 0 12px;">
               <strong>${escapeHtml(role.name)}</strong> (${escapeHtml(dateLabel)}): ${role.open_spots} critical spots still open out of ${role.critical_positions_required} required
@@ -191,7 +205,7 @@ function buildEmailHtml(metrics: SummaryMetrics, roles: OpenCriticalRole[]) {
 function buildSlackPayload(metrics: SummaryMetrics, roles: OpenCriticalRole[]) {
   const summaryDateLabel = formatEventDate(metrics.summary_date)
   const roleLines = roles.length
-    ? roles.map((role) => `• *${role.name}* (${formatEventDate(role.event_date)}): ${role.open_spots} critical spots still open out of ${role.critical_positions_required} required`)
+    ? roles.map((role) => `• *${role.name}* (${formatRoleScheduleLabel(role)}): ${role.open_spots} critical spots still open out of ${role.critical_positions_required} required`)
     : ['• All critical roles are currently filled']
 
   return {
@@ -363,7 +377,7 @@ serve(async (req) => {
 
     const { data: roles, error: rolesError } = await supabaseAdmin
       .from('volunteer_roles')
-      .select('id, name, event_date, positions_total, critical, critical_positions_required')
+      .select('id, name, event_date, completion_month, positions_total, critical, critical_positions_required')
 
     if (rolesError) throw rolesError
 
@@ -437,7 +451,9 @@ serve(async (req) => {
       .filter((role) => role.open_spots > 0)
       .sort((a, b) => {
         if (b.open_spots !== a.open_spots) return b.open_spots - a.open_spots
-        if ((a.event_date || '') !== (b.event_date || '')) return (a.event_date || '').localeCompare(b.event_date || '')
+        const sa = `${a.event_date || ''}|${a.completion_month || ''}`
+        const sb = `${b.event_date || ''}|${b.completion_month || ''}`
+        if (sa !== sb) return sa.localeCompare(sb)
         return a.name.localeCompare(b.name)
       })
 

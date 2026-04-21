@@ -41,6 +41,7 @@
     name: '',
     description: '',
     event_date: '',
+    completion_month: '',
     start_time: '',
     end_time: '',
     location: '',
@@ -55,6 +56,10 @@
     formData.name = role.name || '';
     formData.description = role.description || '';
     formData.event_date = role.event_date || '';
+    formData.completion_month =
+      role.completion_month && String(role.completion_month).length >= 7
+        ? String(role.completion_month).slice(0, 7)
+        : '';
     formData.start_time = role.start_time || '';
     formData.end_time = role.end_time || '';
     formData.location = role.location || '';
@@ -65,6 +70,9 @@
   } else if (defaultDomainId) {
     formData.domain_id = defaultDomainId;
   }
+
+  $: if (formData.event_date) formData.completion_month = '';
+  $: if (formData.completion_month) formData.event_date = '';
 
   $: formData.critical_positions_required = normalizeCriticalPositionsInput(
     formData.critical_positions_required,
@@ -110,13 +118,12 @@
 
   <div class="form-row">
     <div class="form-group">
-      <label for="event_date">Event Date *</label>
+      <label for="event_date">Event date</label>
       <input
         type="date"
         id="event_date"
         bind:value={formData.event_date}
-        required
-        disabled={loading}
+        disabled={loading || !!formData.completion_month}
       />
     </div>
 
@@ -133,29 +140,42 @@
     </div>
   </div>
 
+  <div class="form-group">
+    <label for="completion_month">Complete during month (no specific day)</label>
+    <input
+      type="month"
+      id="completion_month"
+      bind:value={formData.completion_month}
+      disabled={loading || !!formData.event_date}
+    />
+    <small>Optional. Pick a calendar month when the work should be done, without a fixed day or time. Clears event date above when set.</small>
+  </div>
+
   <div class="form-row">
     <div class="form-group">
-      <label for="start_time">Start Time *</label>
+      <label for="start_time">Start time</label>
       <input
         type="time"
         id="start_time"
         bind:value={formData.start_time}
-        required
         disabled={loading}
       />
     </div>
 
     <div class="form-group">
-      <label for="end_time">End Time *</label>
+      <label for="end_time">End time</label>
       <input
         type="time"
         id="end_time"
         bind:value={formData.end_time}
-        required
         disabled={loading}
       />
     </div>
   </div>
+
+  <p class="schedule-hint">
+    Leave date and time blank for a <strong>flexible</strong> schedule (shown as Flexible to volunteers). You can combine a specific date with flexible times, or a month window with flexible times.
+  </p>
 
   <div class="form-group">
     <label for="location">Location/Meeting Point</label>
@@ -338,6 +358,16 @@
 
   .btn-secondary:hover:not(:disabled) {
     background: #f8f9fa;
+  }
+
+  .schedule-hint {
+    margin: 0 0 1rem;
+    padding: 0.75rem 1rem;
+    background: #f8f9fa;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    color: #495057;
+    line-height: 1.5;
   }
 
   @media (max-width: 768px) {
