@@ -14,10 +14,28 @@ export const storageKey = (() => {
 })();
 
 /**
+ * Structured log for auth recovery / storage actions (instrument migration §4.4).
+ * @param {string} reason
+ * @param {Record<string, unknown>} [detail]
+ */
+export function authRecoveryLog(reason, detail = {}) {
+  if (typeof console === 'undefined' || !console.info) return;
+  try {
+    console.info('[authRecovery]', reason, detail);
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
  * Remove persisted GoTrue tokens (e.g. before applying fresh hash tokens, or after stall recovery).
  * @param {Storage} [store]
+ * @param {string} [reason] — optional log reason
  */
-export function clearPersistedSupabaseAuthKeys(store = typeof window !== 'undefined' ? window.localStorage : null) {
+export function clearPersistedSupabaseAuthKeys(
+  store = typeof window !== 'undefined' ? window.localStorage : null,
+  reason = 'clearPersistedSupabaseAuthKeys'
+) {
   if (!store || !storageKey) return;
   try {
     for (const k of Object.keys(store)) {
@@ -25,6 +43,7 @@ export function clearPersistedSupabaseAuthKeys(store = typeof window !== 'undefi
         store.removeItem(k);
       }
     }
+    authRecoveryLog(reason, { storage: store === window?.localStorage ? 'localStorage' : 'sessionStorage' });
   } catch {
     /* ignore quota / privacy */
   }
@@ -35,9 +54,11 @@ if (typeof window !== 'undefined' && storageKey) {
   // Email magic links put new tokens in the hash. A stale refresh in localStorage can hang
   // getSession and block hash handling — drop old tokens so detectSessionInUrl can apply the new ones.
   // Clear sessionStorage too: migration below would otherwise copy stale keys back into localStorage.
+  // Narrow: only when fragment clearly contains auth tokens (not arbitrary hash routes).
   if (/access_token|refresh_token|type=magiclink|type=recovery/i.test(h)) {
-    clearPersistedSupabaseAuthKeys(window.localStorage);
-    clearPersistedSupabaseAuthKeys(window.sessionStorage);
+    authRecoveryLog('module_init_clear_stale_before_hash_session', { hashPrefix: h.slice(0, 80) });
+    clearPersistedSupabaseAuthKeys(window.localStorage, 'module_init_hash_tokens_localStorage');
+    clearPersistedSupabaseAuthKeys(window.sessionStorage, 'module_init_hash_tokens_sessionStorage');
   }
 
   // Older builds used sessionStorage for auth (tab-scoped magic links). Migrate into

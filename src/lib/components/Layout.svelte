@@ -61,7 +61,7 @@
         </button>
         <div class="nav-menu" class:active={showMobileMenu}>
         {#if $auth.user}
-          {#if $auth.isAdmin}
+          {#if $auth.adminReady}
             <a href="#/admin" class="nav-link" on:click={handleNavClick}>Dashboard</a>
             <a href="#/admin/roles" class="nav-link" on:click={handleNavClick}>Roles</a>
             <a href="#/admin/domains" class="nav-link" on:click={handleNavClick}>Domains</a>
@@ -107,6 +107,28 @@
       </div>
     </div>
   </nav>
+  {/if}
+
+  {#if !isKidsLanding && ($auth.sessionWarning || $auth.bootstrapTimedOut || (!$auth.loading && $auth.profileState === 'degraded' && $auth.user))}
+    <div class="session-banner" role="status">
+      <p class="session-banner__text">
+        {#if $auth.sessionWarning}
+          {$auth.sessionWarning}
+        {:else if $auth.bootstrapTimedOut}
+          Sign-in took longer than usual; the app will keep trying in the background.
+        {:else}
+          Your profile is still loading. Some features may be unavailable.
+        {/if}
+      </p>
+      <div class="session-banner__actions">
+        <button type="button" class="session-banner__btn" on:click={() => auth.retrySession()}>
+          Retry connection
+        </button>
+        <button type="button" class="session-banner__btn session-banner__btn--muted" on:click={() => auth.dismissSessionWarning()}>
+          Dismiss
+        </button>
+      </div>
+    </div>
   {/if}
 
   <main class="main-content" class:main-content--kids={isKidsLanding}>
@@ -301,6 +323,58 @@
 
   .kids-landing {
     background: var(--bg-primary);
+  }
+
+  .session-banner {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0.75rem 1rem;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    background: #fff3cd;
+    color: #664d03;
+    border-bottom: 1px solid #ffc107;
+    font-size: 0.9rem;
+  }
+
+  :global([data-theme='dark']) .session-banner {
+    background: rgba(255, 243, 205, 0.12);
+    color: #f0e6c8;
+    border-bottom-color: rgba(255, 193, 7, 0.4);
+  }
+
+  .session-banner__text {
+    margin: 0;
+    flex: 1 1 12rem;
+    line-height: 1.4;
+  }
+
+  .session-banner__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .session-banner__btn {
+    padding: 0.35rem 0.75rem;
+    font-size: 0.85rem;
+    border-radius: 6px;
+    border: 1px solid #856404;
+    background: rgba(255, 255, 255, 0.6);
+    cursor: pointer;
+    color: inherit;
+  }
+
+  .session-banner__btn:hover {
+    background: rgba(255, 255, 255, 0.95);
+  }
+
+  .session-banner__btn--muted {
+    border-style: dashed;
+    opacity: 0.85;
   }
 
   .footer {

@@ -1,6 +1,10 @@
 import { writable, get } from 'svelte/store';
 import { supabase, clearPersistedSupabaseAuthKeys } from '../supabaseClient';
+import { authObs } from '../auth/authObservability';
 import { TimeoutError, withSupabaseReadTimeout, withTimeout } from '../utils/withTimeout';
+
+/** Hydrate-only `getSession` — bounded (migration §6.1) */
+const HYDRATE_GET_SESSION_TIMEOUT_MS = 12000;
 
 /** Whole bootstrap (session + profile retries) — outer safety net only */
 const AUTH_BOOTSTRAP_TIMEOUT_MS = 120000;
@@ -14,6 +18,35 @@ const GET_SESSION_STALL_MS = 5000;
  * block other Supabase requests (e.g. public role listings). Clear local session so anon reads work.
  * @param {unknown} error
  */
+/**
+ * @param {{
+ *   user: import('@supabase/supabase-js').User | null;
+ *   profile: Record<string, unknown> | null;
+ *   loading: boolean;
+ *   isAdmin: boolean;
+ *   bootstrapTimedOut?: boolean;
+ *   sessionWarning?: string | null;
+ * }} s
+ */
+function withDerived(s) {
+  const { user, profile, loading } = s;
+  let authSession = 'loading';
+  if (!loading) authSession = user ? 'signed_in' : 'signed_out';
+  /** @type {'none' | 'ready' | 'degraded'} */
+  let profileState = 'none';
+  if (user) profileState = profile ? 'ready' : 'degraded';
+  const adminReady =
+    !loading && !!user && !!profile && /** @type {{ role?: string }} */ (profile).role === 'admin';
+  return {
+    ...s,
+    authSession,
+    profileState,
+    adminReady,
+    bootstrapTimedOut: s.bootstrapTimedOut ?? false,
+    sessionWarning: s.sessionWarning ?? null,
+  };
+}
+
 function shouldClearLocalSessionAfterAuthError(error) {
   if (!error || typeof error !== 'object') return false;
   const msg = String(/** @type {{ message?: string }} */ (error).message ?? '').toLowerCase();
@@ -26,12 +59,16 @@ function shouldClearLocalSessionAfterAuthError(error) {
 }
 
 function createAuthStore() {
-  const { subscribe, set, update } = writable({
-    user: null,
-    profile: null,
-    loading: true,
-    isAdmin: false
-  });
+  const { subscribe, set, update } = writable(
+    withDerived({
+      user: null,
+      profile: null,
+      loading: true,
+      isAdmin: false,
+      bootstrapTimedOut: false,
+      sessionWarning: null,
+    })
+  );
   const getState = () => get({ subscribe });
   let authSubscriptionInitialized = false;
   /** After first full `loadCurrentSession` bootstrap, further `initialize()` calls only hydrate (no stall recovery). */
@@ -84,15 +121,33 @@ function createAuthStore() {
         profile = prev.profile;
       }
 
-      set({
-        user: session.user,
-        profile,
-        loading: false,
-        isAdmin: profile?.role === 'admin'
-      });
+      const sessionWarning =
+        session.user && !profile
+          ? 'Your profile could not be loaded. Try refreshing, or sign out and sign in again.'
+          : null;
+
+      set(
+        withDerived({
+          user: session.user,
+          profile,
+          loading: false,
+          isAdmin: profile?.role === 'admin',
+          bootstrapTimedOut: false,
+          sessionWarning,
+        })
+      );
       return { user: session.user, profile };
     } else {
-      set({ user: null, profile: null, loading: false, isAdmin: false });
+      set(
+        withDerived({
+          user: null,
+          profile: null,
+          loading: false,
+          isAdmin: false,
+          bootstrapTimedOut: false,
+          sessionWarning: null,
+        })
+      );
       return { user: null, profile: null };
     }
   };
@@ -144,8 +199,8 @@ function createAuthStore() {
       console.warn(
         '[auth] getSession stalled (bad refresh often hangs without rejecting); clearing local session'
       );
-      clearPersistedSupabaseAuthKeys(window.localStorage);
-      clearPersistedSupabaseAuthKeys(window.sessionStorage);
+      clearPersistedSupabaseAuthKeys(window.localStorage, 'get_session_stall_recovery');
+      clearPersistedSupabaseAuthKeys(window.sessionStorage, 'get_session_stall_recovery');
       await supabase.auth.signOut({ scope: 'local' });
       const retryAfterStall = await Promise.race([
         supabase.auth.getSession(),
@@ -186,7 +241,16 @@ function createAuthStore() {
   };
 
   const setLoggedOutState = () => {
-    set({ user: null, profile: null, loading: false, isAdmin: false });
+    set(
+      withDerived({
+        user: null,
+        profile: null,
+        loading: false,
+        isAdmin: false,
+        bootstrapTimedOut: false,
+        sessionWarning: null,
+      })
+    );
   };
 
   return {
@@ -246,7 +310,16 @@ function createAuthStore() {
           console.warn(
             'Auth bootstrap timed out; finishing load in background without clearing session.'
           );
-          update((state) => ({ ...state, loading: false }));
+          authObs('bootstrap_timeout', { timeoutMs: AUTH_BOOTSTRAP_TIMEOUT_MS });
+          update((state) =>
+            withDerived({
+              ...state,
+              loading: false,
+              bootstrapTimedOut: true,
+              sessionWarning:
+                'Sign-in is taking longer than expected. Public pages still work; try refreshing or sign in again.',
+            })
+          );
           authFullBootstrapDone = true;
           void loadCurrentSession()
             .then(() => {})
@@ -262,6 +335,17 @@ function createAuthStore() {
       return loadCurrentSession();
     },
 
+    /** Clears client-only warning banner (session may still need `refreshSession`). */
+    dismissSessionWarning: () => {
+      update((state) => withDerived({ ...state, sessionWarning: null }));
+    },
+
+    /** User-triggered re-run of session bootstrap (after timeouts / degraded state). */
+    retrySession: async () => {
+      authObs('user_retry_session_load', {});
+      return loadCurrentSession();
+    },
+
     /**
      * Reload profile from DB for an existing session without running stall recovery (use after OAuth/magic link).
      * @param {import('@supabase/supabase-js').Session | null} [knownSession]
@@ -270,11 +354,40 @@ function createAuthStore() {
       if (knownSession?.user) {
         return applySessionWithProfile(knownSession);
       }
-      const { data, error } = await supabase.auth.getSession();
+      authObs('hydrate_get_session_start', {});
+      let data;
+      let error;
+      try {
+        const raced = await withTimeout(() => supabase.auth.getSession(), {
+          label: 'auth.hydrateFromSession.getSession',
+          timeoutMs: HYDRATE_GET_SESSION_TIMEOUT_MS,
+        });
+        data = raced.data;
+        error = raced.error;
+      } catch (e) {
+        if (e instanceof TimeoutError) {
+          authObs('hydrate_get_session_timeout', { ms: HYDRATE_GET_SESSION_TIMEOUT_MS });
+          update((state) =>
+            withDerived({
+              ...state,
+              sessionWarning:
+                state.sessionWarning ??
+                'Could not confirm your session quickly. Try refreshing if pages look wrong.',
+            })
+          );
+          // Last resort — same as pre-timeout behavior; may still hang if GoTrue is stuck.
+          const fallback = await supabase.auth.getSession();
+          data = fallback.data;
+          error = fallback.error;
+        } else {
+          throw e;
+        }
+      }
       if (error) {
         console.error('[auth] hydrateFromSession getSession:', error);
         return applySession(null);
       }
+      authObs('hydrate_get_session_ok', {});
       return applySessionWithProfile(data.session);
     },
 
@@ -392,10 +505,19 @@ function createAuthStore() {
         }
       } finally {
         if (typeof window !== 'undefined') {
-          clearPersistedSupabaseAuthKeys(window.localStorage);
-          clearPersistedSupabaseAuthKeys(window.sessionStorage);
+          clearPersistedSupabaseAuthKeys(window.localStorage, 'sign_out_explicit');
+          clearPersistedSupabaseAuthKeys(window.sessionStorage, 'sign_out_explicit');
         }
-        set({ user: null, profile: null, loading: false, isAdmin: false });
+        set(
+          withDerived({
+            user: null,
+            profile: null,
+            loading: false,
+            isAdmin: false,
+            bootstrapTimedOut: false,
+            sessionWarning: null,
+          })
+        );
       }
     },
 

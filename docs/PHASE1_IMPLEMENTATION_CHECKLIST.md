@@ -1,7 +1,7 @@
 # Phase 1 — Auth spine implementation checklist
 
 **Branch:** `omnium2026` (canonical for this work).  
-**Specs:** [`AUTH_DATA_ACCESS_MIGRATION.md`](./AUTH_DATA_ACCESS_MIGRATION.md), [`TARGET_ARCHITECTURE_OPTION_B_SPEC.md`](./TARGET_ARCHITECTURE_OPTION_B_SPEC.md).
+**Specs:** [`AUTH_DATA_ACCESS_MIGRATION.md`](./AUTH_DATA_ACCESS_MIGRATION.md), [`TARGET_ARCHITECTURE_OPTION_B_SPEC.md`](./TARGET_ARCHITECTURE_OPTION_B_SPEC.md), [`RLS_EXPOSURE_INVENTORY.md`](./RLS_EXPOSURE_INVENTORY.md).
 
 ---
 
@@ -24,43 +24,43 @@
 
 ## Session / profile explicit states
 
-- [ ] Introduce explicit **`authSession`** / **`profileState`** (or equivalent) in `auth.js` store — loading / signed-out / signed-in / degraded / error.
-- [ ] Align `Layout` / route guards with the state machine (incremental; avoid big-bang).
+- [x] Introduce explicit **`authSession`** / **`profileState`** / **`adminReady`** / **`sessionWarning`** / **`bootstrapTimedOut`** in `auth.js` (`withDerived`).
+- [x] Align `Layout` — admin nav uses **`adminReady`**; session warning banner + retry/dismiss.
 
 ---
 
 ## Storage recovery (instrument, narrow)
 
-- [ ] Inventory all **`localStorage` / `sessionStorage`** clears touching Supabase keys in `supabaseClient.js` and auth paths.
-- [ ] Replace **broad heuristic** callback/login clears with **narrow** rules; add **logging/metrics** for each clear path (see migration **§4.4**, **§11.1**).
-- [ ] Keep bounded stall recovery **outside** active callback processing where still needed; review after instrumentation.
+- [x] **`authRecoveryLog(reason)`** + per-call **`clearPersistedSupabaseAuthKeys(..., reason)`** (module hash pre-clear, stall recovery, sign-out).
+- [ ] Replace **broad heuristic** callback/login clears with **narrow** rules where still needed after reviewing `[authRecovery]` logs in staging.
+- [x] Stall recovery logic unchanged but **instrumented**; optional further narrowing TBD.
 
 ---
 
 ## Remove alternate PostgREST / JWT side channel — **conditional**
 
-- [ ] Add **bounded timeouts** for `getSession` / critical auth calls where missing.
-- [ ] Add **visible** session-error / retry UX for “signed in but queries fail” and GoTrue hang cases.
+- [x] **`hydrateFromSession`** uses bounded **`getSession`** timeout + fallback path + store warning.
+- [x] **Visible** session banner (`sessionWarning`, degraded profile, bootstrap timeout) + **Retry** / **Dismiss**.
 - [ ] **Then** remove **`getUserPostgrestClient`** and migrate callers to the single Supabase client (see migration **§6.1**).
 
 ---
 
 ## Central route gating
 
-- [ ] **`adminReady`** (or equivalent) before showing admin chrome — verify all admin routes respect it.
-- [ ] Document guard order: session → profile → role.
+- [x] **Layout** admin links gated by **`$auth.adminReady`** (session loaded + admin profile). Page-level **`ensureAdminRouteReady`** unchanged.
+- [ ] Document guard order: session → profile → role (extend `ARCHITECTURE.md` §6 if needed).
 
 ---
 
 ## Observability (incremental)
 
-- [ ] Log or client metric: callback entered, session recovered / timeout, profile hydrate ok/error, forced re-auth.
+- [x] **`authObs`** (dev `console.debug`) + **`[authRecovery]`** `console.info`; magic-link **`authObs`** events in `completeMagicLinkAfterRedirect`.
 
 ---
 
 ## RLS audit (Phase 5 — track early)
 
-- [ ] Maintain a running list of **tables/views/rpc** accessed from browser and Edge; Phase 5 full audit is **mandatory** (migration **§8**, **§3**).
+- [x] Starter list: [`RLS_EXPOSURE_INVENTORY.md`](./RLS_EXPOSURE_INVENTORY.md) (expand + check off RLS reviewed).
 
 ---
 
@@ -69,3 +69,4 @@
 | Date | Notes |
 |------|--------|
 | 2026-04-20 | Initial checklist; first code slice: callback route + shared completion helper + `redirectTo`. |
+| 2026-04-20 | Auth spine: derived session states, Layout banner + `adminReady`, `authRecoveryLog`, `authObs`, RLS inventory stub, hydrate timeout. |

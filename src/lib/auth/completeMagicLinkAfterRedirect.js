@@ -1,4 +1,5 @@
 import { auth } from '../stores/auth';
+import { authObs } from './authObservability';
 
 /**
  * After `auth.initialize()`, waits for Supabase to recover the session from URL tokens (PKCE or hash),
@@ -16,11 +17,14 @@ export async function completeMagicLinkAfterRedirect(opts) {
   const { supabase } = await import('../supabaseClient');
   const { replace } = await import('svelte-spa-router');
 
+  authObs('magic_link_complete_loop_start', { hadPkceCode });
+
   for (let i = 0; i < 40; i++) {
     const {
       data: { session },
     } = await supabase.auth.getSession();
     if (session) {
+      authObs('magic_link_session_recovered', { attempts: i + 1 });
       const { profile } = await auth.hydrateFromSession(session);
       const needsOnboarding = !profile?.emergency_contact_name;
       const fromMagicLink = hash.includes('type=magiclink') || hadPkceCode;

@@ -287,6 +287,17 @@ Used in **Dashboard, Roles, Volunteers, Communications** `onMount`:
 
 Guards that only run **`onMount`** once may redirect using **stale** state if auth finishes milliseconds later—prefer **`ensureAdminRouteReady`** or subscribe to **`auth`** for admin.
 
+### Derived session fields (`auth.js`)
+
+| Field | Meaning |
+|-------|---------|
+| `authSession` | `loading` \| `signed_out` \| `signed_in` |
+| `profileState` | `none` \| `ready` \| `degraded` (signed in but no profile row) |
+| `adminReady` | `!loading && user && profile && admin role` — **use for admin chrome** |
+| `sessionWarning` / `bootstrapTimedOut` | User-visible recovery hints |
+
+**Guard order (target):** session resolved → profile row → role-based chrome → page data. Admin routes should keep calling **`ensureAdminRouteReady`** in `onMount`.
+
 ### Route / render matrix (summary)
 
 | `$auth` shape | Nav | Admin links | Typical redirect if accessing `/admin` |
@@ -309,7 +320,7 @@ Guards that only run **`onMount`** once may redirect using **stale** state if au
 | Client `redirectTo` for login | **`auth.signInWithMagicLink`** uses `window.location.origin + '/#/auth/callback'` — so **whatever origin the user is on** (apex vs `www`) is what gets sent to **`send-magic-link`**. The exact string must be on the Supabase redirect allow list. |
 | Apex vs `www` | **Confirm** DNS and canonical host; mismatch between email links and stored session origin can cause confusing logins. **Search the repo** for `berkeleyomnium` / `www.` in env and docs. |
 | Fragment `#access_token=...` vs `?code=` PKCE | Depends on **Supabase project settings** and **client** (`detectSessionInUrl: true` in `supabaseClient.js`). **App checks both** hash and query in `App.svelte`. |
-| Dedicated callback route | **No** dedicated `/callback` route in `App.svelte` routes—**landing is `/`** with hash router. |
+| Dedicated callback route | **`/#/auth/callback`** is registered in `App.svelte` (`AuthCallback.svelte`). **Landing** may still be `/` with `#access_token=…` depending on Supabase redirect + hash behavior—validate in prod (see `AUTH_DATA_ACCESS_MIGRATION.md` §6.2). |
 | Email scanners (Gmail/Outlook) | **Not controlled in code**—can strip or prefetch links; document in support playbooks. |
 | Mobile clients | Same as above—report failures with **client, OS, mail app**. |
 
