@@ -1,9 +1,6 @@
 import { writable } from 'svelte/store';
 import { supabase } from '../supabaseClient';
-import { getUserPostgrestClient } from '../supabaseUserRest';
 import { withSupabaseReadTimeout } from '../utils/withTimeout';
-
-const clientForReads = () => getUserPostgrestClient() ?? supabase;
 
 function createAffiliationsStore() {
   const { subscribe, set } = writable([]);
@@ -12,7 +9,7 @@ function createAffiliationsStore() {
   const fetchAffiliations = async () => {
     if (cached) return cached;
     const { data, error } = await withSupabaseReadTimeout(
-      () => clientForReads()
+      () => supabase
         .from('team_club_affiliations')
         .select('id, name, sort_order')
         .order('sort_order', { ascending: true })

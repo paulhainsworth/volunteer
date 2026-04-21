@@ -162,14 +162,12 @@ sb-<supabase-project-ref>-auth-token
 
 | Key pattern | Written by | Read by | Cleared by |
 |-------------|------------|---------|------------|
-| `sb-*-auth-token*` (primary + prefixes) | **Supabase JS** (GoTrue) when persisting session; **migration block** may copy sessionStorage → localStorage | **Supabase JS** `getSession`, refresh; **`getPersistedAccessToken()`** parses JSON and reads `access_token` | **`clearPersistedSupabaseAuthKeys`**: called from `loadCurrentSession` stall recovery, `signOut`, magic-link hash pre-clear in `supabaseClient.js`, and `loadCurrentSession` after some auth errors |
+| `sb-*-auth-token*` (primary + prefixes) | **Supabase JS** (GoTrue) when persisting session; **migration block** may copy sessionStorage → localStorage | **Supabase JS** `getSession`, refresh only (no app-side JWT parse) | **`clearPersistedSupabaseAuthKeys`**: called from `loadCurrentSession` stall recovery, `signOut`, magic-link hash pre-clear in `supabaseClient.js`, and `loadCurrentSession` after some auth errors |
 | Same keys in **sessionStorage** | Older behavior / transient | Migration copies to localStorage if missing | Same clear helper; magic-link hash path clears both |
 
-### App code that reads raw persisted session (not only Supabase)
+### App code and raw JWT / storage
 
-- **`getPersistedAccessToken()`** (`src/lib/supabaseUserRest.js`) — **`JSON.parse(localStorage.getItem(storageKey))`** and returns **`access_token`**. Used to build **`getUserPostgrestClient()`** so PostgREST reads do not queue behind a stuck GoTrue refresh on the shared `supabase` client.
-
-**No other app modules** should parse JWTs from storage; if you add one, document it here.
+**No application modules** parse JWTs from `localStorage` or build a parallel PostgREST client. Historical **`getUserPostgrestClient` / `getPersistedAccessToken`** (`supabaseUserRest.js`) was **removed** after Phase 1 (bounded `getSession` timeouts, session warning UI, magic-link normalization). If you add any storage JWT read, document it here.
 
 ### Multiple tabs
 
@@ -185,7 +183,7 @@ sb-<supabase-project-ref>-auth-token
 |-------|------|
 | **GoTrue session** (in memory + persisted JSON) | **Canonical** for “is there a valid access/refresh token?” RLS and Edge Functions care about the **JWT**. |
 | **`auth` Svelte store** | **Canonical for UI** (nav, admin detection, onboarding gating). It is **derived** from `getSession` + `profiles` fetch, not from storage directly. |
-| **Raw `localStorage`** | **Not** a source of truth for UI; only an implementation detail + `getPersistedAccessToken` escape hatch. |
+| **Raw `localStorage`** | **Not** a source of truth for UI; only an implementation detail (GoTrue persistence). |
 
 **When they disagree:**
 
@@ -204,13 +202,12 @@ sb-<supabase-project-ref>-auth-token
 |--------|--------|-------------|-------------|
 | **`supabase`** | `src/lib/supabaseClient.js` | User JWT when logged in; anon when not | Mutations, authenticated reads, `auth.*`, anything needing RLS as the logged-in user |
 | **`supabasePublic`** | `src/lib/supabasePublic.js` | **Anon key only** (`Authorization: Bearer <anon>`) | **Public** role listings, featured roles, RPC like `get_confirmed_signup_counts` where RLS allows anon |
-| **`getUserPostgrestClient()`** | `src/lib/supabaseUserRest.js` | **User JWT from parsed `localStorage` JSON** | Read paths that must **not** block on stuck `supabase.auth` refresh (e.g. some stores); **same RLS** as authenticated `supabase` when token valid |
 
 ### Policy (how to choose)
 
-- **Needs the user’s identity for RLS** → `supabase` or `getUserPostgrestClient()` (never `supabasePublic` for private data).
+- **Needs the user’s identity for RLS** → **`supabase`** (never `supabasePublic` for private data).
 - **Explicitly public marketing/anon** (browse roles without login) → `supabasePublic` where tables/policies allow.
-- **Hung GoTrue / stuck refresh** → `getUserPostgrestClient()` is a **workaround** to unblock reads using the persisted access token.
+- **Hung GoTrue / slow refresh** → use **`sessionWarning`**, **Retry**, stall recovery, and timeouts in **`auth.js`** — not a second PostgREST client.
 
 ### JWT + RLS vs anonymous
 
@@ -339,12 +336,13 @@ Phase 1 (Option A–style spine, toward Option B) added concrete code paths and 
 | **Instrumented recovery** | **`authRecoveryLog`** + reasons on **`clearPersistedSupabaseAuthKeys`**; **`authObs`** (dev) and events in the magic-link loop. |
 | **Bounded `getSession` on hydrate** | **`hydrateFromSession`** wraps **`getSession`** in a timeout, then optional fallback + **`sessionWarning`** if GoTrue is slow. |
 | **Double-hash fix** | **`index.html`** (inline) and **`src/normalizeMagicLinkHash.js`** (imported first in **`main.js`**) — if the URL is **`#/auth/callback#access_token=…`**, **`location.replace`** to **`#access_token=…`** so **`detectSessionInUrl`** and the router see the same shape as the legacy **`redirectTo: origin + '/'`** flow. |
+| **Single PostgREST client** | No **`getUserPostgrestClient`** / **`supabaseUserRest.js`** — authenticated reads use **`supabase`** only (`domains`, `affiliations`, **`RolesList`**). |
 
 ### 7.2 How this addresses common login / auth failure modes
 
 | Failure mode | How Phase 1 helps |
 |--------------|-------------------|
-| **Split-brain** (nav shows signed-in, queries fail or disagree) | One completion pipeline (**`completeMagicLinkAfterRedirect`**), explicit **`profileState` / `sessionWarning` / `adminReady`**, and a path to **remove `getUserPostgrestClient`** only after timeout + UX (migration doc). |
+| **Split-brain** (nav shows signed-in, queries fail or disagree) | One completion pipeline (**`completeMagicLinkAfterRedirect`**), explicit **`profileState` / `sessionWarning` / `adminReady`**, single **`supabase`** client for reads (no parallel PostgREST JWT-from-storage path). |
 | **Opaque magic-link failures** | Dedicated **`/auth/callback`** shell + **`authObs`** breadcrumbs; **`authRecoveryLog`** attributes storage clears. |
 | **Hung GoTrue / slow `getSession`** | Stall logic unchanged but visible; **`hydrateFromSession`** timeout + banner; **`bootstrapTimedOut`** when outer bootstrap hits the safety net. |
 | **Wrong or fragile redirect URL** | Still requires **Supabase allow-list** and **real** redirect validation; code documents the **double-hash** case (§7 table + §7.3). |
@@ -492,7 +490,7 @@ sequenceDiagram
 
 | Key | Owner | Written by | Read by | Cleared by | Lifetime |
 |-----|-------|------------|---------|------------|----------|
-| `sb-<ref>-auth-token*` | GoTrue | Supabase JS | Supabase JS; `getPersistedAccessToken` | Stall recovery, signOut, magic pre-clear, auth error recovery | Until cleared or expired |
+| `sb-<ref>-auth-token*` | GoTrue | Supabase JS | Supabase JS only | Stall recovery, signOut, magic pre-clear, auth error recovery | Until cleared or expired |
 
 ### Client inventory (see §4)
 
@@ -500,7 +498,6 @@ sequenceDiagram
 |--------|------|-------------|
 | `supabase` | User JWT or anon | CRUD, auth API |
 | `supabasePublic` | Anon only | Public reads allowed by RLS |
-| `getUserPostgrestClient()` | User JWT from storage parse | Escape stuck main client |
 
 ### Failure modes (starter)
 
@@ -518,10 +515,10 @@ sequenceDiagram
 Use this as a checklist when hardening auth docs and behavior.
 
 - [ ] **Production redirect allow-list** in Supabase exactly matches **all** deployed origins (preview + prod + `www` vs apex).
-- [ ] **Do any code paths besides** `getPersistedAccessToken` **read** raw JWT from storage? (Periodic grep.)
+- [x] **No** raw JWT-from-storage reads in app code (periodic grep; removed with `supabaseUserRest.js`).
 - [ ] **`initialize()` vs `onAuthStateChange`**: confirm no double-application bugs for the same session in failure cases (review logs).
 - [ ] **Which production link shape** (hash vs PKCE) dominates—measure from real magic links.
-- [ ] **Screens**: list which use **`supabase`** vs **`supabasePublic`** vs **`getUserPostgrestClient`** (expand §4 as you audit).
+- [ ] **Screens**: list which use **`supabase`** vs **`supabasePublic`** (expand §4 as you audit).
 - [ ] **Original incident** that motivated aggressive `clearPersistedSupabaseAuthKeys`—link to issue when found.
 
 ---
@@ -532,7 +529,6 @@ Use this as a checklist when hardening auth docs and behavior.
 |------|------|
 | Auth store + bootstrap | `src/lib/stores/auth.js` |
 | Supabase client + persistence | `src/lib/supabaseClient.js` |
-| PostgREST user escape hatch | `src/lib/supabaseUserRest.js` |
 | Anon PostgREST | `src/lib/supabasePublic.js` |
 | Post–magic-link routing | `src/App.svelte` |
 | Layout / nav visibility | `src/lib/components/Layout.svelte` |

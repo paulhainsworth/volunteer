@@ -18,7 +18,7 @@ This file stays **short**: concrete files, phases, and checkpoints for engineers
 
 | Phase | Focus |
 |-------|--------|
-| 0 | Inventory: all `supabase` / `supabasePublic` / `getUserPostgrestClient` calls; classify risk; redirect allow-list |
+| 0 | Inventory: all `supabase` / `supabasePublic` calls; classify risk; redirect allow-list |
 | 1 | Auth spine (see migration doc §7–9, §11) |
 | 2 | First 2–3 Edge endpoints (admin aggregate, volunteers, my-signups — product may adjust) |
 | 3 | Migrate admin → leader → volunteer private screens |
@@ -33,8 +33,8 @@ This file stays **short**: concrete files, phases, and checkpoints for engineers
 |------|--------|
 | `src/App.svelte` | `#/auth/callback` route; trim duplicate post-login logic vs callback component |
 | `src/lib/stores/auth.js` | Explicit `authSession` + `profileState`; remove storage JWT path |
-| `src/lib/supabaseUserRest.js` | Deprecate/remove after callers migrated |
-| `src/lib/stores/domains.js`, `affiliations.js`, `RoutesList` | Drop `getUserPostgrestClient` fallback |
+| ~~`src/lib/supabaseUserRest.js`~~ | **Removed** — use `supabase` only |
+| `src/lib/stores/domains.js`, `affiliations.js`, `RolesList.svelte` | Migrated off parallel PostgREST client |
 | `src/lib/supabaseClient.js` | Revisit hash/stall clear per **§11.1** |
 | Auth redirect | `signInWithMagicLink` / edge `send-magic-link` **`redirectTo`** + Supabase allow-list |
 | `Layout.svelte` | Gating: `adminReady` before admin chrome |

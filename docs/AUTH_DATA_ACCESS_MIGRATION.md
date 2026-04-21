@@ -207,7 +207,9 @@ Validate **Supabase + email** flows; tokens may not arrive first on `#/auth/call
 
 ### 11.3 Removing `getUserPostgrestClient`
 
-**Conditional** on: single session authority, **bounded timeouts**, **visible** session-error/retry — avoid reintroducing silent GoTrue hangs.
+**Done in this repo** (after single-session work, bounded `getSession` on hydrate, session warning UI, magic-link URL normalization): **`src/lib/supabaseUserRest.js`** deleted; **`domains.js`**, **`affiliations.js`**, **`RolesList.svelte`** use **`supabase`** only.
+
+**Do not reintroduce** a parallel PostgREST path without the same guardrails — avoid silent GoTrue hangs.
 
 ### 11.4 RLS
 
@@ -245,3 +247,4 @@ That URL shape can prevent **`detectSessionInUrl`** from establishing a session 
 | 2026-04-20 | Initial drafts. |
 | 2026-04-20 | Final: non-goals, first-vs-later table, softened storage language, callback landing §6.2, conditional `getUserPostgrestClient` removal, mandatory RLS, §11 rename, risks rows, executive summary. |
 | 2026-04-21 | §11.7 double-hash `redirectTo` + token append; risk row; cross-ref to `ARCHITECTURE.md` §7.1–7.3 (Phase 1 implementation + incident). |
+| 2026-04-21 | §11.3: removed `getUserPostgrestClient` / deleted `supabaseUserRest.js`. |

@@ -27,9 +27,9 @@ So: **tokens are intentionally present in browser storage** for logged-in users.
 
 ### App-specific: reading tokens outside Supabase JS
 
-`src/lib/supabaseUserRest.js` defines **`getPersistedAccessToken()`**, which **`JSON.parse`s** the same GoTrue storage blob and reads **`access_token`**. That is used to build **`getUserPostgrestClient()`** so some reads do not block on a stuck main Supabase client.
+**None.** The app **does not** parse JWTs from storage or build a parallel PostgREST client. A historical **`getPersistedAccessToken` / `getUserPostgrestClient`** helper was **removed** (Phase 1 auth spine); all queries use the shared **`supabase`** client from `src/lib/supabaseClient.js`.
 
-**Risk profile:** Same storage as GoTrue already uses; **no second copy** of secrets—just **another reader** of the persisted session JSON. It does **not** change the fundamental “tokens in the browser” model; it **does** mean XSS could hit this code path too. **Policy:** avoid adding more ad-hoc readers; grep periodically (see open questions in `ARCHITECTURE.md`).
+**Policy:** do **not** reintroduce ad-hoc `localStorage` JWT readers; grep periodically (see open questions in `ARCHITECTURE.md`).
 
 ### What this is *not*
 
@@ -48,4 +48,5 @@ So: **tokens are intentionally present in browser storage** for logged-in users.
 
 | Date | Change |
 |------|--------|
-| 2026-04-20 | Initial `SECURITY.md`: browser token storage, threat model, `getPersistedAccessToken`, pointers to `ARCHITECTURE.md`. |
+| 2026-04-20 | Initial `SECURITY.md`: browser token storage, threat model, pointers to `ARCHITECTURE.md`. |
+| 2026-04-21 | Document removal of parallel PostgREST / storage JWT parse (`supabaseUserRest.js`). |

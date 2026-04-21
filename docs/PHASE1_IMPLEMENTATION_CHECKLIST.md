@@ -41,7 +41,7 @@
 
 - [x] **`hydrateFromSession`** uses bounded **`getSession`** timeout + fallback path + store warning.
 - [x] **Visible** session banner (`sessionWarning`, degraded profile, bootstrap timeout) + **Retry** / **Dismiss**.
-- [ ] **Then** remove **`getUserPostgrestClient`** and migrate callers to the single Supabase client (see migration **§6.1**).
+- [x] **Removed `getUserPostgrestClient`** — `domains.js`, `affiliations.js`, **`RolesList.svelte`** use **`supabase`** only; **`supabaseUserRest.js`** deleted (see migration **§11.3**).
 
 ---
 
@@ -70,3 +70,4 @@
 |------|--------|
 | 2026-04-20 | Initial checklist; first code slice: callback route + shared completion helper + `redirectTo`. |
 | 2026-04-20 | Auth spine: derived session states, Layout banner + `adminReady`, `authRecoveryLog`, `authObs`, RLS inventory stub, hydrate timeout. |
+| 2026-04-21 | Removed `getUserPostgrestClient` / `supabaseUserRest.js`. |

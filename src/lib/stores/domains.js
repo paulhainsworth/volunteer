@@ -1,10 +1,6 @@
 import { writable } from 'svelte/store';
 import { supabase } from '../supabaseClient';
-import { getUserPostgrestClient } from '../supabaseUserRest';
 import { withSupabaseReadTimeout } from '../utils/withTimeout';
-
-/** Avoid main supabase client when GoTrue refresh blocks the queue (same pattern as public reads). */
-const clientForReads = () => getUserPostgrestClient() ?? supabase;
 
 function createDomainsStore() {
   const { subscribe, set, update } = writable([]);
@@ -16,7 +12,7 @@ function createDomainsStore() {
       const { leaderId } = options;
 
       const { data, error } = await withSupabaseReadTimeout(async () => {
-        let query = clientForReads()
+        let query = supabase
           .from('volunteer_leader_domains')
           .select(`
             *,
@@ -50,7 +46,7 @@ function createDomainsStore() {
     },
 
     fetchDomain: async (id) => withSupabaseReadTimeout(async () => {
-      const db = clientForReads();
+      const db = supabase;
       const { data, error } = await db
         .from('volunteer_leader_domains')
         .select(`

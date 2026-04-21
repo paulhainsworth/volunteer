@@ -11,7 +11,7 @@
 | Column | Meaning |
 |--------|--------|
 | **Resource** | Table or view name |
-| **From** | Typical code path / client (`supabase`, `supabasePublic`, `getUserPostgrestClient`) |
+| **From** | Typical code path / client (`supabase`, `supabasePublic`) |
 | **RLS reviewed** | Checkbox when policies verified for intended anon/authenticated behavior |
 
 ---
