@@ -332,7 +332,8 @@ function createAuthStore() {
     },
 
     signInWithMagicLink: async (email) => {
-      const redirectTo = typeof window !== 'undefined' ? window.location.origin + '/' : '';
+      const redirectTo =
+        typeof window !== 'undefined' ? `${window.location.origin}/#/auth/callback` : '';
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
       const INVOKE_TIMEOUT_MS = 45000;
