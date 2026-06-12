@@ -1,9 +1,8 @@
 import { writable } from 'svelte/store';
 import { supabase } from '../supabaseClient';
-import { getUserPostgrestClient } from '../supabaseUserRest';
 import { withSupabaseReadTimeout } from '../utils/withTimeout';
 
-const clientForReads = () => getUserPostgrestClient() ?? supabase;
+const clientForReads = () => supabase;
 
 function createAffiliationsStore() {
   const { subscribe, set } = writable([]);

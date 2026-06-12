@@ -208,7 +208,6 @@ serve(async (req) => {
     const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
       type: 'magiclink',
       email: to,
-      options: { redirectTo },
     })
 
     if (linkError) {
@@ -219,18 +218,32 @@ serve(async (req) => {
       )
     }
 
-    // Response shape: { properties: { action_link }, user, ... } or top-level action_link
-    const actionLink =
-      (linkData as { action_link?: string })?.action_link ??
-      (linkData as { properties?: { action_link?: string } })?.properties?.action_link
+    // Link straight to the app's confirm route with the OTP token_hash; the app exchanges
+    // it via verifyOtp() so no auth tokens ride in the URL (see send-magic-link).
+    const hashedToken =
+      (linkData as { hashed_token?: string })?.hashed_token ??
+      (linkData as { properties?: { hashed_token?: string } })?.properties?.hashed_token
 
-    if (!actionLink) {
-      console.error('No action_link in generateLink response:', linkData)
+    if (!hashedToken) {
+      console.error('No hashed_token in generateLink response:', linkData)
       return new Response(
         JSON.stringify({ error: 'Magic link not returned' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
+
+    let appOrigin: string
+    try {
+      appOrigin = new URL(redirectTo).origin
+    } catch {
+      return new Response(
+        JSON.stringify({ error: 'Invalid redirectTo URL' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    const actionLink =
+      `${appOrigin}/#/auth/confirm?token_hash=${encodeURIComponent(hashedToken)}&type=magiclink`
 
     const html = buildWelcomeHtml(actionLink, !!promptWaiverAndEmergencyContact)
 

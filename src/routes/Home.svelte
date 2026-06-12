@@ -13,11 +13,7 @@
     let cancelled = false;
     const run = async () => {
       // Wait for auth to settle so we don't fetch then redirect
-      let waited = 0;
-      while ($auth.loading && waited < 5000 && !cancelled) {
-        await new Promise((r) => setTimeout(r, 100));
-        waited += 100;
-      }
+      await auth.ready();
       if (cancelled) return;
       if ($auth.user) {
         if (!$auth.profile?.emergency_contact_name) {

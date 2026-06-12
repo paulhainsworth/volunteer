@@ -1,6 +1,5 @@
 import { writable, derived } from 'svelte/store';
 import { supabase } from '../supabaseClient';
-import { supabasePublic } from '../supabasePublic';
 import {
   getCriticalOpenSpots,
   getCriticalPositionsFilled,
@@ -18,7 +17,7 @@ function createRolesStore() {
   const { subscribe, set, update } = writable([]);
 
   const fetchRole = async (id) => withSupabaseReadTimeout(async () => {
-    const { data, error } = await supabasePublic
+    const { data, error } = await supabase
       .from('volunteer_roles')
       .select(`
         *,
@@ -47,7 +46,7 @@ function createRolesStore() {
     // Same as fetchRoles: use RPC for fill count so anonymous visitors see correct numbers.
     // RLS hides signups from the public; nested select returns [] and would show 0 filled.
     let positions_filled = confirmedSignups.length;
-    const { data: countRows } = await supabasePublic.rpc('get_confirmed_signup_counts', {
+    const { data: countRows } = await supabase.rpc('get_confirmed_signup_counts', {
       role_ids: [id]
     });
     const countRow = (countRows || []).find((r) => r.role_id === id);
@@ -68,7 +67,7 @@ function createRolesStore() {
     fetchRoles: async (filters = {}) => {
       try {
         const rolesWithCounts = await withSupabaseReadTimeout(async () => {
-          let query = supabasePublic
+          let query = supabase
             .from('volunteer_roles')
             .select(`
               *,
@@ -94,7 +93,7 @@ function createRolesStore() {
           const roleIds = (data || []).map((r) => r.id);
           let confirmedCountByRole = {};
           if (roleIds.length > 0) {
-            const { data: countRows } = await supabasePublic.rpc('get_confirmed_signup_counts', {
+            const { data: countRows } = await supabase.rpc('get_confirmed_signup_counts', {
               role_ids: roleIds
             });
             (countRows || []).forEach((row) => {
@@ -123,7 +122,7 @@ function createRolesStore() {
         signups:signups(count),
         domain:volunteer_leader_domains!domain_id(id, name, leader:profiles!leader_id(id, first_name, last_name))
       `;
-      const { data, error } = await supabasePublic
+      const { data, error } = await supabase
         .from('volunteer_roles')
         .select(select)
         .eq('featured', true)
@@ -134,7 +133,7 @@ function createRolesStore() {
       const roleIds = (data || []).map((r) => r.id);
       let confirmedCountByRole = {};
       if (roleIds.length > 0) {
-        const { data: countRows } = await supabasePublic.rpc('get_confirmed_signup_counts', {
+        const { data: countRows } = await supabase.rpc('get_confirmed_signup_counts', {
           role_ids: roleIds
         });
         (countRows || []).forEach((row) => {

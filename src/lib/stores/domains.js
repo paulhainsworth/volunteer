@@ -1,10 +1,9 @@
 import { writable } from 'svelte/store';
 import { supabase } from '../supabaseClient';
-import { getUserPostgrestClient } from '../supabaseUserRest';
 import { withSupabaseReadTimeout } from '../utils/withTimeout';
 
-/** Avoid main supabase client when GoTrue refresh blocks the queue (same pattern as public reads). */
-const clientForReads = () => getUserPostgrestClient() ?? supabase;
+/** All reads go through the single supabase client (token refresh handled there). */
+const clientForReads = () => supabase;
 
 function createDomainsStore() {
   const { subscribe, set, update } = writable([]);

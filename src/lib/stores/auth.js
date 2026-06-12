@@ -1,30 +1,21 @@
 import { writable, get } from 'svelte/store';
-import { supabase, clearPersistedSupabaseAuthKeys } from '../supabaseClient';
-import { TimeoutError, withSupabaseReadTimeout, withTimeout } from '../utils/withTimeout';
-
-/** Whole bootstrap (session + profile retries) — outer safety net only */
-const AUTH_BOOTSTRAP_TIMEOUT_MS = 120000;
-/** Profile row fetch only — keep bounded; session read is not wrapped (see loadCurrentSession) */
-const PROFILE_READ_TIMEOUT_MS = 12000;
-/** If refresh hangs without returning, getSession never rejects — race so we can clear local storage */
-const GET_SESSION_STALL_MS = 5000;
+import { supabase } from '../supabaseClient';
 
 /**
- * Stale or invalid refresh tokens in localStorage can make getSession/refresh hang or fail and
- * block other Supabase requests (e.g. public role listings). Clear local session so anon reads work.
- * @param {unknown} error
+ * Auth store.
+ *
+ * Architecture rules (the old version violated these and produced wedged "semi-logged-in"
+ * sessions that only incognito mode escaped):
+ *
+ * 1. NEVER await Supabase calls inside the onAuthStateChange callback. supabase-js holds an
+ *    internal auth lock while dispatching events; `supabase.from()` needs that same lock to
+ *    read the session, so awaiting it inside the callback deadlocks the whole client. All
+ *    profile loading is scheduled onto a fresh macrotask instead.
+ * 2. Never clear Supabase's localStorage entries by hand. supabase-js owns that storage;
+ *    it clears it itself on SIGNED_OUT and on invalid refresh tokens.
+ * 3. One client for everything. No parallel PostgREST clients reading tokens straight out
+ *    of localStorage — those bypass token refresh and go stale after an hour.
  */
-function shouldClearLocalSessionAfterAuthError(error) {
-  if (!error || typeof error !== 'object') return false;
-  const msg = String(/** @type {{ message?: string }} */ (error).message ?? '').toLowerCase();
-  const code = String(/** @type {{ code?: string }} */ (error).code ?? '').toLowerCase();
-  if (code === 'refresh_token_not_found' || code === 'invalid_grant') return true;
-  if (msg.includes('invalid refresh token')) return true;
-  if (msg.includes('refresh token')) return true;
-  if (msg.includes('jwt') && (msg.includes('expired') || msg.includes('invalid'))) return true;
-  return false;
-}
-
 function createAuthStore() {
   const { subscribe, set, update } = writable({
     user: null,
@@ -33,269 +24,197 @@ function createAuthStore() {
     isAdmin: false
   });
   const getState = () => get({ subscribe });
-  let authSubscriptionInitialized = false;
-  /** After first full `loadCurrentSession` bootstrap, further `initialize()` calls only hydrate (no stall recovery). */
-  let authFullBootstrapDone = false;
 
-  const applySession = async (session) => {
-    if (session?.user) {
-      const prev = getState();
-      let profile = null;
-      let retries = 0;
-      const maxRetries = 5;
+  let listenerInitialized = false;
+  /** applySession calls are serialized so a caller's result is always in the store by the time it resolves (route guards read the store right after navigation). */
+  let applyQueue = Promise.resolve();
+  /** Resolves once the first session hydration finishes — route guards await this before reading user/profile. */
+  let resolveReady;
+  const readyPromise = new Promise((resolve) => {
+    resolveReady = resolve;
+  });
 
-      while (!profile && retries < maxRetries) {
-        try {
-          const { data, error } = await withSupabaseReadTimeout(
-            () => supabase
-              .from('profiles')
-              .select('*')
-              .eq('id', session.user.id)
-              .maybeSingle(),
-            'auth.applySession.profile',
-            PROFILE_READ_TIMEOUT_MS
-          );
+  /** Fetch the profile row, retrying briefly — for brand-new users the row is created by a DB trigger and can lag the session by a moment. */
+  const fetchProfile = async (userId) => {
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
+      if (data) return data;
+      if (error) throw error;
+      await new Promise((r) => setTimeout(r, 500));
+    }
+    return null;
+  };
 
-          if (data) {
-            profile = data;
-          } else if (error) {
-            throw error;
-          } else {
-            retries++;
-            await new Promise(resolve => setTimeout(resolve, 500));
-          }
-        } catch (e) {
-          if (e instanceof TimeoutError && retries < maxRetries - 1) {
-            retries++;
-            await new Promise(resolve => setTimeout(resolve, 500));
-            continue;
-          }
-          if (e instanceof TimeoutError) {
-            console.warn('Profile fetch timed out; continuing with session only until retry succeeds.');
-            break;
-          }
-          throw e;
-        }
-      }
-
-      // If profile read failed but session is still the same user, keep last known profile so we
-      // don't flip isAdmin / nav to volunteer links (Layout uses profile.role + isAdmin).
-      if (!profile && prev.user?.id === session.user.id && prev.profile) {
-        profile = prev.profile;
-      }
-
-      set({
-        user: session.user,
-        profile,
-        loading: false,
-        isAdmin: profile?.role === 'admin'
-      });
-      return { user: session.user, profile };
-    } else {
+  const doApplySession = async (session) => {
+    if (!session?.user) {
       set({ user: null, profile: null, loading: false, isAdmin: false });
       return { user: null, profile: null };
     }
+
+    const prev = getState();
+    const sameUser = prev.user?.id === session.user.id;
+
+    // Show the user as signed in right away; keep the previous profile while reloading so
+    // nav/role guards don't flicker for an already-hydrated user.
+    update((s) => ({
+      ...s,
+      user: session.user,
+      profile: sameUser ? s.profile : null,
+      isAdmin: sameUser ? s.isAdmin : false
+    }));
+
+    let profile = null;
+    try {
+      profile = await fetchProfile(session.user.id);
+    } catch (error) {
+      console.error('[auth] profile fetch failed:', error);
+      if (sameUser && prev.profile) profile = prev.profile;
+    }
+
+    set({
+      user: session.user,
+      profile,
+      loading: false,
+      isAdmin: profile?.role === 'admin'
+    });
+    return { user: session.user, profile };
   };
 
-  /**
-   * Apply session + load profile. Does not run getSession() stall recovery — safe to call right
-   * after magic-link / OAuth redirect when loadCurrentSession() could falsely "stall" and wipe a
-   * fresh session from localStorage.
-   * @param {import('@supabase/supabase-js').Session} session
-   */
-  const applySessionWithProfile = async (session) => {
-    if (!session?.user) return applySession(null);
-    return applySession(session);
+  /** Serialized session apply. Safe to call from anywhere EXCEPT inside the auth event callback (schedule it instead). */
+  const applySession = (session) => {
+    const run = applyQueue.then(() => doApplySession(session));
+    applyQueue = run.catch(() => {});
+    return run;
   };
 
-  /** True while Supabase may still be exchanging magic-link / recovery tokens (hash or PKCE ?code=). */
-  const authUrlMayStillBeProcessing = () => {
-    if (typeof window === 'undefined') return false;
-    const h = window.location.hash || '';
-    const s = window.location.search || '';
-    const fromHash =
-      h.length > 0 && /access_token|refresh_token|type=magiclink|type=recovery/i.test(h);
-    const fromPkce = /[?&]code=/.test(s);
-    return fromHash || fromPkce;
-  };
-
-  const loadCurrentSession = async () => {
-    const hashMayStillBeProcessing = authUrlMayStillBeProcessing();
-
-    const stallMarker = { __authStall: true };
-    const stallMs = hashMayStillBeProcessing ? Math.max(GET_SESSION_STALL_MS, 15000) : GET_SESSION_STALL_MS;
-
-    const raced = await Promise.race([
-      supabase.auth.getSession(),
-      new Promise((resolve) => setTimeout(() => resolve(stallMarker), stallMs)),
-    ]);
-
-    let data;
-    let error;
-
-    if (raced && raced.__authStall) {
-      if (hashMayStillBeProcessing) {
-        console.warn(
-          '[auth] getSession slow while URL still has auth hash or PKCE code — skipping stall recovery to avoid wiping new magic-link session'
+  const initListener = () => {
+    if (listenerInitialized) return;
+    listenerInitialized = true;
+    supabase.auth.onAuthStateChange((event, session) => {
+      // Rule 1: leave the callback before touching the client again.
+      setTimeout(() => {
+        applySession(session).catch((error) =>
+          console.error('[auth] applying auth state change failed:', error)
         );
-        const direct = await supabase.auth.getSession();
-        ({ data, error } = direct);
-      } else {
-      console.warn(
-        '[auth] getSession stalled (bad refresh often hangs without rejecting); clearing local session'
-      );
-      clearPersistedSupabaseAuthKeys(window.localStorage);
-      clearPersistedSupabaseAuthKeys(window.sessionStorage);
-      await supabase.auth.signOut({ scope: 'local' });
-      const retryAfterStall = await Promise.race([
-        supabase.auth.getSession(),
-        new Promise((resolve) => setTimeout(() => resolve(stallMarker), GET_SESSION_STALL_MS)),
-      ]);
-      if (retryAfterStall && retryAfterStall.__authStall) {
-        console.warn('[auth] getSession stalled again after clear; continuing signed out');
-        ({ data, error } = { data: { session: null }, error: null });
-      } else {
-        ({ data, error } = retryAfterStall);
-      }
-      }
-    } else {
-      ({ data, error } = raced);
-    }
-
-    if (error && shouldClearLocalSessionAfterAuthError(error)) {
-      console.warn('[auth] Clearing local session after recoverable auth error:', error.message);
-      await supabase.auth.signOut({ scope: 'local' });
-      const retry = await supabase.auth.getSession();
-      data = retry.data;
-      error = retry.error;
-    }
-
-    if (error) {
-      console.error('[auth] getSession failed; continuing signed out so public pages can load:', error);
-      if (shouldClearLocalSessionAfterAuthError(error)) {
-        try {
-          await supabase.auth.signOut({ scope: 'local' });
-        } catch {
-          /* ignore */
-        }
-      }
-      return applySession(null);
-    }
-
-    return applySession(data.session);
-  };
-
-  const setLoggedOutState = () => {
-    set({ user: null, profile: null, loading: false, isAdmin: false });
+      }, 0);
+    });
   };
 
   return {
     subscribe,
-    
-    initialize: async () => {
-      if (!authSubscriptionInitialized) {
-        supabase.auth.onAuthStateChange(async (event, session) => {
-          try {
-            await applySession(session);
-          } catch (error) {
-            console.error('Auth state change handling failed:', error);
-            if (session?.user) {
-              console.warn('Session present after auth handler error; not clearing auth state.');
-              void applySession(session).catch((err) =>
-                console.error('Auth state retry after error failed:', err)
-              );
-            } else {
-              setLoggedOutState();
-            }
-          }
-        });
-        authSubscriptionInitialized = true;
-      }
 
-      // Profile / Onboarding call `initialize()` again after saves. Re-running full
-      // `loadCurrentSession()` repeats getSession stall recovery and can clear localStorage.
-      if (authFullBootstrapDone) {
+    /** Idempotent. Sets up the auth listener and hydrates from the persisted session. */
+    initialize: async () => {
+      initListener();
+      try {
         const { data, error } = await supabase.auth.getSession();
         if (error) {
-          console.error('[auth] initialize (re-entry) getSession:', error);
-          return applySession(null);
+          console.error('[auth] getSession failed; continuing signed out:', error);
+          return await applySession(null);
         }
-        return applySessionWithProfile(data.session);
-      }
-
-      const bootstrapPromise = loadCurrentSession().catch((error) => {
-        console.error('Auth bootstrap failed:', error);
-        if (!(error instanceof TimeoutError)) {
-          if (shouldClearLocalSessionAfterAuthError(error)) {
-            void supabase.auth.signOut({ scope: 'local' });
-          }
-          setLoggedOutState();
-        }
-        throw error;
-      });
-
-      try {
-        const result = await withTimeout(bootstrapPromise, {
-          label: 'auth.initialize',
-          timeoutMs: AUTH_BOOTSTRAP_TIMEOUT_MS
-        });
-        authFullBootstrapDone = true;
-        return result;
-      } catch (error) {
-        if (error instanceof TimeoutError) {
-          console.warn(
-            'Auth bootstrap timed out; finishing load in background without clearing session.'
-          );
-          update((state) => ({ ...state, loading: false }));
-          authFullBootstrapDone = true;
-          void loadCurrentSession()
-            .then(() => {})
-            .catch((err) => console.error('Auth bootstrap background retry failed:', err));
-          return { user: null, profile: null, timedOut: true };
-        }
-
-        return { user: null, profile: null, error };
+        return await applySession(data.session);
+      } finally {
+        resolveReady();
       }
     },
 
+    /** Resolves after the first session hydration. Await before reading user/profile in route guards. */
+    ready: () => readyPromise,
+
     refreshSession: async () => {
-      return loadCurrentSession();
+      const { data, error } = await supabase.auth.getSession();
+      if (error) {
+        console.error('[auth] refreshSession getSession:', error);
+        return applySession(null);
+      }
+      return applySession(data.session);
     },
 
     /**
-     * Reload profile from DB for an existing session without running stall recovery (use after OAuth/magic link).
+     * Reload the profile row for the current (or given) session — used after Profile /
+     * Onboarding saves so the store reflects the new row.
      * @param {import('@supabase/supabase-js').Session | null} [knownSession]
      */
     hydrateFromSession: async (knownSession) => {
-      if (knownSession?.user) {
-        return applySessionWithProfile(knownSession);
-      }
+      if (knownSession?.user) return applySession(knownSession);
       const { data, error } = await supabase.auth.getSession();
       if (error) {
         console.error('[auth] hydrateFromSession getSession:', error);
         return applySession(null);
       }
-      return applySessionWithProfile(data.session);
+      return applySession(data.session);
     },
 
     /**
-     * Wait for auth bootstrap + profile row (magic link often has session before profiles loads).
-     * Call at the start of admin onMount guards.
+     * Wait for auth bootstrap + profile row before admin route guards run.
      */
     ensureAdminRouteReady: async () => {
-      for (let i = 0; i < 80; i++) {
-        if (!getState().loading) break;
-        await new Promise((r) => setTimeout(r, 50));
-      }
+      await readyPromise;
       let s = getState();
       if (s.user && !s.profile) {
         const { data, error } = await supabase.auth.getSession();
-        if (!error && data.session) {
-          await applySessionWithProfile(data.session);
-        }
+        if (!error && data.session) await applySession(data.session);
         s = getState();
       }
       return s;
+    },
+
+    /**
+     * Exchange a magic-link token_hash (from #/auth/confirm) for a session.
+     * Returns { user, profile } once the profile is loaded.
+     */
+    verifyMagicLinkToken: async (tokenHash) => {
+      const { data, error } = await supabase.auth.verifyOtp({
+        type: 'magiclink',
+        token_hash: tokenHash
+      });
+      if (error) throw error;
+      if (!data.session) throw new Error('Sign-in succeeded but no session was returned.');
+      return applySession(data.session);
+    },
+
+    signInWithMagicLink: async (email) => {
+      const redirectTo = typeof window !== 'undefined' ? window.location.origin + '/' : '';
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      const INVOKE_TIMEOUT_MS = 45000;
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), INVOKE_TIMEOUT_MS);
+
+      try {
+        const res = await fetch(`${supabaseUrl}/functions/v1/send-magic-link`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${anonKey}`,
+            apikey: anonKey
+          },
+          body: JSON.stringify({ to: email, redirectTo }),
+          signal: controller.signal
+        });
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok) {
+          const msg = data?.error || res.statusText || 'Failed to send sign-in link';
+          if (res.status === 429 || String(msg).includes('429') || String(msg).toLowerCase().includes('too many')) {
+            throw new Error('Too many sign-in attempts. Please wait a few minutes and try again.');
+          }
+          throw new Error(typeof msg === 'string' ? msg : JSON.stringify(data));
+        }
+        if (data?.error) throw new Error(data.error);
+      } catch (e) {
+        if (e?.name === 'AbortError') {
+          throw new Error('Request timed out. The server may be waking up — please try again in a moment.');
+        }
+        throw e;
+      } finally {
+        clearTimeout(timeoutId);
+      }
     },
 
     signUp: async (email, password, firstName, lastName, role = 'volunteer') => {
@@ -310,90 +229,21 @@ function createAuthStore() {
           }
         }
       });
-
       if (error) throw error;
-
       if (data.user) {
-        await new Promise(resolve => setTimeout(resolve, 500));
+        // Give the profiles trigger a beat before callers query the new row.
+        await new Promise((resolve) => setTimeout(resolve, 500));
       }
-
       return data;
-    },
-
-    /** @deprecated Use signInWithMagicLink instead - password auth removed */
-    signIn: async (email, password) => {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password
-      });
-      if (error) throw error;
-      await supabase.from('profiles').update({ last_login: new Date().toISOString() }).eq('id', data.user.id);
-      return data;
-    },
-
-    signInWithMagicLink: async (email) => {
-      const redirectTo = typeof window !== 'undefined' ? window.location.origin + '/' : '';
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-      const INVOKE_TIMEOUT_MS = 45000;
-
-      // Use fetch + anon JWT instead of supabase.functions.invoke: a stuck GoTrue refresh can
-      // serialize/block all client requests, leaving the button on "Sending link..." forever.
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), INVOKE_TIMEOUT_MS);
-
-      try {
-        const res = await fetch(`${supabaseUrl}/functions/v1/send-magic-link`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${anonKey}`,
-            apikey: anonKey,
-          },
-          body: JSON.stringify({ to: email, redirectTo }),
-          signal: controller.signal,
-        });
-        const data = await res.json().catch(() => ({}));
-
-        if (!res.ok) {
-          const msg = data?.error || res.statusText || 'Failed to send sign-in link';
-          if (res.status === 429 || String(msg).includes('429') || String(msg).toLowerCase().includes('too many')) {
-            throw new Error('Too many sign-in attempts. Please wait a few minutes and try again.');
-          }
-          throw new Error(typeof msg === 'string' ? msg : JSON.stringify(data));
-        }
-        if (data?.error) throw new Error(data.error);
-      } catch (e) {
-        if (e?.name === 'AbortError') {
-          throw new Error(
-            'Request timed out. The server may be waking up — please try again in a moment.'
-          );
-        }
-        throw e;
-      } finally {
-        clearTimeout(timeoutId);
-      }
     },
 
     signOut: async () => {
-      // Never await global signOut() (server refresh-token revoke) — it can hang when GoTrue is
-      // stuck, leaving the UI on "Signing out…". Local-only + wiping storage always finishes.
       try {
-        await withTimeout(() => supabase.auth.signOut({ scope: 'local' }), {
-          timeoutMs: 5000,
-          label: 'auth.signOut.local',
-        });
+        // Local scope: revoking the refresh token server-side isn't worth blocking the UI on.
+        await supabase.auth.signOut({ scope: 'local' });
       } catch (error) {
-        if (error instanceof TimeoutError) {
-          console.warn('Local sign out stalled; clearing persisted session keys');
-        } else {
-          console.error('Sign out failed:', error);
-        }
+        console.error('[auth] sign out failed:', error);
       } finally {
-        if (typeof window !== 'undefined') {
-          clearPersistedSupabaseAuthKeys(window.localStorage);
-          clearPersistedSupabaseAuthKeys(window.sessionStorage);
-        }
         set({ user: null, profile: null, loading: false, isAdmin: false });
       }
     },
@@ -415,4 +265,3 @@ function createAuthStore() {
 }
 
 export const auth = createAuthStore();
-

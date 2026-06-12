@@ -3,68 +3,18 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-/** Same key GoTrue uses for persisted session JSON (read access_token for PostgREST without blocked client). */
-export const storageKey = (() => {
-  if (!supabaseUrl) return undefined;
-  try {
-    return `sb-${new URL(supabaseUrl).hostname.split('.')[0]}-auth-token`;
-  } catch {
-    return undefined;
-  }
-})();
-
 /**
- * Remove persisted GoTrue tokens (e.g. before applying fresh hash tokens, or after stall recovery).
- * @param {Storage} [store]
+ * The single Supabase client for the whole app — auth, reads, and writes all go through it
+ * so RLS always sees the current session and tokens are refreshed in one place.
+ *
+ * Magic links land on #/auth/confirm with a token_hash that we exchange via verifyOtp(),
+ * so auth tokens never appear in the URL. detectSessionInUrl stays off: there is nothing
+ * to detect, and it can never race the hash-based SPA router.
  */
-export function clearPersistedSupabaseAuthKeys(store = typeof window !== 'undefined' ? window.localStorage : null) {
-  if (!store || !storageKey) return;
-  try {
-    for (const k of Object.keys(store)) {
-      if (k === storageKey || k.startsWith(`${storageKey}-`)) {
-        store.removeItem(k);
-      }
-    }
-  } catch {
-    /* ignore quota / privacy */
-  }
-}
-
-if (typeof window !== 'undefined' && storageKey) {
-  const h = window.location.hash || '';
-  // Email magic links put new tokens in the hash. A stale refresh in localStorage can hang
-  // getSession and block hash handling — drop old tokens so detectSessionInUrl can apply the new ones.
-  // Clear sessionStorage too: migration below would otherwise copy stale keys back into localStorage.
-  if (/access_token|refresh_token|type=magiclink|type=recovery/i.test(h)) {
-    clearPersistedSupabaseAuthKeys(window.localStorage);
-    clearPersistedSupabaseAuthKeys(window.sessionStorage);
-  }
-
-  // Older builds used sessionStorage for auth (tab-scoped magic links). Migrate into
-  // localStorage so admin sessions survive reloads and work across tabs.
-  const keysToMigrate = Object.keys(window.sessionStorage).filter(
-    (key) => key === storageKey || key.startsWith(`${storageKey}-`)
-  );
-
-  for (const key of keysToMigrate) {
-    if (!window.localStorage.getItem(key)) {
-      const value = window.sessionStorage.getItem(key);
-      if (value != null) {
-        window.localStorage.setItem(key, value);
-      }
-    }
-  }
-}
-
-const storage = typeof window !== 'undefined' ? window.localStorage : undefined;
-
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
-    detectSessionInUrl: true,
-    storageKey,
-    storage
+    detectSessionInUrl: false
   }
 });
-

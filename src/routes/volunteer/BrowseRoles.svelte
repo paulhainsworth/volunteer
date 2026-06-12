@@ -66,6 +66,7 @@
   let piiParentSignatureName = '';
 
   onMount(async () => {
+    await auth.ready();
     // Redirect to onboarding if no emergency contact
     if ($auth.user && !$auth.profile?.emergency_contact_name) {
       loading = false;

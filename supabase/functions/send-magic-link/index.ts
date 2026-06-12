@@ -151,7 +151,6 @@ serve(async (req) => {
     const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
       type: 'magiclink',
       email: normalizedEmail,
-      options: { redirectTo },
     })
 
     if (linkError) {
@@ -172,17 +171,37 @@ serve(async (req) => {
       )
     }
 
-    const actionLink =
-      (linkData as { action_link?: string })?.action_link ??
-      (linkData as { properties?: { action_link?: string } })?.properties?.action_link
+    // Build a link straight to the app's confirm route with the OTP token_hash. The app
+    // exchanges it via verifyOtp(), so no auth tokens ever ride in a URL hash fragment
+    // (which used to collide with the SPA's hash router and stale local sessions).
+    const hashedToken =
+      (linkData as { hashed_token?: string })?.hashed_token ??
+      (linkData as { properties?: { hashed_token?: string } })?.properties?.hashed_token
 
-    if (!actionLink) {
-      console.error('No action_link in generateLink response:', linkData)
+    if (!hashedToken) {
+      console.error('No hashed_token in generateLink response:', linkData)
       return new Response(
         JSON.stringify({ error: 'Magic link not returned' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
+
+    let appOrigin: string
+    let postLogin: string | null
+    try {
+      const redirectUrl = new URL(redirectTo)
+      appOrigin = redirectUrl.origin
+      postLogin = redirectUrl.searchParams.get('post_login')
+    } catch {
+      return new Response(
+        JSON.stringify({ error: 'Invalid redirectTo URL' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    const actionLink =
+      `${appOrigin}/#/auth/confirm?token_hash=${encodeURIComponent(hashedToken)}&type=magiclink` +
+      (postLogin ? `&post_login=${encodeURIComponent(postLogin)}` : '')
 
     if (sendEmail === false) {
       return new Response(JSON.stringify({ success: true, action_link: actionLink }), {

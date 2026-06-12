@@ -23,6 +23,7 @@
   let contactLeaderSignup = null;
 
   onMount(async () => {
+    await auth.ready();
     if (!$auth.user) {
       push('/auth/login');
       return;
