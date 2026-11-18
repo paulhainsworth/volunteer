@@ -15,7 +15,7 @@ The browser uses hash routes such as `/#/volunteer`, `/#/auth/login`, `/#/my-sig
 
 ## Release verification
 
-Automatic Vercel Git deployments are enabled for `main`. Non-main branches, including pull request branches, skip automatic deployment while the preview pause is in effect. Review the rule in [vercel.json](../vercel.json) before resuming previews.
+Automatic Vercel Git deployments are paused for `main` and preview branches in [vercel.json](../vercel.json). Resume production auto-deploy after the required Supabase migrations and Edge Functions are ready for the frontend rollout.
 
 1. Identify the exact commit and the Vercel and Supabase targets. The frontend build, database migrations, Edge Functions, and scheduled jobs have separate deployment paths.
 2. Run `npm test` and `npm run test:release` locally. The latter builds the production bundle and exercises the browser flows with synthetic data in a local preview. Review test results and expected failures before promoting the release.
