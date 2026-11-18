@@ -14,4 +14,11 @@ The script checks for Auth dependencies and refuses a database with existing vol
 
 For a new staging project, use the [prerequisite SQL order](../supabase/README.md#bootstrap-exercised-in-tests), then apply the timestamped migrations with [migration tracking](../supabase/migrations/README.md). Confirm the project target before using the SQL Editor or migration tools. Rehearse login, role availability, and waiver signing with synthetic accounts.
 
-For an existing environment, confirm its migration history, applied manual patches, and effective access policies before choosing an upgrade path. Keep hosted migration history under the [Supabase migration workflow](../supabase/migrations/README.md). The local bootstrap script does not write hosted migration history. Confirm deployed functions, configuration names, and the active scheduler separately before promotion. See [issue #6](https://github.com/paulhainsworth/volunteer/issues/6).
+For an existing environment, connect `psql` to the approved target using your normal database connection profile. Check the reported target before running the read-only baseline report.
+
+```sh
+psql -X -c '\conninfo'
+psql -X -f scripts/sql/CHECK_DATABASE_BASELINE.sql
+```
+
+Compare the returned versions with the filename prefixes under [supabase/migrations](../supabase/migrations/). Review missing objects, missing versions, and unapplied manual prerequisites before choosing an upgrade path. The baseline report reads metadata only. Verify effective access policies and rehearse the upgrade separately. Keep hosted migration history under the [Supabase migration workflow](../supabase/migrations/README.md). The local bootstrap script does not write hosted migration history. Confirm deployed functions, configuration names, and the active scheduler separately before promotion. See [issue #6](https://github.com/paulhainsworth/volunteer/issues/6).
