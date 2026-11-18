@@ -99,7 +99,7 @@ serve(async (req) => {
     const child_name = String(body?.child_name ?? '').trim()
     const child_gender = String(body?.child_gender ?? '').trim()
     const child_age = Number(body?.child_age)
-    const waiver_consent = Boolean(body?.waiver_consent)
+    const waiver_consent = body?.waiver_consent === true
 
     if (!parent_first_name || !parent_last_name) {
       return new Response(JSON.stringify({ error: 'Parent first and last name are required.' }), {
@@ -125,7 +125,7 @@ serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
-    if (!Number.isFinite(child_age) || child_age < 1 || child_age > 17) {
+    if (!Number.isInteger(child_age) || child_age < 1 || child_age > 17) {
       return new Response(JSON.stringify({ error: 'Child age must be between 1 and 17.' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -138,82 +138,69 @@ serve(async (req) => {
       })
     }
 
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
-
-    const { error: insertError } = await supabase.from('kids_clinic_signups').insert({
-      parent_first_name,
-      parent_last_name,
-      parent_email,
-      child_name,
-      child_gender,
-      child_age: Math.round(child_age),
-      waiver_version: WAIVER_VERSION,
-      waiver_consent: true,
-    })
-
-    if (insertError) {
-      console.error('[submit-kids-clinic-signup] insert error:', insertError)
-      return new Response(JSON.stringify({ error: 'Could not save signup. Please try again later.' }), {
-        status: 500,
+    if ([parent_first_name, parent_last_name, child_name].some((name) => name.length > 120) || parent_email.length > 254) {
+      return new Response(JSON.stringify({ error: 'A name or email address is too long.' }), {
+        status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
 
-    // Read at request time (matches Supabase secrets injection; avoids stale top-level reads).
-    const resendKey = Deno.env.get('RESEND_API_KEY')?.trim()
-    let emailSent = false
+    const headers = { ...corsHeaders, 'Content-Type': 'application/json' }
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+    const { data: registration, error: insertError } = await supabase.rpc('reserve_clinic_registration', {
+      p_registration: {
+        parent_first_name, parent_last_name, parent_email, child_name,
+        child_gender, child_age, waiver_version: WAIVER_VERSION, waiver_consent,
+      },
+    })
 
-    if (!resendKey) {
-      console.warn('[submit-kids-clinic-signup] RESEND_API_KEY missing or empty; skipping email.')
-    } else {
-      const res = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${resendKey}`,
-        },
-        body: JSON.stringify({
-          from: RESEND_FROM,
-          to: [parent_email],
-          subject: 'Kids Clinic signup confirmed — 2026 Berkeley Omnium',
-          html: buildConfirmationHtml(parent_first_name, child_name),
-        }),
+    if (insertError || !registration) {
+      console.error('Clinic registration write failed', { code: insertError?.code })
+      return new Response(JSON.stringify({ error: 'Could not save signup. Please try again later.' }), {
+        status: 500, headers,
       })
+    }
+    if (registration.limited) {
+      return new Response(JSON.stringify({ error: 'Too many registrations. Please try again later.' }), {
+        status: 429, headers,
+      })
+    }
 
-      const raw = await res.text()
-      if (!res.ok) {
-        let detail = raw
-        try {
-          const j = JSON.parse(raw) as { message?: string; name?: string }
-          detail = [j?.name, j?.message, raw].filter(Boolean).join(' | ')
-        } catch {
-          /* keep raw */
-        }
-        console.error('[submit-kids-clinic-signup] Resend failed', {
-          status: res.status,
-          to: parent_email,
-          detail,
+    let emailSent = registration.emailSent === true
+    const resendKey = Deno.env.get('RESEND_API_KEY')?.trim()
+    if (registration.created && resendKey) {
+      try {
+        const result = await fetch('https://api.resend.com/emails', {
+          signal: AbortSignal.timeout(5000),
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${resendKey}`,
+          },
+          body: JSON.stringify({
+            from: RESEND_FROM,
+            to: [parent_email],
+            subject: 'Kids Clinic signup confirmed — 2026 Berkeley Omnium',
+            html: buildConfirmationHtml(parent_first_name, child_name),
+          }),
         })
-      } else {
-        try {
-          const j = JSON.parse(raw) as { id?: string }
-          console.log('[submit-kids-clinic-signup] Resend ok', { id: j?.id ?? null, to: parent_email })
-          emailSent = Boolean(j?.id)
-        } catch {
-          console.error('[submit-kids-clinic-signup] Resend 200 but body not JSON:', raw.slice(0, 500))
+        emailSent = result.ok
+        if (emailSent) {
+          const { error } = await supabase.from('kids_clinic_signups')
+            .update({ confirmation_email_sent_at: new Date().toISOString() })
+            .eq('id', registration.id)
+          if (error) console.error('Clinic email status write failed', { code: error.code })
+        } else {
+          console.error('Clinic confirmation delivery rejected', { status: result.status })
         }
-        if (res.ok && !emailSent) {
-          // Rare: treat HTTP 2xx as sent even if id missing
-          emailSent = true
-        }
+      } catch {
+        console.error('Clinic confirmation delivery interrupted')
       }
     }
 
-    return new Response(JSON.stringify({ success: true, emailSent }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
-  } catch (e) {
-    console.error('[submit-kids-clinic-signup]', e)
+    return new Response(JSON.stringify({ success: true, emailSent }), { headers })
+  } catch {
+    console.error('Clinic registration request failed')
     return new Response(JSON.stringify({ error: 'Invalid request' }), {
       status: 400,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

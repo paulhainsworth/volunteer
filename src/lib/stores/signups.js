@@ -28,81 +28,15 @@ function createSignupsStore() {
       return data;
     },
 
-    createSignup: async (volunteerId, roleId, phone = null) => {
-      // Check if already signed up with confirmed status
-      const { data: existing } = await supabase
-        .from('signups')
-        .select('*')
-        .eq('volunteer_id', volunteerId)
-        .eq('role_id', roleId)
-        .maybeSingle();
-
-      if (existing && existing.status === 'confirmed') {
-        throw new Error('You are already signed up for this role');
-      }
-
-      // Check if role is full
-      const { data: role } = await supabase
-        .from('volunteer_roles')
-        .select('positions_total')
-        .eq('id', roleId)
-        .single();
-
-      const { data: signups } = await supabase
-        .from('signups')
-        .select('id')
-        .eq('role_id', roleId)
-        .eq('status', 'confirmed');
-
-      if (signups && signups.length >= role.positions_total) {
-        throw new Error('This role is already full');
-      }
-
-      let data;
-      let error;
-
-      // If there's a cancelled signup, reactivate it
-      if (existing && existing.status === 'cancelled') {
-        const result = await supabase
-          .from('signups')
-          .update({
-            status: 'confirmed',
-            phone: phone,
-            waiver_signed: true
-          })
-          .eq('id', existing.id)
-          .select(`
-            *,
-            role:volunteer_roles!role_id(*)
-          `)
-          .single();
-        
-        data = result.data;
-        error = result.error;
-      } else {
-        // Create new signup
-        const result = await supabase
-          .from('signups')
-          .insert({
-            volunteer_id: volunteerId,
-            role_id: roleId,
-            phone: phone,
-            status: 'confirmed',
-            waiver_signed: true
-          })
-          .select(`
-            *,
-            role:volunteer_roles!role_id(*)
-          `)
-          .single();
-        
-        data = result.data;
-        error = result.error;
-      }
-
+    confirmSignup: async (roleId, phone = null, consent = null) => {
+      const { data, error } = await supabase.rpc('confirm_volunteer_signup', {
+        p_role_id: roleId,
+        p_phone: phone,
+        p_consent: consent
+      });
       if (error) throw error;
 
-      update(signups => [...signups, data]);
+      update(signups => [...signups.filter(signup => signup.id !== data.signup.id), data.signup]);
       return data;
     },
 

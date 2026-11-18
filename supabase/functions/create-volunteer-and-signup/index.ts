@@ -277,7 +277,7 @@ serve(async (req) => {
 
       if (existingSignup) {
         if (existingSignup.status === 'cancelled') {
-          await supabaseAdmin
+          const { error: reactivationError } = await supabaseAdmin
             .from('signups')
             .update({
               status: 'confirmed',
@@ -285,6 +285,12 @@ serve(async (req) => {
               waiver_signed: false,
             })
             .eq('id', existingSignup.id)
+          if (reactivationError) {
+            return new Response(
+              JSON.stringify({ error: reactivationError.message }),
+              { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            )
+          }
         } else {
           return new Response(
             JSON.stringify({ error: 'This volunteer is already signed up for this role.' }),
@@ -332,6 +338,7 @@ serve(async (req) => {
         const allFilled = `${totalSignups ?? 0}/${totalPositions || 1} of all volunteer roles filled!`
         const text = `:raising_hand: New volunteer signup: *${volunteerName}* (${email}) signed up for *${roleName}*.\n\n${roleFilled}\n${allFilled}`
         const slackRes = await fetch('https://slack.com/api/chat.postMessage', {
+          signal: AbortSignal.timeout(5000),
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -339,12 +346,12 @@ serve(async (req) => {
           },
           body: JSON.stringify({ channel: slackChannel, text }),
         })
-        if (!slackRes.ok) {
-          const err = await slackRes.json().catch(() => ({}))
-          console.error('Slack notify error:', slackRes.status, err)
+        const outcome = await slackRes.json().catch(() => null)
+        if (!slackRes.ok || outcome?.ok !== true) {
+          console.error('Signup Slack notification rejected', { status: slackRes.status, roleId: role_id })
         }
-      } catch (slackErr) {
-        console.error('Slack notify error:', slackErr)
+      } catch {
+        console.error('Signup Slack notification failed', { roleId: role_id })
       }
     }
 

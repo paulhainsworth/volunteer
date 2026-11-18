@@ -5,18 +5,11 @@
 import { supabase } from './supabaseClient';
 import { auth } from './stores/auth';
 import { signups } from './stores/signups';
-import { waiver as waiverStore } from './stores/waiver';
 import { formatRoleScheduleDate, formatTimeRange } from './utils/timeDisplay';
 
 const SITE_URL = typeof window !== 'undefined' ? `${window.location.origin}/#` : '';
 
-/** True if the error is the signups volunteer_id FK violation (profile not yet created by trigger). */
-function isSignupFkError(err) {
-  const msg = err?.message || String(err);
-  return msg.includes('foreign key constraint') && msg.includes('signups_volunteer_id_fkey');
-}
-
-export async function createVolunteerAndSignup(pii, roleId) {
+export async function createVolunteerAndSignup(pii, roleId, waiverVersion) {
   const {
     first_name,
     last_name,
@@ -32,18 +25,11 @@ export async function createVolunteerAndSignup(pii, roleId) {
     parent_signature_name
   } = pii;
   const volunteerName = `${first_name} ${last_name}`.trim();
-  const parentPayload =
-    is_minor && parent_guardian_name && parent_guardian_email && parent_signature_name
-      ? {
-          parent_guardian_name,
-          parent_guardian_email,
-          parent_guardian_phone: parent_guardian_phone || null,
-          parent_signature_name
-        }
-      : null;
+  const redirect = new URL('/', window.location.origin);
+  redirect.searchParams.set('signup_role', roleId);
 
-  // Create auth user (passwordless - they'll use magic link to sign in later)
-  const tempPassword = Math.random().toString(36).slice(-12) + Math.random().toString(36).slice(-12);
+  // The generated password is never shown or stored by the app.
+  const tempPassword = crypto.randomUUID();
   const { data: authData, error: authError } = await supabase.auth.signUp({
     email,
     password: tempPassword,
@@ -57,88 +43,29 @@ export async function createVolunteerAndSignup(pii, roleId) {
         emergency_contact_phone: emergency_contact_phone || '',
         team_club_affiliation_id: team_club_affiliation_id || ''
       },
-      emailRedirectTo: `${window.location.origin}/#/volunteer`
+      emailRedirectTo: redirect.href
     }
   });
 
   if (authError) throw authError;
   if (!authData?.user) throw new Error('User creation failed.');
 
-  const userId = authData.user.id;
-  const hasSession = !!authData.session;
-  // Profile is created by handle_new_user trigger; it may be a moment before it's visible. Retry signup on FK.
-
-  // Sign waiver (only works when we have a session; otherwise they'll sign on first login or via edge function)
-  if (hasSession) {
-    try {
-      await waiverStore.signWaiver(userId, volunteerName, null, parentPayload ?? undefined);
-    } catch (waiverErr) {
-      console.warn('Waiver sign failed (may already be signed):', waiverErr);
-    }
+  if (!authData.session) {
+    return { pendingVerification: true };
   }
 
-  if (hasSession) {
-    // Create signup via client (RLS allows volunteer_id = auth.uid())
-    const maxAttempts = 10;
-    const delayMs = 500;
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      try {
-        await signups.createSignup(userId, roleId, phone || null);
-        break;
-      } catch (err) {
-        const isLast = attempt === maxAttempts - 1;
-        if (isLast || !isSignupFkError(err)) {
-          if (isLast && isSignupFkError(err)) {
-            throw new Error(
-              'Your account was created but signup didn\'t complete. Please sign in and try signing up for this role again.'
-            );
-          }
-          throw err;
-        }
-        await new Promise((r) => setTimeout(r, delayMs));
-      }
-    }
-  } else {
-    // No session (e.g. "Confirm email" is on). Create signup via Edge Function (service role).
-    const maxAttempts = 8;
-    const delayMs = 500;
-    const signupBody = {
-      user_id: userId,
-      role_id: roleId,
-      phone: phone || null
-    };
-    if (parentPayload) {
-      signupBody.waiver_minor = true;
-      signupBody.parent_guardian_name = parentPayload.parent_guardian_name;
-      signupBody.parent_guardian_email = parentPayload.parent_guardian_email;
-      signupBody.parent_guardian_phone = parentPayload.parent_guardian_phone;
-      signupBody.parent_signature_name = parentPayload.parent_signature_name;
-      signupBody.volunteer_signature_name = volunteerName;
-    }
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      const { data, error } = await supabase.functions.invoke('create-signup-for-new-user', {
-        body: signupBody
-      });
-      if (!error && data?.ok) break;
-      const msg = data?.error ?? error?.message ?? 'Create signup failed';
-      const isFk = String(msg).toLowerCase().includes('foreign key') || String(msg).toLowerCase().includes('violates');
-      const isLast = attempt === maxAttempts - 1;
-      if (isLast || !isFk) {
-        if (isLast && isFk) {
-          throw new Error(
-            'Your account was created but signup didn\'t complete. Please sign in and try signing up for this role again.'
-          );
-        }
-        throw new Error(typeof msg === 'string' ? msg : data?.details ?? 'Signup failed');
-      }
-      await new Promise((r) => setTimeout(r, delayMs));
-    }
-  }
-
-  // Refresh auth so UI shows logged-in state (signUp returns session when confirm email is off)
+  const { created } = await signups.confirmSignup(roleId, phone, {
+    version: waiverVersion,
+    signature_name: volunteerName,
+    is_minor,
+    parent_guardian_name,
+    parent_guardian_email,
+    parent_guardian_phone,
+    parent_signature_name
+  });
   await auth.refreshSession();
 
-  return { userId, email, first_name, last_name };
+  return { created, userId: authData.user.id, email, first_name, last_name };
 }
 
 export async function sendRoleConfirmationEmail({ to, first_name, role, roleId }) {

@@ -1,13 +1,17 @@
-import { test, expect, profile, role, signInFixture, user, waiver } from '../helpers/browser.js';
+import { test, expect, fixtureSession, profile, role, signInFixture, user, waiver } from '../helpers/browser.js';
 
-const fallback = '/functions/v1/create-signup-for-new-user';
+const confirmation = '/rest/v1/rpc/confirm_volunteer_signup';
 
-async function openSignup(page, backend) {
+async function openSignup(page, backend, authResponse = user) {
   backend.reply('GET', '/rest/v1/volunteer_roles', role);
   backend.reply('POST', '/rest/v1/rpc/get_confirmed_signup_counts', [{ role_id: role.id, cnt: 1 }]);
   backend.reply('GET', '/rest/v1/waiver_settings', waiver);
   backend.reply('GET', '/rest/v1/team_club_affiliations', [{ id: 'fixture-team', name: 'Fixture Club' }]);
-  backend.reply('POST', '/auth/v1/signup', user);
+  backend.handle('POST', '/auth/v1/signup', (_request, url) => {
+    const destination = new URL(url.searchParams.get('redirect_to'));
+    expect(destination.searchParams.get('signup_role')).toBe(role.id);
+    return { body: authResponse };
+  });
   await page.goto(`/#/signup/${role.id}`);
   await page.getByLabel('First Name').fill('Test');
   await page.getByLabel('Last Name').fill('Volunteer');
@@ -17,28 +21,30 @@ async function openSignup(page, backend) {
   await page.locator('#guest-affiliation').selectOption('fixture-team');
 }
 
-test('requires consent and confirms the signup when email confirmation is pending', async ({ page, backend }) => {
-  backend.reply('POST', fallback, { ok: true });
-  backend.reply('POST', '/functions/v1/send-email', { ok: true });
-  backend.reply('POST', '/functions/v1/send-welcome-with-magic-link', { ok: true });
+test('requires consent and waits for identity verification before assigning a seat', async ({ page, backend }) => {
   await openSignup(page, backend);
   const submit = page.getByRole('button', { name: 'Complete Signup' });
   await expect(submit).toBeDisabled();
   expect(backend.calls('POST', '/auth/v1/signup')).toBe(0);
   await page.getByRole('checkbox', { name: /I have read and agree/ }).check();
   await submit.click();
-  await expect(page.getByText("You're all set!")).toBeVisible();
-  expect(backend.calls('POST', fallback)).toBe(1);
+  await expect(page.getByRole('heading', { name: 'Check your email to finish signing up' })).toBeVisible();
+  await expect(page.getByText('A spot has not been reserved.', { exact: false })).toBeVisible();
+  expect(backend.calls('POST', confirmation)).toBe(0);
+  expect(backend.calls('POST', '/functions/v1/send-email')).toBe(0);
 });
 
-test('failed signup never displays a confirmation', async ({ page, backend }) => {
-  backend.reply('POST', fallback, { error: 'Role closed' }, 409);
-  await openSignup(page, backend);
-  await page.getByRole('checkbox', { name: /I have read and agree/ }).check();
-  await page.getByRole('button', { name: 'Complete Signup' }).click();
-  await expect(page.getByText('Edge Function returned a non-2xx status code')).toBeVisible();
+test('a failed confirmation keeps the role form available and sends no email', async ({ page, backend }) => {
+  await signInFixture(page, backend);
+  backend.reply('GET', '/rest/v1/volunteer_roles', role);
+  backend.reply('POST', '/rest/v1/rpc/get_confirmed_signup_counts', [{ role_id: role.id, cnt: 0 }]);
+  backend.reply('POST', confirmation, { message: 'This role is already full' }, 409);
+  await page.goto(`/#/signup/${role.id}`);
+  await page.getByRole('button', { name: 'Confirm Signup' }).click();
+  await expect(page.getByText('This role is already full', { exact: true })).toBeVisible();
   await expect(page.getByText("You're all set!")).toHaveCount(0);
-  expect(backend.calls('POST', fallback)).toBe(1);
+  expect(backend.calls('POST', confirmation)).toBe(1);
+  expect(backend.calls('POST', '/functions/v1/send-email')).toBe(0);
 });
 
 test('a returning volunteer sees the existing signup instead of a second checkout form', async ({ page, backend }) => {
@@ -48,7 +54,7 @@ test('a returning volunteer sees the existing signup instead of a second checkou
   backend.reply('GET', '/rest/v1/signups', [{ id: 'fixture-signup', role_id: role.id, role }]);
   await page.goto(`/#/signup/${role.id}`);
   await expect(page.getByText("You're signed up!")).toBeVisible();
-  expect(backend.calls('POST', '/rest/v1/signups')).toBe(0);
+  expect(backend.calls('POST', confirmation)).toBe(0);
 });
 
 test('volunteer cancellation removes the assignment from My Signups', async ({ page, backend }) => {
@@ -73,17 +79,46 @@ test('signed-in volunteers can confirm one assignment and see it in My Signups',
   backend.reply('POST', '/rest/v1/rpc/get_confirmed_signup_counts', [{ role_id: role.id, cnt: 0 }]);
   backend.handle('GET', '/rest/v1/signups', () => ({ body: assignments }));
   backend.reply('POST', '/functions/v1/send-email', { success: true });
-  backend.handle('POST', '/rest/v1/signups', (request) => {
+  backend.handle('POST', confirmation, (request) => {
     const row = request.postDataJSON();
-    expect(row).toMatchObject({ volunteer_id: user.id, role_id: role.id, status: 'confirmed' });
-    const saved = { ...row, id: 'fixture-assignment', role };
+    expect(row).toEqual({ p_role_id: role.id, p_phone: '', p_consent: null });
+    const saved = { id: 'fixture-assignment', volunteer_id: user.id, role_id: role.id, status: 'confirmed', role };
     assignments.push(saved);
-    return { body: saved, status: 201 };
+    return { body: { signup: saved, created: true } };
   });
   await page.goto(`/#/signup/${role.id}`);
   await page.getByRole('button', { name: 'Confirm Signup' }).click();
   await expect(page.getByText("You're all set!")).toBeVisible();
   await expect(page).toHaveURL(/#\/my-signups$/);
   await expect(page.getByRole('heading', { name: role.name, exact: true })).toBeVisible();
-  expect(backend.calls('POST', '/rest/v1/signups')).toBe(1);
+  expect(backend.calls('POST', confirmation)).toBe(1);
+});
+
+test('a verification callback returns the volunteer to the selected role', async ({ page, backend }) => {
+  backend.reply('GET', '/rest/v1/volunteer_roles', role);
+  backend.reply('POST', '/rest/v1/rpc/get_confirmed_signup_counts', [{ role_id: role.id, cnt: 0 }]);
+  await signInFixture(page, backend, 'volunteer', { search: `?signup_role=${role.id}` });
+  await expect(page).toHaveURL(new RegExp(`#/signup/${role.id}$`));
+  await expect(page.getByRole('heading', { name: role.name })).toBeVisible();
+  expect(backend.calls('POST', confirmation)).toBe(0);
+});
+
+test('a guest signup with an immediate session submits consent and confirms the seat', async ({ page, backend }) => {
+  backend.reply('GET', '/rest/v1/profiles', [profile]);
+  backend.reply('GET', '/rest/v1/waivers', { waiver_version: 1 });
+  backend.reply('GET', '/rest/v1/signups', []);
+  backend.reply('POST', '/functions/v1/send-email', { success: true });
+  backend.reply('POST', '/functions/v1/send-welcome-with-magic-link', { success: true });
+  backend.handle('POST', confirmation, (request) => {
+    expect(request.postDataJSON()).toMatchObject({
+      p_role_id: role.id,
+      p_consent: { version: 1, signature_name: 'Test Volunteer' },
+    });
+    return { body: { signup: { id: 'fixture-assignment' }, created: true } };
+  });
+  await openSignup(page, backend, fixtureSession());
+  await page.getByRole('checkbox', { name: /I have read and agree/ }).check();
+  await page.getByRole('button', { name: 'Complete Signup' }).click();
+  await expect(page.getByText("You're all set!")).toBeVisible();
+  expect(backend.calls('POST', confirmation)).toBe(1);
 });

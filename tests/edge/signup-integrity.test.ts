@@ -1,121 +1,53 @@
-import { equal } from 'node:assert/strict';
+import { deepStrictEqual, equal } from 'node:assert/strict';
 import { handler, request, setClient } from './stubs.ts';
 
 Deno.env.set('SUPABASE_URL', 'https://fixture.invalid');
-Deno.env.set('SUPABASE_SERVICE_ROLE_KEY', 'synthetic-service-key');
+Deno.env.set('SUPABASE_ANON_KEY', 'synthetic-anon-key');
 await import('../../supabase/functions/create-signup-for-new-user/index.ts');
 const signup = handler();
 
-Deno.test('signup rejects a request missing required fields before writing a roster entry', async () => {
-  setClient(() => ({
-    from() { throw new Error('Roster must not be touched'); },
-  }));
-  equal((await signup(request({}))).status, 400);
+const roleId = '00000000-0000-4000-8000-000000000001';
+const user = { id: '00000000-0000-4000-8000-000000000002' };
+
+function authenticatedRequest() {
+  return new Request('https://fixture.invalid/function', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer synthetic-session' },
+    body: JSON.stringify({ role_id: roleId }),
+  });
+}
+
+Deno.test('legacy signup requires a session before calling Supabase', async () => {
+  equal((await signup(request({ role_id: roleId }))).status, 401);
 });
 
-Deno.test('a valid new volunteer registration writes one confirmed assignment', async () => {
-  const writes: unknown[] = [];
-  const volunteerId = '00000000-0000-4000-8000-000000000002';
-  const roleId = '00000000-0000-4000-8000-000000000001';
+Deno.test('legacy signup rejects an expired session without assigning a seat', async () => {
   setClient(() => ({
-    from(table: string) {
-      if (table === 'volunteer_roles') {
-        return { select: () => ({ eq: () => ({ single: () => ({ data: { id: roleId } }) }) }) };
-      }
-      equal(table, 'signups');
-      return {
-        select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: () => ({ data: null }) }) }) }),
-        insert: (row: unknown) => { writes.push(row); return { error: null }; },
-      };
-    },
+    auth: { getUser: () => ({ data: { user: null }, error: new Error('Expired session') }) },
+    rpc() { throw new Error('Roster must not be touched'); },
   }));
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = () => Promise.resolve(Response.json({ created_at: new Date().toISOString() }));
-  try {
-    const result = await signup(request({ user_id: volunteerId, role_id: roleId }));
-    equal(result.status, 200);
-    equal(writes.length, 1);
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
+  equal((await signup(authenticatedRequest())).status, 401);
 });
 
-Deno.test('xfail REL-01: failed reactivation should not report a confirmed signup', async () => {
-  const volunteerId = '00000000-0000-4000-8000-000000000002';
-  const roleId = '00000000-0000-4000-8000-000000000001';
-  let updates = 0;
-  setClient(() => ({
-    from(table: string) {
-      if (table === 'volunteer_roles') {
-        return { select: () => ({ eq: () => ({ single: () => ({ data: { id: roleId } }) }) }) };
-      }
-      equal(table, 'signups');
-      return {
-        select: () => ({ eq: () => ({ eq: () => ({
-          maybeSingle: () => ({ data: { id: 'existing-signup', status: 'cancelled' } }),
-        }) }) }),
-        update: () => ({ eq: () => {
-          updates += 1;
-          return { error: { message: 'Fixture reactivation write failed' } };
-        } }),
-      };
+Deno.test('legacy signup confirms through the authenticated database operation', async () => {
+  setClient((_url, key) => ({
+    auth: { getUser: () => ({ data: { user }, error: null }) },
+    rpc(name: string, args: object) {
+      equal(key, 'synthetic-anon-key');
+      equal(name, 'confirm_volunteer_signup');
+      deepStrictEqual(args, { p_role_id: roleId, p_phone: null });
+      return { error: null };
     },
   }));
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = () => Promise.resolve(Response.json({ created_at: new Date().toISOString() }));
-  try {
-    const result = await signup(request({ user_id: volunteerId, role_id: roleId }));
-    equal(updates, 1);
-    // REL-01: index.ts:112–121 ignores the failed update and index.ts:169 returns success.
-    equal(result.status, 200, 'Expected false-success regression changed. Remove xfail and assert failure.');
-    equal((await result.json()).ok, true);
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
+  equal((await signup(authenticatedRequest())).status, 200);
 });
 
-Deno.test('xfail REL-01: failed guardian waiver write should prevent signup confirmation', async () => {
-  const volunteerId = '00000000-0000-4000-8000-000000000002';
-  const roleId = '00000000-0000-4000-8000-000000000001';
-  let waiverWrites = 0;
+Deno.test('legacy signup reports a rejected database write as failure', async () => {
   setClient(() => ({
-    from(table: string) {
-      if (table === 'volunteer_roles') {
-        return { select: () => ({ eq: () => ({ single: () => ({ data: { id: roleId } }) }) }) };
-      }
-      if (table === 'waiver_settings') {
-        return { select: () => ({ single: () => ({ data: { version: 1, waiver_text: 'Fixture waiver' } }) }) };
-      }
-      if (table === 'waivers') {
-        return { insert: () => {
-          waiverWrites += 1;
-          return { error: { message: 'Fixture waiver write failed' } };
-        } };
-      }
-      equal(table, 'signups');
-      return {
-        select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: () => ({ data: null }) }) }) }),
-        insert: () => ({ error: null }),
-      };
-    },
+    auth: { getUser: () => ({ data: { user }, error: null }) },
+    rpc: () => ({ error: { message: 'Current waiver required' } }),
   }));
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = () => Promise.resolve(Response.json({ created_at: new Date().toISOString() }));
-  try {
-    const result = await signup(request({
-      user_id: volunteerId,
-      role_id: roleId,
-      waiver_minor: true,
-      parent_guardian_name: 'Test Guardian',
-      parent_guardian_email: 'parent@example.invalid',
-      parent_signature_name: 'Test Guardian',
-      volunteer_signature_name: 'Test Volunteer',
-    }));
-    equal(waiverWrites, 1);
-    // REL-01: index.ts:152–171 logs the failed waiver write and returns success.
-    equal(result.status, 200, 'Expected waiver regression changed. Remove xfail and assert failure.');
-    equal((await result.json()).ok, true);
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
+  const result = await signup(authenticatedRequest());
+  equal(result.status, 409);
+  deepStrictEqual(await result.json(), { error: 'Current waiver required' });
 });

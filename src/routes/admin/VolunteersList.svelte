@@ -5,7 +5,7 @@
   import { affiliations } from '../../lib/stores/affiliations';
   import { supabase } from '../../lib/supabaseClient';
   import { sendWelcomeEmail } from '../../lib/volunteerSignup';
-  import { notifySlackSignup } from '../../lib/notifySlackSignup';
+
   import { push } from 'svelte-spa-router';
   import { format } from 'date-fns';
   import {
@@ -757,14 +757,6 @@
       const volunteerId = fnData?.volunteerId;
       if (!volunteerId) throw new Error('User creation failed');
 
-      if (addVolunteerForm.role_id) {
-        notifySlackSignup({
-          role_id: addVolunteerForm.role_id,
-          volunteer_id: volunteerId,
-          volunteer_name: [addVolunteerForm.first_name, addVolunteerForm.last_name].filter(Boolean).join(' ').trim() || undefined,
-          volunteer_email: addVolunteerForm.email
-        }).catch(() => {});
-      }
 
       // Don't block the admin UI on email generation/delivery after the volunteer record already exists.
       sendWelcomeEmailInBackground({

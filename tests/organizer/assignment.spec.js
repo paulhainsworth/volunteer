@@ -12,7 +12,6 @@ test('an organizer creates one volunteer assignment and requests a welcome email
   backend.reply('GET', '/rest/v1/volunteer_contacts', []);
   backend.reply('GET', '/rest/v1/volunteer_roles', [role]);
   backend.reply('GET', '/rest/v1/team_club_affiliations', [{ id: 'fixture-team', name: 'Fixture Club' }]);
-  backend.reply('POST', '/functions/v1/notify-slack-signup', { ok: true });
   backend.reply('POST', welcome, { ok: true });
   backend.handle('POST', assignment, (request) => {
     expect(request.postDataJSON()).toMatchObject({ email: newVolunteer.email, role_id: role.id });

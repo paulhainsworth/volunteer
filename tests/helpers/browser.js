@@ -78,7 +78,7 @@ export function fixtureSession() {
   };
 }
 
-export async function signInFixture(page, backend, role = 'volunteer', { signups = [], profileFields = {} } = {}) {
+export async function signInFixture(page, backend, role = 'volunteer', { signups = [], profileFields = {}, search = '' } = {}) {
   backend.reply('GET', '/auth/v1/user', user);
   backend.reply('GET', '/rest/v1/waiver_settings', waiver);
   backend.reply('GET', '/rest/v1/waivers', { waiver_version: 1 });
@@ -92,6 +92,6 @@ export async function signInFixture(page, backend, role = 'volunteer', { signups
     token_type: 'bearer',
     type: 'magiclink',
   });
-  await page.goto(`/#${params}`);
+  await page.goto(`/${search}#${params}`);
   await expect(page.getByRole('button', { name: 'Sign Out' })).toBeVisible();
 }

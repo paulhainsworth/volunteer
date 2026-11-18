@@ -7,7 +7,7 @@ import { auth } from '../../lib/stores/auth';
 import { supabase } from '../../lib/supabaseClient';
 import { getUserPostgrestClient } from '../../lib/supabaseUserRest';
 import { sendWelcomeEmail } from '../../lib/volunteerSignup';
-import { notifySlackSignup } from '../../lib/notifySlackSignup';
+
 import { getEdgeInvokeErrorMessage } from '../../lib/edgeFunctionError';
 import { push } from 'svelte-spa-router';
 import RoleForm from '../../lib/components/RoleForm.svelte';
@@ -508,13 +508,6 @@ import {
 
       const volunteerId = fnData?.volunteerId;
       if (!volunteerId) throw new Error('Volunteer creation failed.');
-
-      notifySlackSignup({
-        role_id: roleId,
-        volunteer_id: volunteerId,
-        volunteer_name: [firstName, lastName].filter(Boolean).join(' ').trim() || undefined,
-        volunteer_email: email
-      }).catch(() => {});
 
       sendWelcomeEmailInBackground({
         to: email,
