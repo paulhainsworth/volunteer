@@ -18,4 +18,6 @@ npx --no-install playwright test tests/auth tests/integration tests/volunteer te
 npm run test:report
 ```
 
+Run `npm run test:release` to build and preview the production bundle with synthetic Supabase settings on `127.0.0.1:4180`. It repeats the browser flows against that build, including login, organizer routing, signup, and clinic registration. It runs locally and needs Chromium, without Docker or Deno. Run `npm test` separately for PostgreSQL and Edge Function checks.
+
 Keep fixtures per test. Use an expected-failure marker only around a confirmed regression and cite its source. The suite reports a fixed expected failure as an unexpected pass so the marker can be removed.
