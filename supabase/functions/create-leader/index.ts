@@ -78,7 +78,6 @@ serve(async (req) => {
           first_name,
           last_name,
           phone: phone || null,
-          role: 'volunteer_leader',
           updated_at: new Date().toISOString(),
         })
         .eq('id', leaderId)
@@ -98,7 +97,6 @@ serve(async (req) => {
           user_metadata: {
             first_name,
             last_name,
-            role: 'volunteer_leader',
             phone: phone || '',
           },
         }),
@@ -123,6 +121,19 @@ serve(async (req) => {
         if (p) break
         await new Promise((r) => setTimeout(r, 300))
       }
+    }
+
+    const { data: promoted, error: promotionError } = await supabaseAdmin
+      .from('profiles')
+      .update({ role: 'volunteer_leader' })
+      .eq('id', leaderId)
+      .select('id')
+      .maybeSingle()
+    if (promotionError || !promoted) {
+      return new Response(
+        JSON.stringify({ error: 'Failed to assign leader role' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
     }
 
     const { data: updated, error: updateError } = await supabaseAdmin
