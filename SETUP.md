@@ -62,34 +62,9 @@ npm run dev
 
 Open your browser to [http://localhost:5173](http://localhost:5173)
 
-## 3. Create Default Admin Account
+## 3. Set up an administrator
 
-For easy initial setup, create a default admin with hardcoded credentials:
-
-1. Go to **Supabase** → **Authentication** → **Users**
-2. Click **"Add user"** → **"Create new user"**
-3. Enter:
-   - **Email:** `admin@admin.com`
-   - **Password:** `admin`
-   - ✅ Check **"Auto Confirm User"**
-4. Click **"Create user"**
-5. Go to **SQL Editor** and run:
-
-```sql
-UPDATE profiles 
-SET role = 'admin', first_name = 'Default', last_name = 'Admin'
-WHERE email = 'admin@admin.com';
-```
-
-**Default Login Credentials:**
-- Email: `admin@admin.com`
-- Password: `admin`
-
-⚠️ **IMPORTANT:** Change this password after first login!
-
-See [DEFAULT_ADMIN_SETUP.md](./DEFAULT_ADMIN_SETUP.md) for detailed security instructions.
-
-Now you can log in with admin@admin.com and access the admin dashboard!
+Follow the [administrator invitation and verification procedure](docs/admin-access.md).
 
 ## 4. Deploy to Vercel
 
