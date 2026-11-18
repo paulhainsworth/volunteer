@@ -33,7 +33,7 @@ A modern, full-featured web application for managing race volunteers at bicycle 
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 22.12 or later on the Node 22 line. With nvm, run `nvm install` and `nvm use` from the repo root.
 - A Supabase account (free)
 - A Vercel account (free)
 
