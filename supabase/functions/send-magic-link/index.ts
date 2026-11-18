@@ -4,6 +4,7 @@
  */
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { allowedMailRedirect } from '../_shared/auth-mail-redirect.ts'
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
@@ -112,6 +113,14 @@ serve(async (req) => {
       )
     }
 
+    const safeRedirect = allowedMailRedirect(redirectTo, sendEmail === false)
+    if (!safeRedirect) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid sign-in destination' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
     const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
     const normalizedEmail = to.trim().toLowerCase()
@@ -148,10 +157,27 @@ serve(async (req) => {
       }
     }
 
+    if (sendEmail !== false) {
+      const { data: allowed, error: limitError } = await supabaseAdmin.rpc('claim_auth_mail_request', {
+        p_channel: 'login', p_email: normalizedEmail,
+      })
+      if (limitError) {
+        console.error('Auth email rate limit unavailable')
+        return new Response(JSON.stringify({ error: 'Email temporarily unavailable' }), {
+          status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+      if (allowed !== true) {
+        return new Response(JSON.stringify({ success: true }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+    }
+
     const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
       type: 'magiclink',
       email: normalizedEmail,
-      options: { redirectTo },
+      options: { redirectTo: safeRedirect },
     })
 
     if (linkError) {
