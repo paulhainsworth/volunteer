@@ -24,7 +24,7 @@
     "@supabase/postgrest-js": "^2.78.0",
     "@supabase/supabase-js": "^2.78.0",
     "date-fns": "^4.1.0",
-    "jspdf": "^3.0.4",
+    "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.7",
     "svelte-spa-router": "^4.0.1"
   }
