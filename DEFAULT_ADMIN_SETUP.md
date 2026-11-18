@@ -145,8 +145,8 @@ Then log out and log back in.
 
 Every time you set up the system on a new Supabase project:
 
-1. Run `SUPABASE_SCHEMA.sql`
-2. Run `SUPABASE_TRIGGER_FIX.sql`
+1. Run `supabase/bootstrap/SUPABASE_SCHEMA.sql`
+2. Run `supabase/manual/SUPABASE_TRIGGER_FIX.sql`
 3. Create default admin (this guide)
 4. Login, create your real admin
 5. Change/delete default admin

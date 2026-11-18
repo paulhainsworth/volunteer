@@ -38,7 +38,7 @@ The Volunteer Leader role creates a management hierarchy between admins and volu
 
 ### 1. Run Database Migration
 
-Run `ADD_VOLUNTEER_LEADER_ROLE.sql` in Supabase SQL Editor:
+Run `supabase/bootstrap/ADD_VOLUNTEER_LEADER_ROLE.sql` in Supabase SQL Editor:
 
 This will:
 - Add `leader_id` column to `volunteer_roles` table
@@ -239,7 +239,7 @@ role IN ('admin', 'volunteer_leader', 'volunteer')
 ## Migration Path
 
 ### Existing Systems:
-1. Run `ADD_VOLUNTEER_LEADER_ROLE.sql`
+1. Run `supabase/bootstrap/ADD_VOLUNTEER_LEADER_ROLE.sql`
 2. Existing roles will have `leader_id = NULL` (no leader)
 3. Gradually assign leaders as needed
 4. Promote suitable volunteers to leader role

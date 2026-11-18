@@ -24,7 +24,7 @@ Run the script in the Supabase SQL Editor. It unlinks leaders from `volunteer_le
 
 ## Remove specific volunteers by email
 
-**`REMOVE_VOLUNTEERS_BY_EMAIL.sql`** removes only the users you list by email. Safer than a full wipe when you share one DB across dev/staging/production.
+**`sql/REMOVE_VOLUNTEERS_BY_EMAIL.sql`** removes only the users you list by email. Safer than a full wipe when you share one DB across dev/staging/production.
 
 1. Edit the email list in the script (in both the PREVIEW and the DELETE block so they match).
 2. Run the script once: it only **previews** who would be removed and impact (signups, domains led, roles created).

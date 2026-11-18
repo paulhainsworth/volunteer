@@ -1,6 +1,6 @@
 # Production Priorities — Implementation Roadmap
 
-Your ordered priorities for making the volunteer management site production-ready. Each item maps to current behavior and concrete implementation work.
+Original organizer priorities from January 2026. Use the [production readiness roadmap](PRODUCTION_READINESS_ROADMAP.md) for current implementation status and sequencing.
 
 ---
 

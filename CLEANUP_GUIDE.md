@@ -5,7 +5,7 @@
 ### Method 1: Using SQL Editor (Fastest)
 
 1. Go to **Supabase** → **SQL Editor**
-2. Copy and paste the contents of `CLEANUP_TEST_USERS.sql`
+2. Copy and paste the contents of `scripts/sql/CLEANUP_TEST_USERS.sql`
 3. Click **Run**
 4. This will delete profiles for test users
 
@@ -101,7 +101,7 @@ Run this as a cron job in Supabase.
 
 ### Option 3: Periodic Manual Cleanup
 
-Run `CLEANUP_TEST_USERS.sql` once a week during development.
+Run `scripts/sql/CLEANUP_TEST_USERS.sql` once a week during development.
 
 ---
 

@@ -8,7 +8,7 @@ Get your Race Volunteer Management System up and running in 10 minutes!
 2. Click "New Project"
 3. Name it "volunteer-manager" and set a strong password
 4. Wait for project creation (~2 min)
-5. Go to SQL Editor and paste the entire contents of `SUPABASE_SCHEMA.sql`
+5. Go to SQL Editor and paste the entire contents of `supabase/bootstrap/SUPABASE_SCHEMA.sql`
 6. Click "Run" to create all tables
 
 ## Step 2: Get Your Credentials (1 minute)
