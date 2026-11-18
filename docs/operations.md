@@ -54,3 +54,7 @@ gh run list --repo paulhainsworth/volunteer --workflow nica-coach-digest-cron.ym
 The check fails when scheduled history is missing or the most recent run is more than 45 minutes old. Use it during periods when the digest is expected to run.
 
 Assign delivery follow-up to the event's communications owner. Check NICA workflow delivery counts and the admin summary job history. For clinic receipts, use the [24-hour confirmation count](../scripts/sql/CHECK_CLINIC_CONFIRMATION_DELIVERY.sql) in the approved database and correlate unrecorded confirmations with the function's redacted delivery errors. The query excludes the latest five minutes while delivery may still be in progress. Review counts and timestamps in any escalation.
+
+## Generic email containment
+
+The generic `send-email` function verifies the caller's session. During an incident, set `SEND_EMAIL_STAFF_ONLY=true` to restrict it to administrators and volunteer leaders. This blocks volunteer-triggered role confirmations, guardian confirmations, and cancellation notices until those messages move to server-owned templates. Rehearse staff sending in an approved environment and record when containment can be enabled.

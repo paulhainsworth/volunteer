@@ -32,6 +32,7 @@ await import('../../supabase/functions/send-email/index.ts');
 const sendEmail = handler();
 
 Deno.test('xfail MG-09: guardian mail provider failures should redact their downstream response', async () => {
+  setClient(() => ({ auth: { getUser: () => ({ data: { user: { id: 'fixture-user' } }, error: null }) } }));
   const providerDetails = 'Synthetic provider diagnostic for guardian@example.invalid';
   const messages: string[] = [];
   const originalFetch = globalThis.fetch;
@@ -41,6 +42,7 @@ Deno.test('xfail MG-09: guardian mail provider failures should redact their down
   try {
     const response = await sendEmail(new Request('https://fixture.invalid/email', {
       method: 'POST',
+      headers: { authorization: 'Bearer synthetic-volunteer-session' },
       body: JSON.stringify({
         to: 'guardian@example.invalid', subject: 'Fixture consent confirmation', html: '<p>Fixture</p>',
       }),
