@@ -336,3 +336,27 @@ test('MG-08 standalone consent replaces legacy eligibility and is reusable for r
     has_function_privilege('authenticated', 'public.record_volunteer_waiver(uuid,date,jsonb)', 'EXECUTE')`]);
   expect(access.stdout.trim()).toBe('f|f|f');
 });
+
+
+test('administrator and volunteer-leader accounts can use the staff directory', () => {
+  const fixture = sql('patched', ['-Atc', `
+    BEGIN;
+    INSERT INTO auth.users (id,email,raw_user_meta_data) VALUES
+      ('00000000-0000-4000-8000-000000000091', 'directory-admin@example.invalid', '{}'),
+      ('00000000-0000-4000-8000-000000000092', 'directory-leader@example.invalid', '{}'),
+      ('00000000-0000-4000-8000-000000000093', 'fixture-directory@example.invalid', '{}');
+    UPDATE profiles SET role = 'admin' WHERE email = 'directory-admin@example.invalid';
+    UPDATE profiles SET role = 'volunteer_leader' WHERE email = 'directory-leader@example.invalid';
+    SELECT has_function_privilege('anon','public.search_volunteer_contacts(text)','EXECUTE');
+    SET LOCAL ROLE authenticated;
+    SELECT set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-000000000091', true);
+    SELECT 'admin|' || count(*) FROM search_volunteer_contacts('fixture-directory');
+    SELECT set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-000000000092', true);
+    SELECT 'leader|' || count(*) FROM search_volunteer_contacts('fixture-directory');
+    SELECT set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-000000000093', true);
+    SELECT 'volunteer|' || count(*) FROM search_volunteer_contacts('fixture-directory');
+    ROLLBACK;
+  `]);
+  expect(fixture.status, fixture.stderr).toBe(0);
+  expect(fixture.stdout.trim().split('\n')).toEqual(expect.arrayContaining(['f', 'admin|1', 'leader|1', 'volunteer|0']));
+});
