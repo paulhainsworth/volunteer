@@ -1,5 +1,5 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/sh
+set -eu
 export LC_ALL=C
 
 host=${PGHOST:-127.0.0.1}
@@ -9,20 +9,14 @@ case "$host" in
   localhost|127.0.0.1|::1) ;;
   *) echo 'Bootstrap is limited to an empty local database.' >&2; exit 2 ;;
 esac
-if [[ ! $database =~ ^[a-zA-Z0-9_.-]+$ || ! $port =~ ^[0-9]{1,5}$ ]]; then
-  echo 'Invalid local database name or port.' >&2
-  exit 2
-fi
+case "$database" in
+  *[!a-zA-Z0-9_.-]*) echo 'Invalid local database name.' >&2; exit 2 ;;
+esac
+case "$port" in
+  *[!0-9]*|??????*) echo 'Invalid local database port.' >&2; exit 2 ;;
+esac
 
-repo=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-prerequisites=(
-  SUPABASE_SCHEMA.sql
-  ADD_EMERGENCY_CONTACT.sql
-  ADD_VOLUNTEER_LEADER_ROLE.sql
-  ADD_LEADER_DOMAINS_SAFE.sql
-  ADD_TEAM_CLUB_AFFILIATION.sql
-  ADD_PUBLIC_SIGNUP_COUNTS_RLS.sql
-)
+repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 
 check=$(cat <<'SQL'
 DO $$
@@ -37,19 +31,16 @@ END
 $$;
 SQL
 )
-args=(--command="$check")
-for file in "${prerequisites[@]}"; do
-  path=
-  for dir in "$repo/supabase/bootstrap" "$repo/supabase/manual" "$repo"; do
-    if [[ -f "$dir/$file" ]]; then path="$dir/$file"; break; fi
-  done
-  if [[ -z $path ]]; then echo "Missing bootstrap file: $file" >&2; exit 2; fi
-  args+=(--file="$path")
+set -- --command="$check"
+for file in SUPABASE_SCHEMA.sql ADD_EMERGENCY_CONTACT.sql ADD_VOLUNTEER_LEADER_ROLE.sql \
+  ADD_LEADER_DOMAINS_SAFE.sql ADD_TEAM_CLUB_AFFILIATION.sql; do
+  set -- "$@" --file="$repo/supabase/bootstrap/$file"
 done
+set -- "$@" --file="$repo/supabase/manual/ADD_PUBLIC_SIGNUP_COUNTS_RLS.sql"
 for migration in "$repo"/supabase/migrations/*.sql; do
-  args+=(--file="$migration")
+  set -- "$@" --file="$migration"
 done
 
 unset PGHOSTADDR PGSERVICE PGSERVICEFILE
 exec psql -X --set=ON_ERROR_STOP=1 --single-transaction \
-  --host="$host" --port="$port" --dbname="$database" "${args[@]}"
+  --host="$host" --port="$port" --dbname="$database" "$@"
