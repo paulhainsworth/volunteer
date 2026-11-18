@@ -47,7 +47,7 @@ BEGIN
 
   IF p_kind = 'guardian_waiver' THEN
     SELECT * INTO consent FROM public.waivers w
-    WHERE w.volunteer_id = p_volunteer
+    WHERE w.volunteer_id = p_volunteer AND w.id = p_reference
       AND w.declared_minor IS TRUE AND w.parent_signed_at IS NOT NULL
     ORDER BY w.agreed_at DESC, w.id DESC LIMIT 1;
     activity_id := consent.id;
@@ -122,3 +122,26 @@ $$;
 
 REVOKE ALL ON FUNCTION public.claim_volunteer_mail(uuid, text, uuid) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.claim_volunteer_mail(uuid, text, uuid) TO service_role;
+
+
+DROP FUNCTION public.sign_volunteer_waiver(jsonb);
+CREATE FUNCTION public.sign_volunteer_waiver(p_consent jsonb)
+RETURNS uuid
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  current_volunteer uuid := auth.uid();
+  waiver_id uuid;
+BEGIN
+  IF current_volunteer IS NULL THEN
+    RAISE EXCEPTION 'Sign in before signing a waiver' USING ERRCODE = '42501';
+  END IF;
+  PERFORM public.record_volunteer_waiver(current_volunteer, CURRENT_DATE, p_consent);
+  SELECT id INTO STRICT waiver_id FROM public.waivers
+  WHERE volunteer_id = current_volunteer AND agreed_at = now();
+  RETURN waiver_id;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.sign_volunteer_waiver(jsonb) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.sign_volunteer_waiver(jsonb) TO authenticated;

@@ -5,16 +5,6 @@
 import { supabase } from './supabaseClient';
 import { auth } from './stores/auth';
 import { signups } from './stores/signups';
-import { formatRoleScheduleDate, formatTimeRange } from './utils/timeDisplay';
-
-const SITE_URL = typeof window !== 'undefined' ? `${window.location.origin}/#` : '';
-
-const htmlEntities = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
-
-function escapeHtml(value) {
-  return String(value ?? '').replace(/[&<>"']/g, (character) => htmlEntities[character]);
-}
-
 export async function createVolunteerAndSignup(pii, roleId, waiverVersion) {
   const {
     first_name,
@@ -74,98 +64,11 @@ export async function createVolunteerAndSignup(pii, roleId, waiverVersion) {
   return { created, userId: authData.user.id, email, first_name, last_name };
 }
 
-export async function sendRoleConfirmationEmail({ to, first_name, role, roleId }) {
-  const roleDate = formatRoleScheduleDate(role, 'long');
-  const roleTime = formatTimeRange(role);
-  const roleUrl = `${SITE_URL}/signup/${roleId}`;
-
-  await supabase.functions.invoke('send-email', {
-    body: {
-      to,
-      subject: `You're signed up: ${role.name} – Berkeley Omnium 2026`,
-      html: `
-        <h2>Thanks for volunteering!</h2>
-        <p>Hi ${first_name || 'there'},</p>
-        <p>You're signed up for:</p>
-        <ul>
-          <li><strong>${role.name}</strong></li>
-          <li>Date: ${roleDate}</li>
-          <li>Time: ${roleTime}</li>
-          ${role.location ? `<li>Location: ${role.location}</li>` : ''}
-        </ul>
-        <p><a href="${roleUrl}">View role details</a></p>
-        <p>We'll send reminders before the event. See you there!</p>
-        <p>– Berkeley Omnium Volunteer Team</p>
-      `
-    }
+export async function sendVolunteerNotification(kind, reference) {
+  const { error } = await supabase.functions.invoke('send-email', {
+    body: { notification: { kind, reference } }
   });
-}
-
-/**
- * Sends confirmation to the parent/guardian who signed the waiver for a minor volunteer (PII modal or role-specific flow).
- */
-export async function sendParentGuardianConfirmationEmail({
-  to,
-  parent_guardian_name,
-  volunteer_first_name,
-  volunteer_last_name,
-  role,
-  roleId
-}) {
-  const volunteerName = [volunteer_first_name, volunteer_last_name].filter(Boolean).join(' ').trim() || 'the volunteer';
-  const roleDate = formatRoleScheduleDate(role, 'long');
-  const roleTime = formatTimeRange(role);
-  const roleUrl = `${SITE_URL}/signup/${roleId}`;
-
-  await supabase.functions.invoke('send-email', {
-    body: {
-      to,
-      subject: `Confirmation: You signed the waiver for ${volunteerName} – Berkeley Omnium 2026`,
-      html: `
-        <h2>Parent/Guardian confirmation</h2>
-        <p>Hi ${escapeHtml(parent_guardian_name || 'there')},</p>
-        <p>You signed the liability waiver on behalf of <strong>${escapeHtml(volunteerName)}</strong>, who is now signed up to volunteer at the 2026 Berkeley Omnium.</p>
-        <p><strong>Role details:</strong></p>
-        <ul>
-          <li><strong>${escapeHtml(role.name)}</strong></li>
-          <li>Date: ${escapeHtml(roleDate)}</li>
-          <li>Time: ${escapeHtml(roleTime)}</li>
-          ${role.location ? `<li>Location: ${escapeHtml(role.location)}</li>` : ''}
-        </ul>
-        <p><a href="${escapeHtml(roleUrl)}">View role details</a></p>
-        <p>${escapeHtml(volunteerName)} will also receive a confirmation and welcome email at the address they provided.</p>
-        <p>– Berkeley Omnium Volunteer Team</p>
-      `
-    }
-  });
-}
-
-/**
- * Sends confirmation to the parent/guardian who signed the waiver on the Sign Waiver page (no specific role; volunteer may have multiple signups).
- */
-export async function sendParentGuardianWaiverSignedEmail({
-  to,
-  parent_guardian_name,
-  volunteer_first_name,
-  volunteer_last_name
-}) {
-  const volunteerName = [volunteer_first_name, volunteer_last_name].filter(Boolean).join(' ').trim() || 'the volunteer';
-  const mySignupsUrl = `${SITE_URL}/my-signups`;
-
-  await supabase.functions.invoke('send-email', {
-    body: {
-      to,
-      subject: `Confirmation: You signed the waiver for ${volunteerName} – Berkeley Omnium 2026`,
-      html: `
-        <h2>Parent/Guardian confirmation</h2>
-        <p>Hi ${escapeHtml(parent_guardian_name || 'there')},</p>
-        <p>You signed the liability waiver on behalf of <strong>${escapeHtml(volunteerName)}</strong>. They are all set to volunteer at the 2026 Berkeley Omnium.</p>
-        <p>When ${escapeHtml(volunteerName)} signs in to the volunteer hub, they can view their signups and role details.</p>
-        <p><a href="${escapeHtml(mySignupsUrl)}">Volunteer hub – My Signups</a></p>
-        <p>– Berkeley Omnium Volunteer Team</p>
-      `
-    }
-  });
+  if (error) throw error;
 }
 
 /**

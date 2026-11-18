@@ -63,14 +63,14 @@ serve(async (req) => {
     const body = await req.json()
     if (body.notification !== undefined) {
       const { kind, reference } = body.notification ?? {}
-      if (!isVolunteerNotification(kind) || (kind !== 'guardian_waiver' &&
-          (typeof reference !== 'string' || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(reference)))) {
+      if (!isVolunteerNotification(kind) || (typeof reference !== 'string' ||
+          !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(reference))) {
         return jsonError('Invalid volunteer notification', 400)
       }
       const { data: notice, error } = await supabase.rpc('claim_volunteer_mail', {
         p_volunteer: user.id,
         p_kind: kind,
-        p_reference: kind === 'guardian_waiver' ? null : reference,
+        p_reference: reference,
       })
       if (error) return jsonError('Failed to prepare volunteer notification', 500)
       if (!notice) return jsonSuccess({ skipped: true })

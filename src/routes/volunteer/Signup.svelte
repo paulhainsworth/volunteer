@@ -8,9 +8,8 @@
   import { formatTimeRange, calculateDuration, formatRoleScheduleDate } from '../../lib/utils/timeDisplay';
   import {
     createVolunteerAndSignup,
-    sendRoleConfirmationEmail,
-    sendWelcomeEmail,
-    sendParentGuardianConfirmationEmail
+    sendVolunteerNotification,
+    sendWelcomeEmail
   } from '../../lib/volunteerSignup';
   import { affiliations } from '../../lib/stores/affiliations';
 
@@ -220,12 +219,7 @@
         return;
       }
 
-      sendRoleConfirmationEmail({
-        to: result.email,
-        first_name: result.first_name,
-        role,
-        roleId
-      }).catch((err) => console.error('Role confirmation email failed:', err));
+      sendVolunteerNotification('confirmation', roleId).catch((err) => console.error('Role confirmation email failed:', err));
 
       sendWelcomeEmail({
         to: result.email,
@@ -233,14 +227,7 @@
       }).catch((err) => console.error('Welcome email failed:', err));
 
       if (guestIsMinor && guestParentGuardianEmail?.trim()) {
-        sendParentGuardianConfirmationEmail({
-          to: guestParentGuardianEmail.trim(),
-          parent_guardian_name: guestParentGuardianName?.trim() || null,
-          volunteer_first_name: result.first_name,
-          volunteer_last_name: result.last_name,
-          role,
-          roleId
-        }).catch((err) => console.error('Parent/guardian confirmation email failed:', err));
+        sendVolunteerNotification('guardian_signup', roleId).catch((err) => console.error('Parent/guardian confirmation email failed:', err));
       }
 
       success = true;
@@ -306,21 +293,9 @@
       } : null;
       const { created } = await signups.confirmSignup(roleId, phone, consent);
       if (created) {
-        sendRoleConfirmationEmail({
-          to: $auth.profile?.email || $auth.user?.email,
-          first_name: $auth.profile?.first_name || 'there',
-          role,
-          roleId
-        }).catch((err) => console.error('Confirmation email failed:', err));
+        sendVolunteerNotification('confirmation', roleId).catch((err) => console.error('Confirmation email failed:', err));
         if (isMinor && parentGuardianEmail.trim()) {
-          sendParentGuardianConfirmationEmail({
-            to: parentGuardianEmail.trim(),
-            parent_guardian_name: parentGuardianName.trim(),
-            volunteer_first_name: $auth.profile?.first_name,
-            volunteer_last_name: $auth.profile?.last_name,
-            role,
-            roleId
-          }).catch((err) => console.error('Parent/guardian confirmation email failed:', err));
+          sendVolunteerNotification('guardian_signup', roleId).catch((err) => console.error('Parent/guardian confirmation email failed:', err));
         }
       }
 
