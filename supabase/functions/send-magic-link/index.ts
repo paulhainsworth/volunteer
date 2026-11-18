@@ -105,7 +105,7 @@ serve(async (req) => {
   try {
     const { to, redirectTo, sendEmail = true }: RequestBody = await req.json()
 
-    if (!to || !redirectTo) {
+    if (typeof to !== 'string' || !to.trim() || typeof redirectTo !== 'string' || !redirectTo.trim()) {
       return new Response(
         JSON.stringify({ error: 'Missing required fields: to, redirectTo' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -155,18 +155,21 @@ serve(async (req) => {
     })
 
     if (linkError) {
-      console.error('generateLink error:', linkError, { email: normalizedEmail })
+      console.error('Magic-link generation failed', { status: linkError.status })
       const msg = linkError.message || ''
       const looksLikeMissingUser =
         /finding user|user not found|no user|not registered|email address.*not.*found/i.test(msg)
+      if (sendEmail && looksLikeMissingUser) {
+        return new Response(JSON.stringify({ success: true }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
       const status = looksLikeMissingUser ? 400 : 500
       return new Response(
         JSON.stringify({
           error: looksLikeMissingUser
             ? 'No Auth login exists for this email (or email does not match Auth).'
             : 'Failed to generate magic link',
-          details: msg,
-          email: normalizedEmail,
         }),
         { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
@@ -177,7 +180,7 @@ serve(async (req) => {
       (linkData as { properties?: { action_link?: string } })?.properties?.action_link
 
     if (!actionLink) {
-      console.error('No action_link in generateLink response:', linkData)
+      console.error('Magic-link generation returned no action link')
       return new Response(
         JSON.stringify({ error: 'Magic link not returned' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -207,28 +210,26 @@ serve(async (req) => {
     })
 
     if (!res.ok) {
-      const errText = await res.text()
-      console.error('Resend API error:', errText)
+      console.error('Magic-link delivery failed', { status: res.status })
       const status = res.status
       const message =
         status === 429
           ? 'Too many sign-in attempts. Please wait a few minutes and try again.'
-          : `Failed to send email: ${errText}`
+          : 'Failed to send sign-in email. Please try again.'
       return new Response(
-        JSON.stringify({ error: message, details: errText }),
+        JSON.stringify({ error: message }),
         { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    const data = await res.json()
     return new Response(
-      JSON.stringify({ success: true, id: data.id }),
+      JSON.stringify({ success: true }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   } catch (error) {
-    console.error('send-magic-link error:', error)
+    console.error('Unexpected magic-link request failure', { name: (error as Error).name })
     return new Response(
-      JSON.stringify({ error: (error as Error).message }),
+      JSON.stringify({ error: 'Failed to process sign-in request. Please try again.' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }

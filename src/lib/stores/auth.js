@@ -192,9 +192,24 @@ function createAuthStore() {
   return {
     subscribe,
     
+    waitForReady: () => {
+      const state = getState();
+      if (!state.loading) return Promise.resolve(state);
+      return new Promise((resolve) => {
+        const unsubscribe = subscribe((current) => {
+          if (!current.loading) {
+            unsubscribe();
+            resolve(current);
+          }
+        });
+      });
+    },
+
     initialize: async () => {
       if (!authSubscriptionInitialized) {
         supabase.auth.onAuthStateChange(async (event, session) => {
+          // Startup reads the persisted session below, outside the Auth callback.
+          if (event === 'INITIAL_SESSION') return;
           try {
             await applySession(session);
           } catch (error) {

@@ -1,4 +1,4 @@
-import { equal } from 'node:assert/strict';
+import { deepStrictEqual, equal } from 'node:assert/strict';
 import { handler, request, setClient } from './stubs.ts';
 
 Deno.env.set('SUPABASE_URL', 'https://fixture.invalid');
@@ -24,7 +24,9 @@ Deno.test('a valid public login request sends a single configured confirmation',
     return Promise.resolve(Response.json({ id: 'fixture-email' }));
   };
   try {
-    equal((await sendLogin(request({ to: email, redirectTo }))).status, 200);
+    const response = await sendLogin(request({ to: email, redirectTo }));
+    equal(response.status, 200);
+    deepStrictEqual(await response.json(), { success: true });
     equal(delivery, 1);
   } finally {
     globalThis.fetch = originalFetch;
@@ -50,4 +52,64 @@ Deno.test('volunteer accounts cannot use the organizer-only link preparation act
     body: JSON.stringify({ to: 'volunteer@example.invalid', redirectTo: 'http://127.0.0.1:4179/', sendEmail: false }),
   }));
   equal(result.status, 403);
+});
+
+Deno.test('public login gives the same acknowledgement when no account exists', async () => {
+  setClient(() => ({
+    auth: { admin: { generateLink: () => ({
+      data: null,
+      error: { message: 'User not found', status: 400 },
+    }) } },
+  }));
+  const response = await sendLogin(request({
+    to: 'volunteer@example.invalid',
+    redirectTo: 'http://127.0.0.1:4179/',
+  }));
+  equal(response.status, 200);
+  deepStrictEqual(await response.json(), { success: true });
+});
+
+Deno.test('provider failure is actionable without exposing the upstream response', async () => {
+  setClient(() => ({
+    auth: { admin: { generateLink: () => ({
+      data: { properties: { action_link: 'https://fixture.invalid/link' } },
+      error: null,
+    }) } },
+  }));
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = () => Promise.resolve(Response.json({ detail: 'internal provider fixture' }, { status: 503 }));
+  try {
+    const response = await sendLogin(request({
+      to: 'volunteer@example.invalid',
+      redirectTo: 'http://127.0.0.1:4179/',
+    }));
+    equal(response.status, 503);
+    deepStrictEqual(await response.json(), { error: 'Failed to send sign-in email. Please try again.' });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+await import('../../supabase/functions/send-welcome-with-magic-link/index.ts');
+const sendWelcome = handler();
+
+Deno.test('welcome email reports a delivery failure without returning provider details', async () => {
+  setClient(() => ({
+    auth: { admin: { generateLink: () => ({
+      data: { properties: { action_link: 'https://fixture.invalid/link' } },
+      error: null,
+    }) } },
+  }));
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = () => Promise.resolve(Response.json({ detail: 'internal provider fixture' }, { status: 503 }));
+  try {
+    const response = await sendWelcome(request({
+      to: 'volunteer@example.invalid',
+      redirectTo: 'http://127.0.0.1:4179/',
+    }));
+    equal(response.status, 503);
+    deepStrictEqual(await response.json(), { error: 'Failed to send welcome email' });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });

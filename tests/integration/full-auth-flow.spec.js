@@ -17,10 +17,16 @@ for (const [role, nav] of [['volunteer', 'Browse Roles'], ['volunteer_leader', '
 test('reload keeps a signed-in volunteer on My Signups', async ({ page, backend }) => {
   await signInFixture(page, backend);
   await expect(page).toHaveURL(/#\/my-signups$/);
-  // MySignups.svelte:25–28 redirects before auth bootstrap can restore a persisted session.
-  test.fail();
   await page.reload();
   await expect(page.getByRole('heading', { name: 'My Volunteer Signups' })).toBeVisible();
+  await expect(page).toHaveURL(/#\/my-signups$/);
+});
+
+test('a signed-out visit to My Signups redirects to sign-in', async ({ page, backend }) => {
+  await page.goto('/#/my-signups');
+  await expect(page).toHaveURL(/#\/auth\/login$/);
+  await expect(page.getByRole('heading', { name: 'Sign In' })).toBeVisible();
+  expect(backend.calls('GET', '/rest/v1/signups')).toBe(0);
 });
 
 test('first login collects an emergency contact before opening volunteer opportunities', async ({ page, backend }) => {

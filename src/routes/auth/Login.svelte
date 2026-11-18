@@ -32,7 +32,7 @@
     {#if emailSent}
       <div class="success-message">
         <p><strong>Check your email</strong></p>
-        <p>We've sent a sign-in link to <strong>{email}</strong>. Click the link to sign in.</p>
+        <p>If an account exists for <strong>{email}</strong>, you'll receive a sign-in link.</p>
         <p class="hint">Didn't receive it? Check your spam folder or <button type="button" class="btn-link" on:click={() => (emailSent = false)}>try again</button>.</p>
       </div>
     {:else}
