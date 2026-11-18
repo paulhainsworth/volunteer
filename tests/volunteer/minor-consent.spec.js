@@ -1,0 +1,263 @@
+import { test, expect, fixtureSession, profile, role, signInFixture, user, waiver } from '../helpers/browser.js';
+
+const signup = '/rest/v1/rpc/confirm_volunteer_signup';
+const mail = '/functions/v1/send-email';
+const guardian = {
+  parent_guardian_name: 'Fixture Guardian',
+  parent_guardian_email: 'guardian@example.invalid',
+  parent_signature_name: 'Fixture Signature',
+};
+const signupPath = `/#/signup/${role.id}`;
+const waiverPath = '/#/volunteer/waiver?return=%2Fmy-signups';
+
+function rolesFixture(backend) {
+  backend.handle('GET', '/rest/v1/volunteer_roles', (_request, url) => ({
+    body: url.searchParams.has('id') ? role : [role],
+  }));
+  backend.reply('POST', '/rest/v1/rpc/get_confirmed_signup_counts', []);
+  backend.reply('GET', '/rest/v1/waiver_settings', waiver);
+  backend.reply('GET', '/rest/v1/team_club_affiliations', [{ id: 'fixture-team', name: 'Fixture Club' }]);
+}
+
+async function openForm(page, backend, path) {
+  rolesFixture(backend);
+  if (path === 'signed-in' || path === 'waiver') {
+    await signInFixture(page, backend);
+    await expect(page).toHaveURL(/my-signups$/);
+    backend.reply('GET', '/rest/v1/waivers', { code: 'PGRST116' }, 406);
+    await page.goto(path === 'waiver' ? waiverPath : signupPath);
+    return page.getByRole('button', { name: path === 'waiver' ? 'Sign waiver' : 'Confirm Signup', exact: true });
+  }
+  if (path === 'browse') {
+    await page.goto('/#/volunteer');
+    await page.getByRole('button', { name: /General Opportunities/ }).click();
+    await page.getByRole('button', { name: 'Sign Up', exact: true }).click();
+  } else {
+    await page.goto(signupPath);
+  }
+  await page.getByLabel(/^First Name/).fill('Test');
+  await page.getByLabel(/^Last Name/).fill('Volunteer');
+  await page.getByLabel(/Email Address/).fill(user.email);
+  await page.getByLabel(/Emergency Contact Name/).fill('Fixture Contact');
+  await page.getByLabel(/Emergency Contact Phone/).fill('5550100');
+  await page.getByLabel(/Team \/ Club Affiliation/).selectOption('fixture-team');
+  return page.getByRole('button', { name: 'Complete Signup' });
+}
+
+function under18(page) {
+  return page.getByRole('checkbox', { name: /I will be under 18/ });
+}
+
+async function fillGuardian(page, name = guardian.parent_guardian_name) {
+  await under18(page).check();
+  await page.getByLabel(/parent\/guardian full name/i).fill(name);
+  await page.getByLabel(/parent\/guardian email/i).fill(guardian.parent_guardian_email);
+  await page.getByLabel(/parent\/guardian digital signature/i).fill(guardian.parent_signature_name);
+  await page.getByRole('checkbox', { name: /I have read/i }).check();
+}
+
+function mockSignup(backend, emails, result = { body: { signup: { id: 'fixture-seat' }, created: true } }) {
+  backend.handle('POST', signup, (request) => {
+    expect(request.postDataJSON().p_consent).toMatchObject({
+      version: waiver.version, is_minor: true, signature_name: 'Test Volunteer', ...guardian,
+    });
+    return result;
+  });
+  backend.handle('POST', mail, (request) => {
+    emails.push(request.postDataJSON());
+    return { body: { success: true } };
+  });
+}
+
+for (const path of ['signed-in', 'guest', 'browse', 'waiver']) {
+  test(`MG-01 ${path} requires each guardian field and allows an omitted phone`, async ({ page, backend }) => {
+    const submit = await openForm(page, backend, path);
+    await under18(page).check();
+    await page.getByRole('checkbox', { name: /I have read/i }).check();
+    const name = page.getByLabel(/parent\/guardian full name/i);
+    const email = page.getByLabel(/parent\/guardian email/i);
+    const signature = page.getByLabel(/parent\/guardian digital signature/i);
+    await name.fill('   ');
+    await expect(submit).toBeDisabled();
+    await name.fill(guardian.parent_guardian_name);
+    await expect(submit).toBeDisabled();
+    await email.fill(guardian.parent_guardian_email);
+    await expect(submit).toBeDisabled();
+    await signature.fill(guardian.parent_signature_name);
+    await expect(submit).toBeEnabled();
+    await expect(page.getByLabel(/parent\/guardian phone/i)).toHaveValue('');
+    expect(backend.calls('POST', signup)).toBe(0);
+    expect(backend.calls('POST', '/auth/v1/signup')).toBe(0);
+    expect(backend.calls('POST', '/rest/v1/waivers')).toBe(0);
+  });
+}
+
+test('MG-01 clearing the minor toggle removes guardian data from adult consent', async ({ page, backend }) => {
+  const submit = await openForm(page, backend, 'signed-in');
+  await fillGuardian(page);
+  await under18(page).uncheck();
+  await page.getByLabel(/Digital Signature/).fill(' ');
+  await expect(submit).toBeDisabled();
+  await page.getByLabel(/Digital Signature/).fill('Test Volunteer');
+  backend.handle('POST', signup, (request) => {
+    expect(request.postDataJSON().p_consent).toMatchObject({
+      is_minor: false, parent_guardian_name: null, parent_guardian_email: null, parent_signature_name: null,
+    });
+    return { body: { signup: { id: 'fixture-seat' }, created: false } };
+  });
+  await submit.click();
+  await expect(page.getByText("You're all set!")).toBeVisible();
+});
+
+for (const outcome of ['created', 'retry', 'rejected']) {
+  test(`MG-02 signed-in consent handles ${outcome} without duplicate mail`, async ({ page, backend }) => {
+    const submit = await openForm(page, backend, 'signed-in');
+    const emails = [];
+    mockSignup(backend, emails, outcome === 'rejected'
+      ? { body: { message: 'Fixture role is full' }, status: 409 }
+      : { body: { signup: { id: 'fixture-seat' }, created: outcome === 'created' } });
+    await fillGuardian(page);
+    await submit.click();
+    await expect(page.getByText(outcome === 'rejected' ? 'Fixture role is full' : "You're all set!")).toBeVisible();
+    if (outcome === 'created') {
+      await expect.poll(() => emails.length).toBe(2);
+      expect(emails.map(({ to }) => to).sort()).toEqual([guardian.parent_guardian_email, user.email].sort());
+      expect(emails.find(({ to }) => to === guardian.parent_guardian_email).html).toMatch(/Course Marshal[\s\S]*Date:[^<]*2099/);
+    } else {
+      expect(emails).toHaveLength(0);
+    }
+  });
+}
+
+test('MG-03 blank optional volunteer assent should still allow guardian consent', async ({ page, backend }) => {
+  const submit = await openForm(page, backend, 'signed-in');
+  await fillGuardian(page);
+  await page.getByLabel(/volunteer assent/i).fill('');
+  backend.handle('POST', signup, (request) => request.postDataJSON().p_consent.signature_name
+    ? { body: { signup: { id: 'fixture-seat' }, created: false } }
+    : { body: { message: 'Review and sign the current waiver' }, status: 400 });
+  await expect(submit).toBeEnabled();
+  await submit.click();
+  await expect.poll(() => backend.calls('POST', signup)).toBe(1);
+  // Signup.svelte:298 forwards blank assent, which the real RPC rejects (MG database check).
+  test.fail();
+  await expect(page.getByText("You're all set!")).toBeVisible({ timeout: 1500 });
+});
+
+for (const path of ['guest', 'browse']) {
+  test(`MG-04 ${path} immediate session sends guardian consent and one role email`, async ({ page, backend }) => {
+    const submit = await openForm(page, backend, path);
+    backend.reply('POST', '/auth/v1/signup', fixtureSession());
+    backend.reply('GET', '/rest/v1/profiles', [profile]);
+    backend.reply('GET', '/rest/v1/waivers', waiver);
+    backend.reply('GET', '/rest/v1/signups', []);
+    backend.reply('POST', '/functions/v1/send-welcome-with-magic-link', { success: true });
+    const emails = [];
+    mockSignup(backend, emails);
+    await fillGuardian(page);
+    await submit.click();
+    await expect.poll(() => emails.filter(({ to }) => to === guardian.parent_guardian_email).length).toBe(1);
+    expect(emails.find(({ to }) => to === guardian.parent_guardian_email).html).toContain(role.name);
+    expect(backend.calls('POST', signup)).toBe(1);
+  });
+}
+
+test('MG-05 verification requires entering guardian consent again before reserving', async ({ page, backend }) => {
+  const submit = await openForm(page, backend, 'guest');
+  backend.reply('POST', '/auth/v1/signup', user);
+  await fillGuardian(page);
+  await submit.click();
+  await expect(page.getByText('A spot has not been reserved.', { exact: false })).toBeVisible();
+  expect(backend.calls('POST', signup)).toBe(0);
+  expect(backend.calls('POST', '/rest/v1/waivers')).toBe(0);
+  expect(backend.calls('POST', mail)).toBe(0);
+
+  const pendingWaiver = { code: 'PGRST116' };
+  const session = fixtureSession();
+  backend.reply('GET', '/auth/v1/user', user);
+  backend.reply('GET', '/rest/v1/profiles', [profile]);
+  backend.reply('GET', '/rest/v1/waivers', pendingWaiver, 406);
+  backend.reply('GET', '/rest/v1/signups', []);
+  await page.goto(`/?signup_role=${role.id}#${new URLSearchParams({
+    access_token: session.access_token, refresh_token: session.refresh_token,
+    expires_in: '3600', token_type: 'bearer', type: 'signup',
+  })}`);
+  await expect(page).toHaveURL(new RegExp(`#/signup/${role.id}$`));
+  await under18(page).check();
+  await expect(page.getByLabel(/parent\/guardian full name/i)).toHaveValue('');
+  await expect(page.getByRole('button', { name: 'Confirm Signup' })).toBeDisabled();
+  mockSignup(backend, [], { body: { signup: { id: 'fixture-seat' }, created: false } });
+  await fillGuardian(page);
+  await page.getByRole('button', { name: 'Confirm Signup' }).click();
+  await expect(page.getByText("You're all set!")).toBeVisible();
+  expect(backend.calls('POST', signup)).toBe(1);
+});
+
+for (const accepted of [true, false]) {
+  test(`MG-06 standalone waiver handles accepted=${accepted} with guardian consent`, async ({ page, backend }) => {
+    const submit = await openForm(page, backend, 'waiver');
+    backend.handle('POST', '/rest/v1/waivers', (request) => {
+      const payload = request.postDataJSON();
+      expect(payload).toMatchObject({
+        ...guardian, volunteer_id: user.id, signature_name: 'Test Volunteer',
+        parent_signed_at: expect.any(String), waiver_version: waiver.version, waiver_text: waiver.waiver_text,
+      });
+      expect(payload.parent_guardian_phone).toBe(accepted ? '5550101' : undefined);
+      if (!accepted) return { body: { message: 'Fixture waiver save failed' }, status: 400 };
+      backend.reply('GET', '/rest/v1/waivers', waiver);
+      return { body: waiver, status: 201 };
+    });
+    backend.reply('POST', mail, { success: true });
+    await fillGuardian(page);
+    await page.getByLabel(/volunteer assent/i).fill('');
+    if (accepted) await page.getByLabel(/parent\/guardian phone/i).fill(' 5550101 ');
+    await submit.click();
+    if (accepted) {
+      await expect(page).toHaveURL(/#\/my-signups$/);
+      await expect.poll(() => backend.calls('POST', mail)).toBe(1);
+    } else {
+      await expect(page.getByText('Fixture waiver save failed')).toBeVisible();
+      expect(backend.calls('POST', mail)).toBe(0);
+      await expect(page).toHaveURL(/#\/volunteer\/waiver/);
+    }
+  });
+}
+
+test('MG-09 failed guardian mail leaves signup confirmed and logs no contact data', async ({ page, backend }) => {
+  const submit = await openForm(page, backend, 'signed-in');
+  const emails = [];
+  mockSignup(backend, emails);
+  backend.handle('POST', mail, (request) => {
+    const email = request.postDataJSON();
+    emails.push(email);
+    if (email.to === guardian.parent_guardian_email) {
+      return { body: { error: 'Fixture private provider error' }, status: 500 };
+    }
+    return { body: { success: true } };
+  });
+  const logs = [];
+  page.on('console', (message) => logs.push(message.text()));
+  await fillGuardian(page);
+  await submit.click();
+  await expect(page.getByText("You're all set!")).toBeVisible();
+  await expect.poll(() => emails.length).toBe(2);
+  expect(logs.join('\n')).not.toMatch(/guardian@example\.invalid|volunteer@example\.invalid|Fixture private provider error/);
+});
+
+test('MG-09 guardian confirmation should escape display names in HTML', async ({ page, backend }) => {
+  const submit = await openForm(page, backend, 'signed-in');
+  const emails = [];
+  backend.reply('POST', signup, { signup: { id: 'fixture-seat' }, created: true });
+  backend.handle('POST', mail, (request) => {
+    emails.push(request.postDataJSON());
+    return { body: { success: true } };
+  });
+  await fillGuardian(page, '<b>Fixture & Guardian</b>');
+  await submit.click();
+  await expect.poll(() => emails.length).toBe(2);
+  const confirmation = emails.find(({ to }) => to === guardian.parent_guardian_email);
+  expect(confirmation).toBeDefined();
+  // volunteerSignup.js interpolates the guardian name into the email without HTML escaping.
+  test.fail();
+  expect(confirmation.html).toContain('&lt;b&gt;Fixture &amp; Guardian&lt;/b&gt;');
+});

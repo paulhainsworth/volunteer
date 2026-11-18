@@ -95,6 +95,8 @@ Function names in the table refer to `supabase/functions/<name>/index.ts`.
 - Browser tests use a dedicated local Vite server and synthetic Auth, REST, RPC, and function responses. Database checks run in a fresh PostgreSQL container without networking. Edge handler tests use local imports and stub external providers.
 - [TEST_PLAN.md](TEST_PLAN.md) tracks coverage, expected failures, and remaining P2 and P3 work. Run the suite locally before opening a pull request.
 
+- [Minor and guardian consent tests](tests/volunteer/minor-consent.spec.js) exercise all four consent forms. The test plan records the remaining policy decision and expected failures.
+
 ### Open questions
 
 1. What schema baseline, bootstrap and manual patches, and RLS policies are applied in production, and how should a new environment reproduce them?

@@ -73,6 +73,17 @@ Updated November 18, 2026. Merged code and local checks are recorded here. The c
 | [#13](https://github.com/paulhainsworth/volunteer/issues/13) | Redacted failure counts in [PR #35](https://github.com/paulhainsworth/volunteer/pull/35). | Synthetic failure handling passes. Missed-schedule monitoring and alert ownership remain open. |
 | [#14](https://github.com/paulhainsworth/volunteer/issues/14) | Shared admin assignment operation in [PR #36](https://github.com/paulhainsworth/volunteer/pull/36). | Organizer success and rejection pass. Leader writes and larger component refactoring remain open. |
 
+## Minor and guardian consent verification
+
+The offline MG suite uses synthetic identities and intercepts all email delivery. The findings below have separate GitHub issues. Each fix should get its own PR and remove the corresponding expected failure once verified.
+
+| Finding | Evidence | Status |
+| --- | --- | --- |
+| [#39](https://github.com/paulhainsworth/volunteer/issues/39) · Optional minor assent blocks role signup when left blank | [Signup.svelte](src/routes/volunteer/Signup.svelte#L298) sends the field to [the signup RPC](supabase/migrations/20261118000000_confirm_volunteer_signup_atomically.sql), which requires a nonblank signature. | Reproduced in disposable PostgreSQL and tracked by an expected-failure browser test. Decide whether minor assent is required or can be omitted. |
+| [#40](https://github.com/paulhainsworth/volunteer/issues/40) · Guardian confirmation HTML needs escaping | [volunteerSignup.js](src/lib/volunteerSignup.js#L120) formats the role confirmation using display names. | Tracked by an expected-failure test. |
+| [#41](https://github.com/paulhainsworth/volunteer/issues/41) · Mail provider errors need redaction | [send-email](supabase/functions/send-email/index.ts#L49) currently includes upstream diagnostics in its logs and response. | Tracked by an expected-failure handler test. Related to [#17](https://github.com/paulhainsworth/volunteer/issues/17). |
+| [#42](https://github.com/paulhainsworth/volunteer/issues/42) · Standalone waiver guardian policy needs a decision | [profile-access.sql](tests/database/profile-access.sql) confirms an authorized volunteer can save complete consent. The schema still has no persisted minor status for age-dependent guardian enforcement. | Policy decision open. |
+
 ## Five-line summary
 
 1. Profile policy and public directory access are the highest data-exposure risks. Live grants still need verification.
