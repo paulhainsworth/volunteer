@@ -70,7 +70,7 @@ Updated November 18, 2026. Merged code and local checks are recorded here. The c
 | [#10](https://github.com/paulhainsworth/volunteer/issues/10), [#15](https://github.com/paulhainsworth/volunteer/issues/15) | Generated reports, starter assets, legacy password routes, and an unused test dependency removed in [PR #31](https://github.com/paulhainsworth/volunteer/pull/31) and [PR #32](https://github.com/paulhainsworth/volunteer/pull/32). | Frontend build and 15 targeted auth tests passed. |
 | [#12](https://github.com/paulhainsworth/volunteer/issues/12) | Target-checked cleanup runner with rollback previews in [PR #33](https://github.com/paulhainsworth/volunteer/pull/33). | Target mismatch, rollback, and scoped apply were verified on disposable data. |
 | [#6](https://github.com/paulhainsworth/volunteer/issues/6) | SQL layout in [PR #26](https://github.com/paulhainsworth/volunteer/pull/26) and local bootstrap runner in [PR #34](https://github.com/paulhainsworth/volunteer/pull/34). | Blank local bootstrap passes. Hosted baseline, upgrades, and effective policies remain open. |
-| [#13](https://github.com/paulhainsworth/volunteer/issues/13) | Redacted failure counts in [PR #35](https://github.com/paulhainsworth/volunteer/pull/35). | Synthetic fixtures verify detection of schedule gaps longer than 45 minutes and count-only clinic receipt checks. The operations guide assigns monitoring by role. Live notification routing and complete scheduler outages still need an independent watcher. |
+| [#13](https://github.com/paulhainsworth/volunteer/issues/13) | Redacted failure counts in [PR #35](https://github.com/paulhainsworth/volunteer/pull/35). | Synthetic failure handling passes. Missed-schedule monitoring and alert ownership remain open. |
 | [#14](https://github.com/paulhainsworth/volunteer/issues/14) | Shared admin assignment operation in [PR #36](https://github.com/paulhainsworth/volunteer/pull/36). | Organizer success and rejection pass. Leader writes and larger component refactoring remain open. |
 
 ## Minor and guardian consent verification
@@ -83,6 +83,10 @@ The offline MG suite uses synthetic identities and intercepts all email delivery
 | [#40](https://github.com/paulhainsworth/volunteer/issues/40) · Guardian confirmation HTML needs escaping | [volunteerSignup.js](src/lib/volunteerSignup.js#L120) formats the role confirmation using display names. | Tracked by an expected-failure test. |
 | [#41](https://github.com/paulhainsworth/volunteer/issues/41) · Mail provider errors need redaction | [send-email](supabase/functions/send-email/index.ts#L49) currently includes upstream diagnostics in its logs and response. | Tracked by an expected-failure handler test. Related to [#17](https://github.com/paulhainsworth/volunteer/issues/17). |
 | [#42](https://github.com/paulhainsworth/volunteer/issues/42) · Standalone waiver needs shared guardian enforcement | [MG-08 database test](tests/database/migrations.spec.js) verifies that waivers without an age declaration require renewal and that new adult and guardian-signed waivers can be reused for an eligible role. | Implementation uses one server-side rule and preserves older waivers as history. Older waivers are re-collected at next use. Hosted rollout pending. |
+
+## Notification monitoring follow-up
+
+[Issue #13](https://github.com/paulhainsworth/volunteer/issues/13) · Synthetic fixtures verify detection of schedule gaps longer than 45 minutes and count-only clinic receipt checks. The operations guide assigns monitoring by role. Live notification routing and complete scheduler outages still need an independent watcher. See the [operations guide](docs/operations.md#notification-monitoring) and [PR #45](https://github.com/paulhainsworth/volunteer/pull/45).
 
 ## Five-line summary
 
