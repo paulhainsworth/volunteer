@@ -59,6 +59,8 @@ The check fails when scheduled history is missing or the most recent run is more
 
 Assign delivery follow-up to the event's communications owner. Check NICA workflow delivery counts and the admin summary job history. For clinic receipts, use the [24-hour confirmation count](../scripts/sql/CHECK_CLINIC_CONFIRMATION_DELIVERY.sql) in the approved database and correlate unrecorded confirmations with the function's redacted delivery errors. The query excludes the latest five minutes while delivery may still be in progress. Review counts and timestamps in any escalation.
 
-## Generic email containment
+## Generic email rollout
 
-The generic `send-email` function verifies the caller's session. During an incident, set `SEND_EMAIL_STAFF_ONLY=true` to restrict it to administrators and volunteer leaders. This blocks volunteer-triggered role confirmations, guardian confirmations, and cancellation notices until those messages move to server-owned templates. Rehearse staff sending in an approved environment and record when containment can be enabled.
+Apply the [volunteer notification migration](../supabase/migrations/20261118000700_bind_volunteer_mail_to_activity.sql) before deploying `send-email`. The function verifies the sender, chooses templates and recipients from recent signup or waiver activity, and claims each notification once. Generic organizer mail requires an administrator or volunteer-leader session.
+
+Coordinate the frontend and Edge Function release. An operator can set `SEND_EMAIL_STAFF_ONLY=false` temporarily while old frontend clients switch to the typed requests. Clear the override once staff messages and all four volunteer notifications are verified on the new frontend.
