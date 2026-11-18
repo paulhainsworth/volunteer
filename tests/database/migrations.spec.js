@@ -110,6 +110,7 @@ test('explicit baseline patches support migrations, profile editing, and scoped 
   for (const file of migrations) apply('patched', `${migrationDirectory}/${file}`);
   apply('patched', 'tests/database/profile-access.sql');
   apply('patched', 'tests/database/cleanup-scope.sql');
+  apply('patched', 'tests/database/auth-mail-rate-limit.sql');
   const schema = sql('patched', ['-Atc', "SELECT to_regclass('public.nica_coaches'), to_regclass('public.kids_clinic_signups'), (SELECT count(*) FROM volunteer_roles WHERE name = 'Existing shift')"]);
   expect(schema.stdout.trim()).toBe('nica_coaches|kids_clinic_signups|1');
 });

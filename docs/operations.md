@@ -2,6 +2,10 @@
 
 Use the [production readiness roadmap](../PRODUCTION_READINESS_ROADMAP.md) for release gates. Use synthetic records and approved test recipients for rehearsals.
 
+## Sign-in mail rollout
+
+Apply the [auth mail rate limit migration](../supabase/migrations/20261118000600_limit_auth_email_requests.sql) before deploying the two sign-in mail functions. The default mail destination is `https://volunteer.berkeleyomnium.com`. For a separately approved environment, set `AUTH_MAIL_ALLOWED_ORIGINS` to the comma-separated origins approved for that Supabase environment and mirror those destinations in Supabase Auth redirect settings. Production should use HTTPS origins. The organizer waiver link also needs the approved root URL with `?post_login=waiver`. Deploy both functions together. The limit allows three requests per recipient and 120 per channel per 15-minute window. Rehearse public login, self-signup welcome mail, and organizer invitations.
+
 ## Race-day workflow checks
 
 | Role | Rehearsal |
