@@ -33,3 +33,7 @@ curl -sS -X POST \
 ## Database
 
 Apply migration `20260411120000_nica_coaches.sql` (creates `nica_coaches` and `nica_coach_digest_runs`).
+
+## Check scheduled delivery
+
+The GitHub Actions job displays the sent count or skip status. If the function reports delivery or configuration errors, the check fails and prints only the failure count. The repository owner should review failed runs and confirm which organizer monitors them. A separate freshness check is still needed to detect when the schedule itself does not run.
