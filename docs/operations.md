@@ -23,6 +23,8 @@ Automatic Vercel Git deployments are enabled for `main`. Non-main branches, incl
 4. Confirm the intended Auth redirects, mail and Slack settings, and active scheduler. Record configuration names and deployment versions in the release notes. Keep credential values in the designated secret store.
 5. After promotion, verify the approved release targets with an authorized smoke check and record the outcome. Use the previous frontend deployment for frontend recovery. For database and function changes, follow the separately reviewed recovery plan.
 
+Apply the [optional assent migration](../supabase/migrations/20261118000200_allow_optional_minor_assent.sql) before promoting its frontend. The updated role form can submit a blank minor signature when guardian consent is complete.
+
 See [Vercel rewrites](../vercel.json), [Supabase function configuration](../supabase/config.toml), [migrations](../supabase/migrations/README.md), and the [codebase map](../CODEBASE_MAP.md#configuration).
 
 ## Triage by symptom

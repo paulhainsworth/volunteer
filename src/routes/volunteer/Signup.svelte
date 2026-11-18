@@ -23,6 +23,7 @@
   let waiverText = '';
   let waiverAgreed = false;
   let signatureName = '';
+  let minorAssent = '';
   let submitting = false;
   let success = false;
   let needsWaiver = false;
@@ -151,6 +152,7 @@
     waiverText = '';
     waiverAgreed = false;
     signatureName = '';
+    minorAssent = '';
   }
 
   async function submitGuestSignup() {
@@ -295,7 +297,7 @@
     try {
       const consent = needsWaiver ? {
         version: $waiverStore.version,
-        signature_name: signatureName,
+        signature_name: isMinor ? minorAssent.trim() || null : signatureName,
         is_minor: isMinor,
         parent_guardian_name: isMinor ? parentGuardianName : null,
         parent_guardian_email: isMinor ? parentGuardianEmail : null,
@@ -588,11 +590,11 @@
 
               {#if isMinor}
                 <div class="form-group">
-                  <label for="signature">Your Full Name (volunteer assent)</label>
+                  <label for="signature">Your Full Name (optional volunteer assent)</label>
                   <input
                     type="text"
                     id="signature"
-                    bind:value={signatureName}
+                    bind:value={minorAssent}
                     placeholder="Your Full Name"
                     disabled={submitting}
                   />
@@ -635,7 +637,7 @@
                     />
                   </div>
                   <p class="parent-attestation">
-                    I am the parent or legal guardian of <strong>{signatureName || 'the volunteer'}</strong> and I have read and agree to the waiver above on their behalf.
+                    I am the parent or legal guardian of <strong>{[$auth.profile?.first_name, $auth.profile?.last_name].filter(Boolean).join(' ') || 'the volunteer'}</strong> and I have read and agree to the waiver above on their behalf.
                   </p>
                   <div class="form-group">
                     <label for="parent-signature">Parent/Guardian Digital Signature (Full Name) *</label>
