@@ -60,3 +60,28 @@ BEGIN
 END
 $$;
 ROLLBACK;
+
+INSERT INTO auth.users (id, email) VALUES
+  ('00000000-0000-4000-8000-000000000005', 'leader-profile@example.invalid'),
+  ('00000000-0000-4000-8000-000000000006', 'other-profile@example.invalid');
+UPDATE profiles SET role = 'volunteer_leader'
+WHERE id = '00000000-0000-4000-8000-000000000005';
+INSERT INTO volunteer_roles (id, name, positions_total, leader_id)
+VALUES ('00000000-0000-4000-8000-000000000007', 'Profile visibility fixture', 2,
+  '00000000-0000-4000-8000-000000000005');
+INSERT INTO signups (volunteer_id, role_id) VALUES
+  ('00000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000007');
+
+BEGIN;
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-000000000001', true);
+DO $$
+BEGIN
+  IF (SELECT array_agg(id::text ORDER BY id) FROM profiles) IS DISTINCT FROM ARRAY[
+    '00000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000005'
+  ] THEN
+    RAISE EXCEPTION 'Volunteers should see only their own profile and their assigned leader';
+  END IF;
+END
+$$;
+ROLLBACK;
