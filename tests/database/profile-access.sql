@@ -61,6 +61,7 @@ END
 $$;
 ROLLBACK;
 
+BEGIN;
 INSERT INTO auth.users (id, email) VALUES
   ('00000000-0000-4000-8000-000000000005', 'leader-profile@example.invalid'),
   ('00000000-0000-4000-8000-000000000006', 'other-profile@example.invalid');
@@ -72,7 +73,6 @@ VALUES ('00000000-0000-4000-8000-000000000007', 'Profile visibility fixture', 2,
 INSERT INTO signups (volunteer_id, role_id) VALUES
   ('00000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000007');
 
-BEGIN;
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-000000000001', true);
 DO $$
