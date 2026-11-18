@@ -182,11 +182,13 @@ test('MG-07 signup requires complete guardian consent and stores it once', () =>
   const minor = '00000000-0000-4000-8000-000000000031';
   const adult = '00000000-0000-4000-8000-000000000032';
   const roleId = '00000000-0000-4000-8000-000000000033';
+  const minorWithoutAssent = '00000000-0000-4000-8000-000000000034';
   const fixture = sql('patched', ['-c', `
     INSERT INTO auth.users (id, email) VALUES
-      ('${minor}', 'minor@example.invalid'), ('${adult}', 'adult@example.invalid');
+      ('${minor}', 'minor@example.invalid'), ('${adult}', 'adult@example.invalid'),
+      ('${minorWithoutAssent}', 'no-assent@example.invalid');
     INSERT INTO volunteer_roles (id, name, event_date, start_time, end_time, positions_total)
-    VALUES ('${roleId}', 'Guardian fixture', '2099-04-18', '08:00', '09:00', 2);
+    VALUES ('${roleId}', 'Guardian fixture', '2099-04-18', '08:00', '09:00', 3);
   `]);
   expect(fixture.status, fixture.stderr).toBe(0);
 
@@ -209,9 +211,8 @@ test('MG-07 signup requires complete guardian consent and stores it once', () =>
       expect(rejected.stderr).toContain('Parent or guardian consent is required');
     }
   }
-  const blankSignature = confirm(minor, { ...consent, signature_name: '' });
+  const blankSignature = confirm(adult, { version: 1, is_minor: false, signature_name: '' });
   expect(blankSignature.status).not.toBe(0);
-  // MG-03: independent confirmation of the rejection behind the browser xfail.
   expect(blankSignature.stderr).toContain('Review and sign the current waiver');
   const before = sql('patched', ['-Atc', `SELECT
     (SELECT count(*) FROM waivers WHERE volunteer_id = '${minor}'),
@@ -221,6 +222,7 @@ test('MG-07 signup requires complete guardian consent and stores it once', () =>
   for (const [volunteer, fields, created] of [
     [minor, consent, 'true'],
     [minor, consent, 'false'],
+    [minorWithoutAssent, { ...consent, signature_name: '   ' }, 'true'],
     [adult, { version: 1, signature_name: 'Fixture Adult', is_minor: false }, 'true'],
   ]) {
     const saved = confirm(volunteer, fields);
@@ -228,10 +230,13 @@ test('MG-07 signup requires complete guardian consent and stores it once', () =>
     expect(saved.stdout.trim().split('\n').at(-1)).toBe(created);
   }
 
-  const stored = sql('patched', ['-Atc', `SELECT parent_guardian_name, parent_guardian_email,
+  const stored = sql('patched', ['-Atc', `SELECT signature_name, parent_guardian_name, parent_guardian_email,
     parent_signature_name, parent_guardian_phone IS NULL, parent_signed_at IS NOT NULL
     FROM waivers WHERE volunteer_id = '${minor}'`]);
-  expect(stored.stdout.trim()).toBe('Fixture Guardian|guardian@example.invalid|Fixture Signature|t|t');
+  expect(stored.stdout.trim()).toBe('Fixture Volunteer|Fixture Guardian|guardian@example.invalid|Fixture Signature|t|t');
+  const absentAssent = sql('patched', ['-Atc', `SELECT signature_name IS NULL, parent_signature_name
+    FROM waivers WHERE volunteer_id = '${minorWithoutAssent}'`]);
+  expect(absentAssent.stdout.trim()).toBe('t|Fixture Signature');
   const adultStored = sql('patched', ['-Atc', `SELECT count(*) FROM waivers WHERE volunteer_id = '${adult}'
     AND parent_guardian_name IS NULL AND parent_guardian_email IS NULL
     AND parent_guardian_phone IS NULL AND parent_signature_name IS NULL AND parent_signed_at IS NULL`]);

@@ -56,7 +56,7 @@ export async function createVolunteerAndSignup(pii, roleId, waiverVersion) {
 
   const { created } = await signups.confirmSignup(roleId, phone, {
     version: waiverVersion,
-    signature_name: volunteerName,
+    signature_name: is_minor ? null : volunteerName,
     is_minor,
     parent_guardian_name,
     parent_guardian_email,

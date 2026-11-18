@@ -56,10 +56,10 @@ async function fillGuardian(page, name = guardian.parent_guardian_name) {
   await page.getByRole('checkbox', { name: /I have read/i }).check();
 }
 
-function mockSignup(backend, emails, result = { body: { signup: { id: 'fixture-seat' }, created: true } }) {
+function mockSignup(backend, emails, result = { body: { signup: { id: 'fixture-seat' }, created: true } }, assent = null) {
   backend.handle('POST', signup, (request) => {
     expect(request.postDataJSON().p_consent).toMatchObject({
-      version: waiver.version, is_minor: true, signature_name: 'Test Volunteer', ...guardian,
+      version: waiver.version, is_minor: true, signature_name: assent, ...guardian,
     });
     return result;
   });
@@ -129,20 +129,18 @@ for (const outcome of ['created', 'retry', 'rejected']) {
   });
 }
 
-test('MG-03 blank optional volunteer assent should still allow guardian consent', async ({ page, backend }) => {
-  const submit = await openForm(page, backend, 'signed-in');
-  await fillGuardian(page);
-  await page.getByLabel(/volunteer assent/i).fill('');
-  backend.handle('POST', signup, (request) => request.postDataJSON().p_consent.signature_name
-    ? { body: { signup: { id: 'fixture-seat' }, created: false } }
-    : { body: { message: 'Review and sign the current waiver' }, status: 400 });
-  await expect(submit).toBeEnabled();
-  await submit.click();
-  await expect.poll(() => backend.calls('POST', signup)).toBe(1);
-  // Signup.svelte:298 forwards blank assent, which the real RPC rejects (MG database check).
-  test.fail();
-  await expect(page.getByText("You're all set!")).toBeVisible({ timeout: 1500 });
-});
+for (const assent of ['', '  Test Volunteer  ']) {
+  test(`MG-03 guardian consent works with ${assent ? 'explicit' : 'blank'} volunteer assent`, async ({ page, backend }) => {
+    const submit = await openForm(page, backend, 'signed-in');
+    await fillGuardian(page);
+    const field = page.getByLabel(/volunteer assent/i);
+    await expect(field).toHaveValue('');
+    await field.fill(assent);
+    mockSignup(backend, [], { body: { signup: { id: 'fixture-seat' }, created: false } }, assent.trim() || null);
+    await submit.click();
+    await expect(page.getByText("You're all set!")).toBeVisible();
+  });
+}
 
 for (const path of ['guest', 'browse']) {
   test(`MG-04 ${path} immediate session sends guardian consent and one role email`, async ({ page, backend }) => {
