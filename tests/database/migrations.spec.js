@@ -9,10 +9,10 @@ const image = 'postgres:17-alpine';
 const migrationDirectory = 'supabase/migrations';
 const migrations = readdirSync(migrationDirectory).filter((file) => file.endsWith('.sql')).sort();
 const baselinePatches = [
-  'ADD_EMERGENCY_CONTACT.sql',
-  'ADD_VOLUNTEER_LEADER_ROLE.sql',
-  'ADD_LEADER_DOMAINS_SAFE.sql',
-  'ADD_TEAM_CLUB_AFFILIATION.sql',
+  'supabase/bootstrap/ADD_EMERGENCY_CONTACT.sql',
+  'supabase/bootstrap/ADD_VOLUNTEER_LEADER_ROLE.sql',
+  'supabase/bootstrap/ADD_LEADER_DOMAINS_SAFE.sql',
+  'supabase/bootstrap/ADD_TEAM_CLUB_AFFILIATION.sql',
 ];
 
 function docker(args) {
@@ -34,7 +34,7 @@ function bootstrap(database) {
   const creation = sql('postgres', ['-c', `CREATE DATABASE ${database}`]);
   expect(creation.status, creation.stderr).toBe(0);
   apply(database, 'tests/database/auth-baseline.sql');
-  apply(database, 'SUPABASE_SCHEMA.sql');
+  apply(database, 'supabase/bootstrap/SUPABASE_SCHEMA.sql');
 }
 
 test.describe.configure({ mode: 'serial', timeout: 60000 });
@@ -62,7 +62,7 @@ test('documented bootstrap supports all timestamped migrations', () => {
   if (migration.status !== 0) {
     expect(migration.stderr).toMatch(/volunteer_leader_domains|team_club_affiliations|(?:column|attribute).*leader_id/);
   }
-  // DEP-01: the signup-policy migration requires leader columns and domains defined in root patches.
+  // DEP-01: the signup-policy migration requires leader columns and domains defined in bootstrap patches.
   test.fail();
   expect(migration.status, migration.stderr).toBe(0);
 });

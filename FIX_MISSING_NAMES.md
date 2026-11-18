@@ -71,7 +71,7 @@ if (!$auth.profile?.first_name || !$auth.profile?.last_name) {
 
 ## Prevention
 
-The database trigger is now set up correctly (see `SUPABASE_TRIGGER_FIX.sql`), so all new signups will automatically have first_name and last_name populated from the signup form.
+The database trigger is now set up correctly (see `supabase/manual/SUPABASE_TRIGGER_FIX.sql`), so all new signups will automatically have first_name and last_name populated from the signup form.
 
 No additional action needed for new users! ✅
 

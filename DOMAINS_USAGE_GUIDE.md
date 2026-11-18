@@ -8,8 +8,8 @@ The domain system organizes volunteer roles into logical groupings (e.g., "Cours
 
 Before using domains, you **must** run these SQL scripts in Supabase:
 
-1. **COMPLETE_VOLUNTEER_LEADER_SETUP.sql** - Enables volunteer leader role and admin permissions
-2. **ADD_LEADER_DOMAINS_SAFE.sql** - Creates the domains table and default domains
+1. **supabase/manual/COMPLETE_VOLUNTEER_LEADER_SETUP.sql** - Enables volunteer leader role and admin permissions
+2. **supabase/bootstrap/ADD_LEADER_DOMAINS_SAFE.sql** - Creates the domains table and default domains
 
 ## How to Use Domains
 

@@ -52,7 +52,7 @@ A modern, full-featured web application for managing race volunteers at bicycle 
 
 3. **Set up Supabase**
    - Create a new Supabase project
-   - Run the SQL schema from `SUPABASE_SCHEMA.sql`
+   - Run the SQL schema from `supabase/bootstrap/SUPABASE_SCHEMA.sql`
    - Copy your project URL and anon key
 
 4. **Configure environment variables**
@@ -99,7 +99,7 @@ my-website/
 │   ├── App.svelte             # Main app with router
 │   ├── app.css                # Global styles
 │   └── main.js                # Entry point
-├── SUPABASE_SCHEMA.sql        # Database schema
+├── supabase/                  # Bootstrap SQL, migrations, and Edge Functions
 ├── vercel.json                # Vercel configuration
 └── README.md
 ```

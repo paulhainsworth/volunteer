@@ -68,7 +68,7 @@
 **Tests Affected:** 5 integration tests  
 **Root Cause:** Profile creation happens async via trigger  
 **Current Fix:** Retry logic with 500ms delays (up to 2.5s total)  
-**If Still Failing:** May need to run SUPABASE_TRIGGER_FIX.sql to capture metadata
+**If Still Failing:** May need to run supabase/manual/SUPABASE_TRIGGER_FIX.sql to capture metadata
 
 ### Issue #2: Email Confirmation Testing
 **Status:** Skipped (as designed)  
@@ -90,7 +90,7 @@
 ## Next Steps
 
 ### To Complete Test Suite:
-1. Run `SUPABASE_TRIGGER_FIX.sql` in Supabase SQL Editor
+1. Run `supabase/manual/SUPABASE_TRIGGER_FIX.sql` in Supabase SQL Editor
 2. This updates the trigger to capture first_name/last_name from metadata
 3. Rerun tests: `npm test`
 

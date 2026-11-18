@@ -23,7 +23,8 @@ Berkeley Bicycle Club uses this app to staff bicycle races, collect waivers, and
 ├── .github/workflows/       # Scheduled NICA coach digest invocation
 ├── google-sheets-apps-script/ # Apps Script and HTML for the board view
 ├── public/                 # Images and volunteer-role CSV template
-├── scripts/                # Manual SQL for cron setup, backfills, and cleanup
+├── scripts/
+│   └── sql/                # Manual SQL for cron, diagnostics, and cleanup
 ├── src/
 │   ├── assets/             # Bundled source assets
 │   ├── lib/
@@ -38,7 +39,9 @@ Berkeley Bicycle Club uses this app to staff bicycle races, collect waivers, and
 │       ├── leader/         # Volunteer leader dashboard
 │       └── volunteer/      # Browse, sign up, sign waiver, manage signups
 ├── supabase/
+│   ├── bootstrap/          # Base schema and prerequisite patches exercised in tests
 │   ├── functions/          # Signup, clinic registration, email, and digests
+│   ├── manual/             # Historical patches and repair SQL
 │   └── migrations/         # Timestamped database and policy changes
 ├── tests/
 │   ├── auth/               # Magic-link request tests
@@ -52,7 +55,7 @@ Berkeley Bicycle Club uses this app to staff bicycle races, collect waivers, and
 └── test-results/           # Checked-in execution artifacts
 ```
 
-[SUPABASE_SCHEMA.sql](SUPABASE_SCHEMA.sql) is the bootstrap schema. Root-level SQL patches add and repair features such as leader domains and RLS. For example, [ADD_LEADER_DOMAINS.sql](ADD_LEADER_DOMAINS.sql) and [ADD_LEADER_DOMAINS_SAFE.sql](ADD_LEADER_DOMAINS_SAFE.sql) both address leader-domain setup.
+[supabase/bootstrap/SUPABASE_SCHEMA.sql](supabase/bootstrap/SUPABASE_SCHEMA.sql) is the bootstrap schema. Bootstrap and manual SQL add or repair features such as leader domains and RLS. For example, [supabase/manual/ADD_LEADER_DOMAINS.sql](supabase/manual/ADD_LEADER_DOMAINS.sql) and [supabase/bootstrap/ADD_LEADER_DOMAINS_SAFE.sql](supabase/bootstrap/ADD_LEADER_DOMAINS_SAFE.sql) both address leader-domain setup.
 
 ### Entry points and data flow
 
@@ -65,7 +68,7 @@ Berkeley Bicycle Club uses this app to staff bicycle races, collect waivers, and
 | [src/routes/admin/RolesList.svelte](src/routes/admin/RolesList.svelte), [src/routes/admin/VolunteersList.svelte](src/routes/admin/VolunteersList.svelte), [src/routes/leader/Dashboard.svelte](src/routes/leader/Dashboard.svelte) | Own roster management, including adding volunteers to roles through database writes and Edge Function calls. |
 | [src/routes/KidsClinic.svelte](src/routes/KidsClinic.svelte), [src/lib/submitKidsClinicSignup.js](src/lib/submitKidsClinicSignup.js) | Submit public clinic registration and waiver information to the `submit-kids-clinic-signup` function, which writes `kids_clinic_signups` and can send email. |
 | [src/routes/Contacts.svelte](src/routes/Contacts.svelte), [src/routes/Board.svelte](src/routes/Board.svelte) | Contacts calls `search_volunteer_contacts`. The board route presents the external board view. See the [Apps Script setup](google-sheets-apps-script/README.md). |
-| [supabase/functions/](supabase/functions/), [.github/workflows/nica-coach-digest-cron.yml](.github/workflows/nica-coach-digest-cron.yml), [scripts/](scripts/) | Edge Functions integrate with Resend and Slack. GitHub Actions invokes the NICA digest. SQL scripts document Supabase cron for the daily admin summary and an alternate NICA digest scheduler. |
+| [supabase/functions/](supabase/functions/), [.github/workflows/nica-coach-digest-cron.yml](.github/workflows/nica-coach-digest-cron.yml), [scripts/sql/](scripts/sql/) | Edge Functions integrate with Resend and Slack. GitHub Actions invokes the NICA digest. SQL scripts document Supabase cron for the daily admin summary and an alternate NICA digest scheduler. |
 
 ### Configuration
 
@@ -83,7 +86,7 @@ Function names in the table refer to `supabase/functions/<name>/index.ts`.
 ### Conventions and maintenance
 
 - Route and component files use PascalCase. State generally lives in Svelte stores. [src/app.css](src/app.css) defines global styles, and components use scoped CSS. [jsconfig.json](jsconfig.json) configures editor JavaScript checking. [package.json](package.json) defines no lint or format scripts.
-- Supabase setup spans the bootstrap schema, manual root SQL patches, and timestamped migrations. Which patches have already run in production needs confirmation. The Quick Start references an untracked `.env.example` and lists Node 18, which falls below the locked Vite requirement.
+- Supabase setup spans the bootstrap schema, manual SQL patches, and timestamped migrations. Which patches have already run in production needs confirmation. The Quick Start references an untracked `.env.example` and lists Node 18, which falls below the locked Vite requirement.
 - `npm audit --package-lock-only` reported 11 affected packages (one critical, eight high, two moderate), including jsPDF, Vite, and Svelte. Production reachability remains unverified.
 - The largest pages are `src/routes/admin/RolesList.svelte` (3,066 lines), `src/routes/admin/VolunteersList.svelte` (2,570), and `src/routes/leader/Dashboard.svelte` (1,983). The two admin pages have parallel create-volunteer-and-signup flows.
 - `src/routes/auth/Signup.svelte` and `src/routes/auth/ResetPassword.svelte` are absent from the current route table. `src/lib/Counter.svelte` appears unused (inferred from the absence of imports). The Slack helper invokes `notify-slack-signup`, whose source is absent from this checkout.
@@ -96,6 +99,6 @@ Function names in the table refer to `supabase/functions/<name>/index.ts`.
 
 ### Open questions
 
-1. What schema baseline, root SQL patches, and RLS policies are applied in production, and how should a new environment reproduce them?
+1. What schema baseline, bootstrap and manual patches, and RLS policies are applied in production, and how should a new environment reproduce them?
 2. Which Vercel and Supabase projects serve production and staging, and which environment can engineers use to test signups and outbound notifications?
 3. Which Edge Functions and schedulers are active in production, including the externally referenced `notify-slack-signup` function and the alternative NICA digest schedulers?

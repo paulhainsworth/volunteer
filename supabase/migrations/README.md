@@ -1,5 +1,7 @@
 # Database migrations
 
+See the [SQL layout](../README.md) for bootstrap prerequisites, historical patches, and operational scripts.
+
 Run migrations against your Supabase database so the app schema is up to date.
 
 ## Option A: Supabase Dashboard (SQL Editor)
