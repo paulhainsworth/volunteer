@@ -21,19 +21,21 @@ jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - name: POST send-nica-coach-digest
         env:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
         run: |
+          set -o pipefail
           test -n "${SUPABASE_URL}" && test -n "${SUPABASE_SERVICE_ROLE_KEY}" || { echo "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in repo secrets"; exit 1; }
           BODY='{"source":"github-actions"}'
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.force }}" = "true" ]; then
             BODY='{"source":"github-actions","force":true}'
           fi
           echo "POST body: ${BODY}"
-          curl -sS -f -X POST \
+          curl -sS -f --max-time 120 -X POST \
             "${SUPABASE_URL}/functions/v1/send-nica-coach-digest" \
             -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
             -H "Content-Type: application/json" \
-            -d "${BODY}"
+            -d "${BODY}" | python3 scripts/check-nica-digest-response.py
