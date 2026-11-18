@@ -313,39 +313,6 @@ function createAuthStore() {
       return s;
     },
 
-    signUp: async (email, password, firstName, lastName, role = 'volunteer') => {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            first_name: firstName,
-            last_name: lastName,
-            role
-          }
-        }
-      });
-
-      if (error) throw error;
-
-      if (data.user) {
-        await new Promise(resolve => setTimeout(resolve, 500));
-      }
-
-      return data;
-    },
-
-    /** @deprecated Use signInWithMagicLink instead - password auth removed */
-    signIn: async (email, password) => {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password
-      });
-      if (error) throw error;
-      await supabase.from('profiles').update({ last_login: new Date().toISOString() }).eq('id', data.user.id);
-      return data;
-    },
-
     signInWithMagicLink: async (email) => {
       const redirectTo = typeof window !== 'undefined' ? window.location.origin + '/' : '';
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -411,20 +378,6 @@ function createAuthStore() {
         }
         set({ user: null, profile: null, loading: false, isAdmin: false });
       }
-    },
-
-    /** @deprecated Password auth removed - use signInWithMagicLink */
-    resetPassword: async (email) => {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/#/auth/reset-password`
-      });
-      if (error) throw error;
-    },
-
-    /** @deprecated Password auth removed */
-    updatePassword: async (newPassword) => {
-      const { error } = await supabase.auth.updateUser({ password: newPassword });
-      if (error) throw error;
     }
   };
 }

@@ -43,6 +43,7 @@
   };
   let guestSubmitting = false;
   let guestError = '';
+  let awaitingVerification = false;
   let guestWaiverText = '';
   let guestWaiverLoading = false;
   let guestWaiverAgreed = false;
@@ -58,7 +59,6 @@
   let parentGuardianEmail = '';
   let parentGuardianPhone = '';
   let parentSignatureName = '';
-  const MINOR_PROTOTYPE = true; // when true, minor path does not call backend
   $: showWaiverForDemo = typeof window !== 'undefined' && new URLSearchParams(window.location.hash.split('?')[1] || '').get('demoWaiver') === '1';
 
   // Extract UUID from params.id; share dialogs sometimes append text like " Sign up to volunteer: Role Name"
@@ -79,7 +79,7 @@
 
       if (needsWaiver) {
         const currentWaiver = await waiverStore.fetchCurrentWaiver();
-        waiverText = currentWaiver.text;
+        waiverText = currentWaiver.waiver_text;
       } else {
         waiverText = '';
       }
@@ -205,8 +205,18 @@
           parent_guardian_phone: guestIsMinor ? guestParentGuardianPhone?.trim() || null : null,
           parent_signature_name: guestIsMinor ? guestParentSignatureName?.trim() || null : null
         },
-        roleId
+        roleId,
+        $waiverStore.version
       );
+
+      if (result.pendingVerification) {
+        awaitingVerification = true;
+        return;
+      }
+      if (!result.created) {
+        success = true;
+        return;
+      }
 
       sendRoleConfirmationEmail({
         to: result.email,
@@ -273,11 +283,6 @@
         error = 'Parent/guardian must sign (enter their full name) for volunteers under 18';
         return;
       }
-      if (MINOR_PROTOTYPE) {
-        error = '';
-        alert('Prototype: parent consent would be saved here. Backend not connected yet.');
-        return;
-      }
     }
 
     if (showWaiverForDemo) {
@@ -288,21 +293,34 @@
     submitting = true;
 
     try {
-      // Sign waiver if needed
-      if (needsWaiver) {
-        await waiverStore.signWaiver($auth.user.id, signatureName);
+      const consent = needsWaiver ? {
+        version: $waiverStore.version,
+        signature_name: signatureName,
+        is_minor: isMinor,
+        parent_guardian_name: isMinor ? parentGuardianName : null,
+        parent_guardian_email: isMinor ? parentGuardianEmail : null,
+        parent_guardian_phone: isMinor ? parentGuardianPhone : null,
+        parent_signature_name: isMinor ? parentSignatureName : null
+      } : null;
+      const { created } = await signups.confirmSignup(roleId, phone, consent);
+      if (created) {
+        sendRoleConfirmationEmail({
+          to: $auth.profile?.email || $auth.user?.email,
+          first_name: $auth.profile?.first_name || 'there',
+          role,
+          roleId
+        }).catch((err) => console.error('Confirmation email failed:', err));
+        if (isMinor && parentGuardianEmail.trim()) {
+          sendParentGuardianConfirmationEmail({
+            to: parentGuardianEmail.trim(),
+            parent_guardian_name: parentGuardianName.trim(),
+            volunteer_first_name: $auth.profile?.first_name,
+            volunteer_last_name: $auth.profile?.last_name,
+            role,
+            roleId
+          }).catch((err) => console.error('Parent/guardian confirmation email failed:', err));
+        }
       }
-
-      // Create signup
-      await signups.createSignup($auth.user.id, roleId, phone || null);
-
-      // Send confirmation email
-      sendRoleConfirmationEmail({
-        to: $auth.profile?.email || $auth.user?.email,
-        first_name: $auth.profile?.first_name || 'there',
-        role,
-        roleId
-      }).catch((err) => console.error('Confirmation email failed:', err));
 
       success = true;
 
@@ -325,6 +343,11 @@
       <h2>Error</h2>
       <p>{error}</p>
       <a href="#/volunteer" class="btn btn-primary">Back to Opportunities</a>
+    </div>
+  {:else if awaitingVerification}
+    <div class="success-card" role="status">
+      <h2>Check your email to finish signing up</h2>
+      <p>Follow the account confirmation link, then return to this role to confirm your signup. A spot has not been reserved.</p>
     </div>
   {:else if success}
     <div class="success-card">

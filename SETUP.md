@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Node.js (v18 or higher)
+- Node.js 22.12 or later on the Node 22 line. With nvm, run `nvm install` and `nvm use` from the repo root.
 - npm or yarn
 - A Supabase account (free tier is fine)
 - A Vercel account (for deployment)

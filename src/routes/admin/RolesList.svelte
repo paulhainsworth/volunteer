@@ -6,8 +6,8 @@ import { affiliations } from '../../lib/stores/affiliations';
 import { auth } from '../../lib/stores/auth';
 import { supabase } from '../../lib/supabaseClient';
 import { getUserPostgrestClient } from '../../lib/supabaseUserRest';
-import { sendWelcomeEmail } from '../../lib/volunteerSignup';
-import { notifySlackSignup } from '../../lib/notifySlackSignup';
+import { createVolunteerAsAdmin } from '../../lib/adminVolunteerSignup';
+
 import { getEdgeInvokeErrorMessage } from '../../lib/edgeFunctionError';
 import { push } from 'svelte-spa-router';
 import RoleForm from '../../lib/components/RoleForm.svelte';
@@ -399,43 +399,6 @@ import {
     }
   }
 
-  async function ensureActiveAdminSession() {
-    const { data: sessionData } = await supabase.auth.getSession();
-    if (!sessionData?.session) {
-      throw new Error('Your admin session is not active in this tab. Please refresh this page or sign in again, then retry.');
-    }
-
-    const session = sessionData.session;
-    const expiresAt = session.expires_at || 0;
-    const nowInSeconds = Math.floor(Date.now() / 1000);
-
-    // Avoid a blocking refresh when the current token is still comfortably valid.
-    if (expiresAt > nowInSeconds + 300) {
-      return session;
-    }
-
-    const refreshResult = await Promise.race([
-      supabase.auth.refreshSession(),
-      new Promise((resolve) => setTimeout(() => resolve({ data: { session: null }, error: new Error('Session refresh timed out') }), 5000))
-    ]);
-
-    if (refreshResult?.data?.session) {
-      return refreshResult.data.session;
-    }
-
-    if (expiresAt > nowInSeconds + 60) {
-      return session;
-    }
-
-    throw new Error('Your admin session expired. Please refresh this page or sign in again, then retry.');
-  }
-
-  function sendWelcomeEmailInBackground(options) {
-    void sendWelcomeEmail(options).catch((err) => {
-      console.warn('Welcome email did not complete:', err);
-    });
-  }
-
   async function addVolunteerToExpandedRole(role) {
     const roleId = role.id;
     const form = inlineVolunteerForms[roleId] || emptyInlineVolunteerForm();
@@ -484,42 +447,13 @@ import {
     };
 
     try {
-      const activeSession = await ensureActiveAdminSession();
-
-      const body = {
+      await createVolunteerAsAdmin({
         role_id: roleId,
         email,
         first_name: firstName,
         last_name: lastName,
         phone: phone || null,
         team_club_affiliation_id: affiliationId
-      };
-
-      const { data: fnData, error: fnError } = await supabase.functions.invoke('create-volunteer-and-signup', {
-        body,
-        headers: {
-          Authorization: `Bearer ${activeSession.access_token}`
-        }
-      });
-      if (fnError) throw fnError;
-      if (fnData?.error) {
-        throw new Error(typeof fnData.error === 'string' ? fnData.error : fnData.error?.message || 'Failed to create volunteer');
-      }
-
-      const volunteerId = fnData?.volunteerId;
-      if (!volunteerId) throw new Error('Volunteer creation failed.');
-
-      notifySlackSignup({
-        role_id: roleId,
-        volunteer_id: volunteerId,
-        volunteer_name: [firstName, lastName].filter(Boolean).join(' ').trim() || undefined,
-        volunteer_email: email
-      }).catch(() => {});
-
-      sendWelcomeEmailInBackground({
-        to: email,
-        first_name: firstName,
-        promptWaiverAndEmergencyContact: true
       });
 
       inlineAddStates = {

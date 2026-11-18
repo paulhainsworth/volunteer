@@ -55,6 +55,7 @@
   };
   let piiSubmitting = false;
   let piiError = '';
+  let awaitingVerification = false;
   let piiWaiverText = '';
   let piiWaiverAgreed = false;
   let piiWaiverLoading = false;
@@ -457,6 +458,7 @@
         team_club_affiliation_id: ''
       };
       piiError = '';
+      awaitingVerification = false;
       piiWaiverText = '';
       piiWaiverAgreed = false;
       piiIsMinor = false;
@@ -487,6 +489,7 @@
     piiParentGuardianPhone = '';
     piiParentSignatureName = '';
     piiError = '';
+    awaitingVerification = false;
     piiSubmitting = false;
   }
 
@@ -525,6 +528,7 @@
 
     piiSubmitting = true;
     piiError = '';
+    awaitingVerification = false;
 
     try {
       const result = await createVolunteerAndSignup(
@@ -542,8 +546,19 @@
           parent_guardian_phone: piiIsMinor ? (piiParentGuardianPhone?.trim() || null) : null,
           parent_signature_name: piiIsMinor ? piiParentSignatureName?.trim() || null : null
         },
-        piiRole.id
+        piiRole.id,
+        $waiverStore.version
       );
+
+      if (result.pendingVerification) {
+        awaitingVerification = true;
+        return;
+      }
+      if (!result.created) {
+        closePiiModal();
+        push('/my-signups');
+        return;
+      }
 
       sendRoleConfirmationEmail({
         to: result.email,
@@ -1036,6 +1051,11 @@
         <h2>Sign Up for {piiRole.name}</h2>
         <p class="modal-subtitle">Enter your information to complete your signup</p>
       </div>
+      {#if awaitingVerification}
+        <div class="modal-body" role="status">
+          <p>Check your email to finish signing up. Follow the account confirmation link and return to this role. A spot has not been reserved.</p>
+        </div>
+      {:else}
       <div class="modal-body">
         {#if piiError}
           <div class="alert alert-error">{piiError}</div>
@@ -1172,6 +1192,7 @@
           {piiSubmitting ? 'Signing up...' : 'Complete Signup'}
         </button>
       </div>
+      {/if}
     </div>
   </div>
 {/if}

@@ -3,6 +3,7 @@ BEGIN
   IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'anon') THEN
     CREATE ROLE anon NOLOGIN;
     CREATE ROLE authenticated NOLOGIN;
+    CREATE ROLE service_role NOLOGIN;
   END IF;
 END
 $$;

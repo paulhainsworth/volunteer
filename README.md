@@ -35,7 +35,7 @@ Start with the [documentation index](docs/README.md), [local development guide](
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 22.12 or later on the Node 22 line. With nvm, run `nvm install` and `nvm use` from the repo root.
 - A Supabase account (free)
 - A Vercel account (free)
 
