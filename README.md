@@ -54,7 +54,7 @@ Start with the [documentation index](docs/README.md), [local development guide](
 
 3. **Set up Supabase**
    - Create a new Supabase project
-   - Run the SQL schema from `supabase/bootstrap/SUPABASE_SCHEMA.sql`
+   - Follow the [database setup guide](docs/database-bootstrap.md) for prerequisites and migrations
    - Copy your project URL and anon key
 
 4. **Configure environment variables**

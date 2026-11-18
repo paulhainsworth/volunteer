@@ -60,16 +60,23 @@ test.afterAll(() => {
   docker(['rm', '-f', name]);
 });
 
-test('documented bootstrap supports all timestamped migrations', () => {
-  bootstrap('documented');
-  const inputs = migrations.flatMap((file) => ['-f', `/repo/${migrationDirectory}/${file}`]);
-  const migration = sql('documented', inputs);
-  if (migration.status !== 0) {
-    expect(migration.stderr).toMatch(/volunteer_leader_domains|team_club_affiliations|(?:column|attribute).*leader_id/);
-  }
-  // DEP-01: the signup-policy migration requires leader columns and domains defined in bootstrap patches.
-  test.fail();
-  expect(migration.status, migration.stderr).toBe(0);
+test('canonical bootstrap provisions a fresh local Supabase database', () => {
+  const created = sql('postgres', ['-c', 'CREATE DATABASE fresh']);
+  expect(created.status, created.stderr).toBe(0);
+  apply('fresh', 'tests/database/auth-baseline.sql');
+  const setup = docker(['exec', '-e', 'PGDATABASE=fresh', '-e', 'PGUSER=postgres', name,
+    'sh', '/repo/scripts/bootstrap-local-db.sh']);
+  expect(setup.status, setup.stderr).toBe(0);
+  const objects = sql('fresh', ['-Atc', `SELECT
+    to_regclass('public.nica_coaches'),
+    to_regprocedure('public.get_confirmed_signup_counts(uuid[])') IS NOT NULL,
+    to_regprocedure('public.volunteer_waiver_is_current(uuid)') IS NOT NULL`]);
+  expect(objects.stdout.trim()).toBe('nica_coaches|t|t');
+
+  const repeated = docker(['exec', '-e', 'PGDATABASE=fresh', '-e', 'PGUSER=postgres', name,
+    'sh', '/repo/scripts/bootstrap-local-db.sh']);
+  expect(repeated.status).not.toBe(0);
+  expect(repeated.stderr).toContain('Bootstrap requires an empty volunteer schema');
 });
 
 test('explicit baseline patches support migrations, profile editing, and scoped cleanup', () => {

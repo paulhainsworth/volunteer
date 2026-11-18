@@ -20,11 +20,7 @@
 
 ### Run the Database Schema
 
-1. In your Supabase project, navigate to the SQL Editor (left sidebar)
-2. Copy the entire contents of `supabase/bootstrap/SUPABASE_SCHEMA.sql` from this project
-3. Paste it into the SQL Editor
-4. Click "Run" to execute the schema
-5. Verify no errors appeared
+Follow the [database setup guide](docs/database-bootstrap.md) for the local bootstrap or a hosted project.
 
 ### Get Your Supabase Credentials
 

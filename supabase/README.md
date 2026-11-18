@@ -17,5 +17,6 @@ The [disposable PostgreSQL test](../tests/database/migrations.spec.js) uses a sy
 3. [Volunteer leader role](bootstrap/ADD_VOLUNTEER_LEADER_ROLE.sql)
 4. [Leader domains](bootstrap/ADD_LEADER_DOMAINS_SAFE.sql)
 5. [Team and club affiliations](bootstrap/ADD_TEAM_CLUB_AFFILIATION.sql)
+6. [Public signup counts](manual/ADD_PUBLIC_SIGNUP_COUNTS_RLS.sql)
 
 The test covers prerequisite relationships and preservation of seeded data. A production baseline still requires verification against the target project's migration history and effective policies. See [issue #6](https://github.com/paulhainsworth/volunteer/issues/6) and the [migration guide](migrations/README.md).
