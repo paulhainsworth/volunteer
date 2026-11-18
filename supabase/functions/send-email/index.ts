@@ -75,10 +75,9 @@ serve(async (req) => {
     })
 
     if (!res.ok) {
-      const error = await res.text()
-      console.error('Resend API error:', error)
+      console.error('Mail provider rejected delivery', { status: res.status })
       return new Response(
-        JSON.stringify({ error: 'Failed to send email', details: error }),
+        JSON.stringify({ error: 'Failed to send email' }),
         { 
           status: res.status,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -87,7 +86,6 @@ serve(async (req) => {
     }
 
     const data = await res.json()
-    console.log('Email sent successfully:', data)
 
     return new Response(
       JSON.stringify({ success: true, id: data.id }),
@@ -96,10 +94,10 @@ serve(async (req) => {
       }
     )
 
-  } catch (error) {
-    console.error('Error in send-email function:', error)
+  } catch {
+    console.error('Mail delivery did not complete')
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: 'Failed to send email' }),
       { 
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }

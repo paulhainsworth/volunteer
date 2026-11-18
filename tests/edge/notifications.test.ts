@@ -31,7 +31,7 @@ Deno.test('an authorized invocation respects a disabled daily summary', async ()
 await import('../../supabase/functions/send-email/index.ts');
 const sendEmail = handler();
 
-Deno.test('xfail MG-09: guardian mail provider failures should redact their downstream response', async () => {
+Deno.test('MG-09 guardian mail provider failures redact downstream details', async () => {
   setClient(() => ({ auth: { getUser: () => ({ data: { user: { id: 'fixture-user' } }, error: null }) } }));
   const providerDetails = 'Synthetic provider diagnostic for guardian@example.invalid';
   const messages: string[] = [];
@@ -48,10 +48,11 @@ Deno.test('xfail MG-09: guardian mail provider failures should redact their down
       }),
     }));
     equal(response.status, 500);
-    // send-email/index.ts:50 forwards and logs the provider body. Require the
-    // specific known mismatch so a fix prompts removal of the xfail marker.
-    equal((await response.json()).details, providerDetails);
-    equal(messages.some((message) => message.includes(providerDetails)), true);
+    const body = await response.json();
+    equal(body.error, 'Failed to send email');
+    equal(Object.keys(body).length, 1);
+    equal(messages.length, 1);
+    equal(messages.some((message) => message.includes(providerDetails)), false);
   } finally {
     globalThis.fetch = originalFetch;
     console.error = originalError;
