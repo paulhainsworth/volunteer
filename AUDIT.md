@@ -86,7 +86,7 @@ The offline MG suite uses synthetic identities and intercepts all email delivery
 
 ## Notification monitoring follow-up
 
-[Issue #13](https://github.com/paulhainsworth/volunteer/issues/13) · Synthetic fixtures verify detection of schedule gaps longer than 45 minutes and count-only clinic receipt checks. The operations guide assigns monitoring by role. Live notification routing and complete scheduler outages still need an independent watcher. See the [operations guide](docs/operations.md#notification-monitoring) and [PR #45](https://github.com/paulhainsworth/volunteer/pull/45).
+[Issue #13](https://github.com/paulhainsworth/volunteer/issues/13) · Synthetic fixtures verify detection of schedule gaps longer than 45 minutes and count-only clinic receipt checks. The operations guide assigns monitoring by role. GitHub reports the workflow active with no scheduled run after August 11, 2026. The independently runnable freshness check detects this condition. Scheduling the check and confirming where alerts go remain open. See the [operations guide](docs/operations.md#notification-monitoring) and [PR #45](https://github.com/paulhainsworth/volunteer/pull/45).
 
 ## Five-line summary
 
