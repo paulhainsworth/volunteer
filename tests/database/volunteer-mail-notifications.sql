@@ -22,6 +22,7 @@ DECLARE
   other_account uuid := '00000000-0000-4000-8000-000000000083';
   shift_id uuid := '00000000-0000-4000-8000-000000000084';
   waiver_id uuid := '00000000-0000-4000-8000-000000000085';
+  cancellation_recipients jsonb;
   signup_id uuid := '00000000-0000-4000-8000-000000000086';
 BEGIN
   IF has_function_privilege('authenticated', 'public.claim_volunteer_mail(uuid,text,uuid)', 'EXECUTE') THEN
@@ -42,8 +43,10 @@ BEGIN
     RAISE EXCEPTION 'Both guardian notice paths must share a single claim';
   END IF;
   UPDATE signups SET status = 'cancelled' WHERE id = signup_id;
-  IF public.claim_volunteer_mail(volunteer, 'cancellation', signup_id)->'recipients'
-    IS DISTINCT FROM '["notice-admin@example.invalid"]'::jsonb THEN
+  cancellation_recipients := public.claim_volunteer_mail(volunteer, 'cancellation', signup_id)->'recipients';
+  IF cancellation_recipients IS NULL
+    OR NOT (cancellation_recipients ? 'notice-admin@example.invalid')
+    OR (cancellation_recipients ?| ARRAY['notice-volunteer@example.invalid', 'notice-other@example.invalid']) THEN
     RAISE EXCEPTION 'Cancellation notice must use staff recipients';
   END IF;
   IF public.claim_volunteer_mail(volunteer, 'cancellation', signup_id) IS NOT NULL THEN
