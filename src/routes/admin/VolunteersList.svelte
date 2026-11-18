@@ -743,22 +743,10 @@
     }
 
     try {
-      const { data: updateData, error: updateError } = await supabase
-        .from('profiles')
-        .update({ role: newRole })
-        .eq('id', userId)
-        .select();
+      const { error: updateError } = await supabase
+        .rpc('set_volunteer_profile_role', { p_profile_id: userId, p_role: newRole });
 
-      if (updateError) {
-        console.error('Update error:', updateError);
-        throw updateError;
-      }
-
-      if (!updateData || updateData.length === 0) {
-        throw new Error('No rows updated - check permissions');
-      }
-
-      console.log('Role updated successfully:', updateData);
+      if (updateError) throw updateError;
 
       // Refresh volunteer list
       await volunteers.fetchVolunteers();

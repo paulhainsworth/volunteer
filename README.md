@@ -68,12 +68,8 @@ Start with the [documentation index](docs/README.md), [local development guide](
    npm run dev
    ```
 
-6. **Create default admin account**
-   - In Supabase: Authentication → Add user
-   - Email: `admin@admin.com`, Password: `admin`, Auto Confirm: ✅
-   - Run SQL: `UPDATE profiles SET role = 'admin' WHERE email = 'admin@admin.com';`
-   - Login with admin@admin.com / admin
-   - ⚠️ Change password immediately!
+6. **Set up an administrator**
+   - [Invite and verify a named administrator](docs/admin-access.md).
 
 📖 **Full setup instructions**: See [SETUP.md](./SETUP.md)
 

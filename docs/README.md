@@ -9,4 +9,4 @@
 | Prepare a release or investigate an operational issue | [Operations runbook](operations.md), [database bootstrap](database-bootstrap.md), and [SQL cleanup](sql-cleanup.md) |
 | Find priorities, release gates, or open issues | [Production readiness roadmap](../PRODUCTION_READINESS_ROADMAP.md) and [audit](../AUDIT.md) |
 
-The local development guide is the current starting point. [SETUP.md](../SETUP.md) and [QUICKSTART.md](../QUICKSTART.md) record earlier setup assumptions, including a default administrator recipe. Use individually authorized test accounts and confirm the database baseline with the environment owner.
+Use the local development guide for setup and the [administrator access procedure](admin-access.md) for named invitations. Confirm the database baseline with the environment owner.

@@ -19,7 +19,7 @@ The browser uses hash routes such as `/#/volunteer`, `/#/auth/login`, `/#/my-sig
 
 ## Release verification
 
-Automatic Vercel Git deployments are enabled for `main`. Non-main branches, including pull request branches, skip automatic deployment while the preview pause is in effect. Review the rule in [vercel.json](../vercel.json) before resuming previews.
+Automatic Vercel Git deployments are paused for `main` and preview branches in [vercel.json](../vercel.json). Resume production auto-deploy after the required Supabase migrations and Edge Functions are ready for the frontend rollout.
 
 1. Identify the exact commit and the Vercel and Supabase targets. The frontend build, database migrations, Edge Functions, and scheduled jobs have separate deployment paths.
 2. Run `npm test` and `npm run test:release` locally. The latter builds the production bundle and exercises the browser flows with synthetic data in a local preview. Review test results and expected failures before promoting the release.
@@ -30,6 +30,10 @@ Automatic Vercel Git deployments are enabled for `main`. Non-main branches, incl
 Apply the [optional assent migration](../supabase/migrations/20261118000200_allow_optional_minor_assent.sql) before promoting its frontend. The updated role form can submit a blank minor signature when guardian consent is complete.
 
 Coordinate the [shared waiver migration](../supabase/migrations/20261118000300_enforce_shared_volunteer_waiver_policy.sql) and frontend promotion in one release window. The old standalone form requires direct writes that the migration removes. Rehearse adult and minor waiver renewal with fixture accounts, including an account with a waiver that predates the new age declaration. Older records remain in the database for reference.
+
+For the [profile role migration](../supabase/migrations/20261118000400_protect_profile_role_writes.sql), release the updated leader creation function and role-management frontend with the migration. Verify named admin access and rehearse a leader invitation on staging.
+
+Apply the [authenticated profile read migration](../supabase/migrations/20261118000800_scope_authenticated_profile_reads.sql) after the frontend switches to server-owned volunteer notifications. Legacy cancellation emails depend on client-side administrator profile reads. Verify own-profile editing and contact with an assigned leader during staging smoke checks.
 
 See [Vercel rewrites](../vercel.json), [Supabase function configuration](../supabase/config.toml), [migrations](../supabase/migrations/README.md), and the [codebase map](../CODEBASE_MAP.md#configuration).
 
