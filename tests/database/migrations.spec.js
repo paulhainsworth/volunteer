@@ -105,7 +105,7 @@ test('concurrent voluntary signup allocates the last seat once and rolls back re
   function confirm(id, role, signature, delay = 0) {
     return ['-Atc', `BEGIN; SET LOCAL ROLE authenticated;
       SELECT set_config('request.jwt.claim.sub', '${id}', true);
-      SELECT confirm_volunteer_signup('${role}', NULL, '{"version":1,"signature_name":"${signature}"}')->>'created';
+      SELECT confirm_volunteer_signup('${role}', NULL, '{"version":1,"is_minor":false,"signature_name":"${signature}"}')->>'created';
       SELECT pg_sleep(${delay}); COMMIT;`];
   }
 
@@ -241,4 +241,70 @@ test('MG-07 signup requires complete guardian consent and stores it once', () =>
     AND parent_guardian_name IS NULL AND parent_guardian_email IS NULL
     AND parent_guardian_phone IS NULL AND parent_signature_name IS NULL AND parent_signed_at IS NULL`]);
   expect(adultStored.stdout.trim()).toBe('1');
+  const adultDateScope = sql('patched', ['-qAtc', `BEGIN; SET LOCAL ROLE authenticated;
+    SELECT set_config('request.jwt.claim.sub', '${adult}', true);
+    SELECT volunteer_waiver_is_current(), volunteer_waiver_is_current('${roleId}');
+    ROLLBACK;`]);
+  expect(adultDateScope.status, adultDateScope.stderr).toBe(0);
+  expect(adultDateScope.stdout.trim().split('\n').at(-1)).toBe('f|t');
+});
+
+test('MG-08 standalone consent replaces legacy eligibility and is reusable for roles', () => {
+  const adult = '00000000-0000-4000-8000-000000000041';
+  const minor = '00000000-0000-4000-8000-000000000042';
+  const role = '00000000-0000-4000-8000-000000000043';
+  const fixture = sql('patched', ['-c', `
+    INSERT INTO auth.users (id, email) VALUES
+      ('${adult}', 'legacy-adult@example.invalid'), ('${minor}', 'standalone-minor@example.invalid');
+    INSERT INTO volunteer_roles (id, name, event_date, start_time, end_time, positions_total)
+    VALUES ('${role}', 'Waiver fixture', CURRENT_DATE + 5, '08:00', '09:00', 2);
+    INSERT INTO waivers (volunteer_id, signature_name, waiver_version, waiver_text)
+    VALUES ('${adult}', 'Legacy signature', 1, 'Fixture waiver');
+  `]);
+  expect(fixture.status, fixture.stderr).toBe(0);
+
+  function asVolunteer(volunteer, query) {
+    return sql('patched', ['-qAtc', `BEGIN; SET LOCAL ROLE authenticated;
+      SELECT set_config('request.jwt.claim.sub', '${volunteer}', true);
+      ${query}; COMMIT;`]);
+  }
+  const adultBefore = asVolunteer(adult, `SELECT volunteer_waiver_is_current(),
+    volunteer_waiver_is_current('${role}')`);
+  expect(adultBefore.status, adultBefore.stderr).toBe(0);
+  expect(adultBefore.stdout.trim().split('\n').at(-1)).toBe('f|f');
+
+  const missingDeclaration = asVolunteer(adult,
+    `SELECT sign_volunteer_waiver('{"version":1,"signature_name":"Fixture Adult"}')`);
+  expect(missingDeclaration.stderr).toContain('Declare whether the volunteer will be under 18');
+  const missingGuardian = asVolunteer(minor, `SELECT sign_volunteer_waiver('{"version":1,"is_minor":true}')`);
+  expect(missingGuardian.stderr).toContain('Parent or guardian consent is required');
+
+  const adultConsent = { version: 1, is_minor: false, signature_name: 'Fixture Adult' };
+  const minorConsent = {
+    version: 1, is_minor: true, parent_guardian_name: 'Fixture Guardian',
+    parent_guardian_email: 'guardian@example.invalid', parent_signature_name: 'Fixture Signature',
+  };
+  for (const [volunteer, consent] of [[adult, adultConsent], [minor, minorConsent]]) {
+    const saved = asVolunteer(volunteer, `
+      SELECT sign_volunteer_waiver('${JSON.stringify(consent)}');
+      SELECT volunteer_waiver_is_current(), volunteer_waiver_is_current('${role}');
+      SELECT confirm_volunteer_signup('${role}')->>'created'`);
+    expect(saved.status, saved.stderr).toBe(0);
+    expect(saved.stdout.trim().split('\n').slice(-2)).toEqual(['t|t', 'true']);
+  }
+
+  const history = sql('patched', ['-Atc', `SELECT
+    count(*) FILTER (WHERE age_assessment_date IS NULL AND declared_minor IS NULL),
+    count(*) FILTER (WHERE age_assessment_date = CURRENT_DATE AND declared_minor IS FALSE
+      AND signature_name = 'Fixture Adult' AND parent_signed_at IS NULL),
+    count(*) FILTER (WHERE age_assessment_date = CURRENT_DATE AND declared_minor IS TRUE
+      AND signature_name IS NULL AND parent_signed_at IS NOT NULL)
+    FROM waivers WHERE volunteer_id IN ('${adult}', '${minor}')`]);
+  expect(history.stdout.trim()).toBe('1|1|1');
+
+  const access = sql('patched', ['-Atc', `SELECT
+    has_table_privilege('authenticated', 'public.waivers', 'INSERT'),
+    has_function_privilege('anon', 'public.sign_volunteer_waiver(jsonb)', 'EXECUTE'),
+    has_function_privilege('authenticated', 'public.record_volunteer_waiver(uuid,date,jsonb)', 'EXECUTE')`]);
+  expect(access.stdout.trim()).toBe('f|f|f');
 });

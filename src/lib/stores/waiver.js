@@ -41,57 +41,18 @@ function createWaiverStore() {
     
     fetchCurrentWaiver,
 
-    checkWaiverStatus: async (volunteerId) => {
-      const currentWaiver = await fetchCurrentWaiver();
-      
-      const { data, error } = await supabase
-        .from('waivers')
-        .select('*')
-        .eq('volunteer_id', volunteerId)
-        .gte('waiver_version', currentWaiver.version)
-        .single();
-
-      if (error && error.code !== 'PGRST116') { // PGRST116 is "not found"
-        throw error;
-      }
-
-      return {
-        hasSigned: !!data,
-        needsToSign: !data
-      };
+    checkWaiverStatus: async (roleId = null) => {
+      const { data, error } = await withSupabaseReadTimeout(
+        () => supabase.rpc('volunteer_waiver_is_current', { p_role_id: roleId }),
+        'waiver.checkWaiverStatus'
+      );
+      if (error) throw error;
+      return { hasSigned: data === true, needsToSign: data !== true };
     },
 
-    /**
-     * @param {string} volunteerId
-     * @param {string} signatureName - volunteer's name (or minor's name for assent)
-     * @param {string|null} [ipAddress]
-     * @param {{ parent_guardian_name?: string, parent_guardian_email?: string, parent_guardian_phone?: string, parent_signature_name?: string }} [parent] - for minors
-     */
-    signWaiver: async (volunteerId, signatureName, ipAddress = null, parent = null) => {
-      const currentWaiver = await fetchCurrentWaiver();
-
-      const row = {
-        volunteer_id: volunteerId,
-        signature_name: signatureName,
-        ip_address: ipAddress,
-        waiver_version: currentWaiver.version,
-        waiver_text: currentWaiver.waiver_text
-      };
-      if (parent?.parent_guardian_name != null) row.parent_guardian_name = parent.parent_guardian_name;
-      if (parent?.parent_guardian_email != null) row.parent_guardian_email = parent.parent_guardian_email;
-      if (parent?.parent_guardian_phone != null) row.parent_guardian_phone = parent.parent_guardian_phone;
-      if (parent?.parent_signature_name != null) row.parent_signature_name = parent.parent_signature_name;
-      if (parent?.parent_guardian_name != null) row.parent_signed_at = new Date().toISOString();
-
-      const { data, error } = await supabase
-        .from('waivers')
-        .insert(row)
-        .select()
-        .single();
-
+    signWaiver: async (consent) => {
+      const { error } = await supabase.rpc('sign_volunteer_waiver', { p_consent: consent });
       if (error) throw error;
-
-      return data;
     },
 
     updateWaiverText: async (newText) => {

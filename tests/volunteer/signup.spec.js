@@ -105,7 +105,7 @@ test('a verification callback returns the volunteer to the selected role', async
 
 test('a guest signup with an immediate session submits consent and confirms the seat', async ({ page, backend }) => {
   backend.reply('GET', '/rest/v1/profiles', [profile]);
-  backend.reply('GET', '/rest/v1/waivers', { waiver_version: 1 });
+  backend.reply('POST', '/rest/v1/rpc/volunteer_waiver_is_current', true);
   backend.reply('GET', '/rest/v1/signups', []);
   backend.reply('POST', '/functions/v1/send-email', { success: true });
   backend.reply('POST', '/functions/v1/send-welcome-with-magic-link', { success: true });

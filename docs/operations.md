@@ -25,6 +25,8 @@ Automatic Vercel Git deployments are enabled for `main`. Non-main branches, incl
 
 Apply the [optional assent migration](../supabase/migrations/20261118000200_allow_optional_minor_assent.sql) before promoting its frontend. The updated role form can submit a blank minor signature when guardian consent is complete.
 
+Coordinate the [shared waiver migration](../supabase/migrations/20261118000300_enforce_shared_volunteer_waiver_policy.sql) and frontend promotion in one release window. The old standalone form requires direct writes that the migration removes. Rehearse adult and minor waiver renewal with fixture accounts, including an account with a waiver that predates the new age declaration. Older records remain in the database for reference.
+
 See [Vercel rewrites](../vercel.json), [Supabase function configuration](../supabase/config.toml), [migrations](../supabase/migrations/README.md), and the [codebase map](../CODEBASE_MAP.md#configuration).
 
 ## Triage by symptom

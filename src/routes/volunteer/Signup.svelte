@@ -71,11 +71,11 @@
     return match ? match[0] : raw;
   })();
 
-  async function loadAuthenticatedData(userId) {
+  async function loadAuthenticatedData() {
     loadingUserData = true;
 
     try {
-      const status = await waiverStore.checkWaiverStatus(userId);
+      const status = await waiverStore.checkWaiverStatus(roleId);
       needsWaiver = status.needsToSign;
 
       if (needsWaiver) {
@@ -118,7 +118,7 @@
       }
 
       if (isAuthenticated && $auth.user) {
-        await loadAuthenticatedData($auth.user.id);
+        await loadAuthenticatedData();
         const mySignups = (await signups.fetchMySignups($auth.user.id)) ?? [];
         alreadySignedUp = mySignups.some((s) => s.role_id === roleId || s.role?.id === roleId);
       }
@@ -140,7 +140,7 @@
 
   $: if (isAuthenticated && role && !hasLoadedUserData && !loadingUserData && $auth.user) {
     (async () => {
-      await loadAuthenticatedData($auth.user.id);
+      await loadAuthenticatedData();
       const mySignups = (await signups.fetchMySignups($auth.user.id)) ?? [];
       alreadySignedUp = mySignups.some((s) => s.role_id === roleId || s.role?.id === roleId);
     })();
@@ -468,7 +468,7 @@
               <div class="guest-waiver-text">{guestWaiverText}</div>
               <div class="checkbox-group minor-toggle">
                 <input type="checkbox" id="guest-under-18" bind:checked={guestIsMinor} disabled={guestSubmitting} />
-                <label for="guest-under-18">I will be under 18 on the day of the event</label>
+                <label for="guest-under-18">{role?.event_date ? 'I will be under 18 on the day of the event' : 'I am under 18 today'}</label>
               </div>
               {#if guestIsMinor}
                 <div class="guest-parent-consent-section">
@@ -584,7 +584,7 @@
                   disabled={submitting}
                 />
                 <label for="under-18">
-                  I will be under 18 on the day of the event
+                  {role?.event_date ? 'I will be under 18 on the day of the event' : 'I am under 18 today'}
                 </label>
               </div>
 

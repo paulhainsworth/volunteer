@@ -10,9 +10,12 @@
   let waiverText = '';
   let waiverAgreed = false;
   let signatureName = '';
+  let minorAssent = '';
+  let waiverVersion;
   let submitting = false;
   let returnUrl = '/my-signups';
-  let isMinor = false;
+  let ageDeclaration = '';
+  $: isMinor = ageDeclaration === 'minor';
   let parentGuardianName = '';
   let parentGuardianEmail = '';
   let parentGuardianPhone = '';
@@ -41,12 +44,13 @@
     }
 
     try {
-      const status = await waiverStore.checkWaiverStatus($auth.user.id);
+      const status = await waiverStore.checkWaiverStatus();
       if (!status.needsToSign) {
         push(returnUrl);
         return;
       }
       const current = await waiverStore.fetchCurrentWaiver();
+      waiverVersion = current?.version;
       waiverText = current?.waiver_text ?? current?.text ?? '';
       signatureName = [$auth.profile?.first_name, $auth.profile?.last_name].filter(Boolean).join(' ').trim() || '';
     } catch (err) {
@@ -58,6 +62,10 @@
 
   async function handleSubmit() {
     error = '';
+    if (!ageDeclaration) {
+      error = 'Select whether you are under 18 today.';
+      return;
+    }
     if (!waiverAgreed) {
       error = 'You must agree to the waiver to continue.';
       return;
@@ -75,20 +83,17 @@
 
     submitting = true;
     try {
-      const parentPayload = isMinor && parentGuardianName && parentGuardianEmail && parentSignatureName
-        ? {
-            parent_guardian_name: parentGuardianName.trim(),
-            parent_guardian_email: parentGuardianEmail.trim(),
-            parent_guardian_phone: parentGuardianPhone?.trim() || null,
-            parent_signature_name: parentSignatureName.trim()
-          }
-        : undefined;
-      await waiverStore.signWaiver(
-        $auth.user.id,
-        signatureName.trim() || [$auth.profile?.first_name, $auth.profile?.last_name].filter(Boolean).join(' ').trim(),
-        null,
-        parentPayload
-      );
+      await waiverStore.signWaiver({
+        version: waiverVersion,
+        is_minor: isMinor,
+        signature_name: isMinor ? minorAssent.trim() || null : signatureName.trim(),
+        ...(isMinor && {
+          parent_guardian_name: parentGuardianName.trim(),
+          parent_guardian_email: parentGuardianEmail.trim(),
+          parent_guardian_phone: parentGuardianPhone.trim() || null,
+          parent_signature_name: parentSignatureName.trim()
+        })
+      });
       if (isMinor && parentGuardianEmail?.trim()) {
         sendParentGuardianWaiverSignedEmail({
           to: parentGuardianEmail.trim(),
@@ -126,15 +131,16 @@
       <h2>Liability Waiver</h2>
       <div class="waiver-text">{waiverText}</div>
 
-      <div class="checkbox-group minor-toggle">
-        <input type="checkbox" id="under-18" bind:checked={isMinor} disabled={submitting} />
-        <label for="under-18">I will be under 18 on the day of the event</label>
-      </div>
+      <fieldset class="form-group">
+        <legend>How old are you today?</legend>
+        <label><input type="radio" name="waiver-age" value="minor" bind:group={ageDeclaration} disabled={submitting} /> I am under 18 today</label>
+        <label><input type="radio" name="waiver-age" value="adult" bind:group={ageDeclaration} disabled={submitting} /> I am 18 or older today</label>
+      </fieldset>
 
       {#if isMinor}
         <div class="form-group">
-          <label for="volunteer-sig">Your full name (volunteer assent)</label>
-          <input type="text" id="volunteer-sig" bind:value={signatureName} placeholder="Your full name" disabled={submitting} />
+          <label for="volunteer-sig">Your full name (optional volunteer assent)</label>
+          <input type="text" id="volunteer-sig" bind:value={minorAssent} placeholder="Your full name" disabled={submitting} />
         </div>
         <div class="parent-consent-section">
           <h3>Parent / legal guardian consent</h3>
@@ -157,7 +163,7 @@
             <input type="text" id="parent-sig" bind:value={parentSignatureName} placeholder="Parent/guardian full name" disabled={submitting} />
           </div>
         </div>
-      {:else}
+      {:else if ageDeclaration}
         <div class="form-group">
           <label for="adult-sig">Digital signature (full name)</label>
           <input type="text" id="adult-sig" bind:value={signatureName} placeholder="Your full name" disabled={submitting} />
@@ -182,7 +188,7 @@
         type="button"
         class="btn btn-primary"
         on:click={handleSubmit}
-        disabled={submitting || !waiverAgreed || (!isMinor && !signatureName.trim()) || (isMinor && (!parentGuardianName.trim() || !parentGuardianEmail.trim() || !parentSignatureName.trim()))}
+        disabled={submitting || !ageDeclaration || !waiverAgreed || (!isMinor && !signatureName.trim()) || (isMinor && (!parentGuardianName.trim() || !parentGuardianEmail.trim() || !parentSignatureName.trim()))}
       >
         {submitting ? 'Signing...' : 'Sign waiver'}
       </button>
