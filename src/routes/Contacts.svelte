@@ -1,9 +1,11 @@
 <script>
   import { onDestroy, onMount } from 'svelte';
   import { replace } from 'svelte-spa-router';
+  import { auth } from '../lib/stores/auth';
   import { supabase } from '../lib/supabaseClient';
   import { isContactsFeatureAvailable } from '../lib/contactsAvailability';
 
+  let allowed = false;
   let query = '';
   let results = [];
   let loading = false;
@@ -45,7 +47,7 @@
   }
 
   async function runSearch(q) {
-    if (q.length < 3) {
+    if (!allowed || q.length < 3 || q.length > 120) {
       results = [];
       loading = false;
       error = '';
@@ -76,13 +78,27 @@
 
   onMount(() => {
     redirectIfContactsExpired();
+    let active = true;
+    void auth.waitForReady().then(({ user, profile }) => {
+      if (!active) return;
+      if (!user) {
+        replace('/auth/login');
+        return;
+      }
+      allowed = ['admin', 'volunteer_leader'].includes(profile?.role);
+      if (!allowed) replace('/');
+    });
     const intervalId = setInterval(redirectIfContactsExpired, 1000);
-    return () => clearInterval(intervalId);
+    return () => {
+      active = false;
+      clearInterval(intervalId);
+    };
   });
 
   onDestroy(() => clearTimeout(debounceId));
 </script>
 
+{#if allowed}
 <div class="contacts">
   <div class="hero">
     <h1>🚴 Race Volunteer Management</h1>
@@ -95,6 +111,7 @@
       id="contacts-search"
       class="search-input"
       type="search"
+      maxlength="120"
       autocomplete="off"
       placeholder="Start typing a first name, last name, or email…"
       bind:value={query}
@@ -155,6 +172,8 @@
     {/if}
   </div>
 </div>
+
+{/if}
 
 <style>
   .contacts {
