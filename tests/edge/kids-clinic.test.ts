@@ -16,50 +16,69 @@ const registration = {
   waiver_consent: true,
 };
 
-Deno.test('clinic rejects invalid consent before contacting storage', async () => {
+Deno.test('clinic requires explicit consent before contacting storage', async () => {
   setClient(() => { throw new Error('Storage must not be used'); });
-  equal((await register(request({ ...registration, waiver_consent: false }))).status, 400);
+  for (const consent of [false, 'false', null]) {
+    equal((await register(request({ ...registration, waiver_consent: consent }))).status, 400);
+  }
 });
 
-Deno.test('clinic preserves accepted registration when the mail provider rejects delivery', async () => {
-  const rows: unknown[] = [];
+Deno.test('clinic preserves acceptance when the mail provider rejects or times out', async () => {
   setClient(() => ({
-    from(table: string) {
-      equal(table, 'kids_clinic_signups');
-      return { insert: (row: unknown) => { rows.push(row); return { error: null }; } };
+    rpc(name: string) {
+      equal(name, 'reserve_clinic_registration');
+      return { data: { id: 'registration', created: true, emailSent: false } };
     },
   }));
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = () => Promise.resolve(Response.json({ message: 'Fixture provider unavailable' }, { status: 503 }));
   try {
-    const result = await register(request(registration));
-    equal(result.status, 200);
-    equal(rows.length, 1);
-    deepStrictEqual(await result.json(), { success: true, emailSent: false });
+    for (const delivery of [
+      () => Promise.resolve(new Response(null, { status: 503 })),
+      () => Promise.reject(new Error('Fixture timeout')),
+    ]) {
+      globalThis.fetch = delivery;
+      const result = await register(request(registration));
+      equal(result.status, 200);
+      deepStrictEqual(await result.json(), { success: true, emailSent: false });
+    }
   } finally {
     globalThis.fetch = originalFetch;
   }
 });
 
-Deno.test('clinic reports a rejected insert as a failed registration', async () => {
-  setClient(() => ({ from: () => ({ insert: () => ({ error: { message: 'Fixture storage unavailable' } }) }) }));
+Deno.test('clinic reports a rejected write and rate limiting separately', async () => {
+  setClient(() => ({ rpc: () => ({ error: { code: 'Fixture storage unavailable' } }) }));
   equal((await register(request(registration))).status, 500);
+  setClient(() => ({ rpc: () => ({ data: { limited: true } }) }));
+  equal((await register(request(registration))).status, 429);
 });
 
-Deno.test('xfail SEC-08: submitting the same accepted registration twice should save one row', async () => {
-  const rows: unknown[] = [];
+Deno.test('clinic retry preserves delivery status and does not send another email', async () => {
+  let created = true;
+  let sent = false;
+  let deliveries = 0;
   setClient(() => ({
-    from: () => ({ insert: (row: unknown) => { rows.push(row); return { error: null }; } }),
+    rpc: () => {
+      const result = { id: 'registration', created, emailSent: sent };
+      created = false;
+      return { data: result };
+    },
+    from: () => ({
+      update: () => ({ eq: () => { sent = true; return { error: null }; } }),
+    }),
   }));
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = () => Promise.resolve(Response.json({ id: 'fixture-email' }));
+  globalThis.fetch = () => {
+    deliveries += 1;
+    return Promise.resolve(Response.json({ id: 'fixture-email' }));
+  };
   try {
-    equal((await register(request(registration))).status, 200);
-    const retryStatus = (await register(request(registration))).status;
-    // SEC-08: the clinic handler inserts on every POST at index.ts:143, without a retry key.
-    // Require this specific known mismatch. Unexpected errors and an unexpected pass fail the test.
-    equal(rows.length, 2, 'Expected duplicate-write regression changed. Remove xfail and assert one row.');
-    equal(retryStatus, 200);
+    for (let index = 0; index < 2; index += 1) {
+      const result = await register(request(registration));
+      equal(result.status, 200);
+      deepStrictEqual(await result.json(), { success: true, emailSent: true });
+    }
+    equal(deliveries, 1);
   } finally {
     globalThis.fetch = originalFetch;
   }

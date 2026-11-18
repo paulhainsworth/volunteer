@@ -62,6 +62,10 @@
   onMount(() => {
     const hash = typeof window !== 'undefined' ? window.location.hash : '';
     const search = typeof window !== 'undefined' ? window.location.search : '';
+    const signupRole = new URLSearchParams(search).get('signup_role');
+    const signupRoute = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(signupRole ?? '')
+      ? `/signup/${signupRole}`
+      : null;
     /** Capture before auth.initialize() — PKCE code may be stripped from the URL after exchange. */
     const hadPkceCode = /[?&]code=/.test(search);
     const hasAuthParams =
@@ -89,10 +93,14 @@
                 ? new URLSearchParams(window.location.search).get('post_login')
                 : null;
             if (needsOnboarding) {
-              if (postLogin === 'waiver') {
+              if (signupRoute) {
+                sessionStorage.setItem('postOnboardingRoute', signupRoute);
+              } else if (postLogin === 'waiver') {
                 sessionStorage.setItem('postOnboardingRoute', '/volunteer/waiver');
               }
               await replace('/onboarding');
+            } else if (signupRoute) {
+              await replace(signupRoute);
             } else if (postLogin === 'waiver') {
               await replace('/volunteer/waiver');
             } else if (fromMagicLink) {

@@ -1,6 +1,7 @@
-import { spawnSync } from 'node:child_process';
+import { execFile, spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { readdirSync } from 'node:fs';
+import { promisify } from 'node:util';
 import { setTimeout } from 'node:timers/promises';
 import { test, expect } from '@playwright/test';
 
@@ -21,8 +22,12 @@ function docker(args) {
   return result;
 }
 
+function sqlArgs(database, options) {
+  return ['exec', name, 'psql', '-X', '-v', 'ON_ERROR_STOP=1', '-h', '127.0.0.1', '-U', 'postgres', '-d', database, ...options];
+}
+
 function sql(database, options) {
-  return docker(['exec', name, 'psql', '-X', '-v', 'ON_ERROR_STOP=1', '-h', '127.0.0.1', '-U', 'postgres', '-d', database, ...options]);
+  return docker(sqlArgs(database, options));
 }
 
 function apply(database, path) {
@@ -79,4 +84,96 @@ test('explicit baseline patches support migrations, profile editing, and scoped 
   apply('patched', 'tests/database/cleanup-scope.sql');
   const schema = sql('patched', ['-Atc', "SELECT to_regclass('public.nica_coaches'), to_regclass('public.kids_clinic_signups'), (SELECT count(*) FROM volunteer_roles WHERE name = 'Existing shift')"]);
   expect(schema.stdout.trim()).toBe('nica_coaches|kids_clinic_signups|1');
+});
+
+test('concurrent voluntary signup allocates the last seat once and rolls back rejected consent', async () => {
+  const first = '00000000-0000-4000-8000-000000000011';
+  const second = '00000000-0000-4000-8000-000000000012';
+  const third = '00000000-0000-4000-8000-000000000013';
+  const roleId = '00000000-0000-4000-8000-000000000021';
+  const secondRole = '00000000-0000-4000-8000-000000000022';
+  const setup = sql('patched', ['-c', `
+    INSERT INTO auth.users (id, email) VALUES
+      ('${first}', 'first@example.invalid'), ('${second}', 'second@example.invalid'), ('${third}', 'third@example.invalid');
+    INSERT INTO volunteer_roles (id, name, event_date, start_time, end_time, positions_total) VALUES
+      ('${roleId}', 'Last seat', '2099-04-18', '08:00', '09:00', 1),
+      ('${secondRole}', 'Second shift', '2099-04-18', '08:00', '09:00', 2);
+    ALTER TABLE waivers ADD CONSTRAINT fixture_reject_signature CHECK (signature_name <> 'Fixture rejected') NOT VALID;
+  `]);
+  expect(setup.status, setup.stderr).toBe(0);
+
+  function confirm(id, role, signature, delay = 0) {
+    return ['-Atc', `BEGIN; SET LOCAL ROLE authenticated;
+      SELECT set_config('request.jwt.claim.sub', '${id}', true);
+      SELECT confirm_volunteer_signup('${role}', NULL, '{"version":1,"signature_name":"${signature}"}')->>'created';
+      SELECT pg_sleep(${delay}); COMMIT;`];
+  }
+
+  const run = promisify(execFile);
+  const outcomes = await Promise.allSettled([first, second].map((id) =>
+    run('docker', sqlArgs('patched', confirm(id, roleId, 'Fixture signed', 0.25)), { timeout: 10000 })
+  ));
+  expect(outcomes.filter(({ status }) => status === 'fulfilled')).toHaveLength(1);
+  const loser = outcomes.find(({ status }) => status === 'rejected');
+  expect(loser.reason.stderr).toContain('This role is already full');
+  const winner = outcomes[0].status === 'fulfilled' ? first : second;
+
+  const retry = sql('patched', confirm(winner, roleId, 'Fixture signed'));
+  expect(retry.status, retry.stderr).toBe(0);
+  expect(retry.stdout).toContain('\nfalse\n');
+
+  const failed = sql('patched', confirm(third, secondRole, 'Fixture rejected'));
+  expect(failed.status).not.toBe(0);
+  expect(failed.stderr).toContain('fixture_reject_signature');
+
+  const counts = sql('patched', ['-Atc', `SELECT
+    (SELECT count(*) FROM signups WHERE role_id = '${roleId}' AND waiver_signed),
+    (SELECT count(*) FROM waivers WHERE volunteer_id IN ('${first}', '${second}', '${third}')),
+    (SELECT count(*) FROM signups WHERE role_id = '${secondRole}'),
+    has_function_privilege('anon', 'public.confirm_volunteer_signup(uuid,text,jsonb)', 'EXECUTE');`]);
+  expect(counts.stdout.trim()).toBe('1|1|0|f');
+
+  const cancelled = sql('patched', ['-Atc', `INSERT INTO signups (role_id, volunteer_id, status)
+    VALUES ('${roleId}', '${third}', 'cancelled') RETURNING id;`]);
+  expect(cancelled.status, cancelled.stderr).toBe(0);
+  const signupId = cancelled.stdout.split('\n')[0];
+  const rejectedReactivation = sql('patched', confirm(third, roleId, 'Fixture signed'));
+  expect(rejectedReactivation.stderr).toContain('This role is already full');
+  expect(sql('patched', ['-Atc', `SELECT status FROM signups WHERE id = '${signupId}'`]).stdout.trim()).toBe('cancelled');
+
+  const released = sql('patched', ['-c', `UPDATE signups SET status = 'cancelled' WHERE role_id = '${roleId}' AND volunteer_id = '${winner}'`]);
+  expect(released.status, released.stderr).toBe(0);
+  const reactivated = sql('patched', confirm(third, roleId, 'Fixture signed'));
+  expect(reactivated.status, reactivated.stderr).toBe(0);
+  expect(sql('patched', ['-Atc', `SELECT status FROM signups WHERE id = '${signupId}'`]).stdout.trim()).toBe('confirmed');
+});
+
+test('clinic retries reserve one registration and enforce request limits per parent', async () => {
+  const payload = (name) => JSON.stringify({
+    parent_first_name: 'Test', parent_last_name: 'Parent', parent_email: 'parent@example.invalid',
+    child_name: name, child_gender: 'prefer_not_to_say', child_age: 10,
+    waiver_version: 'fixture', waiver_consent: true,
+  });
+  const reserve = (name) => ['-qAtc', `SET ROLE service_role; SELECT reserve_clinic_registration('${payload(name)}');`];
+  const run = promisify(execFile);
+  const outcomes = await Promise.all(['First Child', ' first   child '].map((name) =>
+    run('docker', sqlArgs('patched', reserve(name)), { timeout: 10000 })
+  ));
+  const registrations = outcomes.map(({ stdout }) => JSON.parse(stdout));
+  expect(registrations.filter(({ created }) => created)).toHaveLength(1);
+  expect(new Set(registrations.map(({ id }) => id)).size).toBe(1);
+
+  for (let index = 2; index <= 5; index += 1) {
+    const outcome = sql('patched', reserve(`Child ${index}`));
+    expect(outcome.status, outcome.stderr).toBe(0);
+    expect(JSON.parse(outcome.stdout).created).toBe(true);
+  }
+  const blocked = sql('patched', reserve('One more child'));
+  expect(blocked.status, blocked.stderr).toBe(0);
+  expect(JSON.parse(blocked.stdout)).toEqual({ limited: true });
+
+  const grants = sql('patched', ['-Atc', `SELECT
+    has_function_privilege('anon','public.reserve_clinic_registration(jsonb)','EXECUTE'),
+    has_function_privilege('service_role','public.reserve_clinic_registration(jsonb)','EXECUTE');`]);
+  expect(grants.stdout.trim()).toBe('f|t');
 });

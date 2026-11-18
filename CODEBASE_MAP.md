@@ -61,9 +61,9 @@ Berkeley Bicycle Club uses this app to staff bicycle races, collect waivers, and
 | [index.html](index.html), [src/main.js](src/main.js), [src/App.svelte](src/App.svelte) | Mount the Svelte app, load global styles, initialize auth, and define hash routes. The route table includes `/volunteer`, `/signup/:id`, `/leader`, `/admin/*`, `/invite/:domainId`, `/board`, `/kids`, and `/contacts`. |
 | [src/lib/stores/auth.js](src/lib/stores/auth.js), [src/lib/components/Layout.svelte](src/lib/components/Layout.svelte) | The app and pages consume session and profile state. Layout renders role-specific navigation. Database access is governed by Supabase policies and function-side checks. |
 | [src/lib/supabaseClient.js](src/lib/supabaseClient.js), [src/lib/supabasePublic.js](src/lib/supabasePublic.js), [src/lib/supabaseUserRest.js](src/lib/supabaseUserRest.js) | The shared client handles Auth and data access. The public client serves anonymous PostgREST requests, and the user REST helper can use the persisted session token independently of Auth refresh. |
-| [src/lib/stores/roles.js](src/lib/stores/roles.js), [src/lib/stores/signups.js](src/lib/stores/signups.js), [src/lib/volunteerSignup.js](src/lib/volunteerSignup.js) | Browse and roster views read roles and signup state. Roles fetch public fill counts through `get_confirmed_signup_counts`. Signup flows write to Supabase and use Edge Functions for new-user signup and email. |
+| [src/lib/stores/roles.js](src/lib/stores/roles.js), [src/lib/stores/signups.js](src/lib/stores/signups.js), [src/lib/volunteerSignup.js](src/lib/volunteerSignup.js) | Browse and roster views read roles and signup state. Roles fetch public fill counts through `get_confirmed_signup_counts`. Signed-in signup uses `confirm_volunteer_signup` to record capacity and consent in one transaction. Guest signup waits for account verification when Auth returns no session. |
 | [src/routes/admin/RolesList.svelte](src/routes/admin/RolesList.svelte), [src/routes/admin/VolunteersList.svelte](src/routes/admin/VolunteersList.svelte), [src/routes/leader/Dashboard.svelte](src/routes/leader/Dashboard.svelte) | Own roster management, including adding volunteers to roles through database writes and Edge Function calls. |
-| [src/routes/KidsClinic.svelte](src/routes/KidsClinic.svelte), [src/lib/submitKidsClinicSignup.js](src/lib/submitKidsClinicSignup.js) | Submit public clinic registration and waiver information to the `submit-kids-clinic-signup` function, which writes `kids_clinic_signups` and can send email. |
+| [src/routes/KidsClinic.svelte](src/routes/KidsClinic.svelte), [src/lib/submitKidsClinicSignup.js](src/lib/submitKidsClinicSignup.js) | Submit public clinic registration and waiver information to the `submit-kids-clinic-signup` function, which reserves one registration through `reserve_clinic_registration` and records optional email delivery separately. |
 | [src/routes/Contacts.svelte](src/routes/Contacts.svelte), [src/routes/Board.svelte](src/routes/Board.svelte) | Contacts calls `search_volunteer_contacts`. The board route presents the external board view. See the [Apps Script setup](google-sheets-apps-script/README.md). |
 | [supabase/functions/](supabase/functions/), [.github/workflows/nica-coach-digest-cron.yml](.github/workflows/nica-coach-digest-cron.yml), [scripts/](scripts/) | Edge Functions integrate with Resend and Slack. GitHub Actions invokes the NICA digest. SQL scripts document Supabase cron for the daily admin summary and an alternate NICA digest scheduler. |
 
@@ -74,7 +74,8 @@ Function names in the table refer to `supabase/functions/<name>/index.ts`.
 | Names | Where read |
 | --- | --- |
 | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` | The three Supabase client modules above, `src/lib/stores/auth.js`, `src/lib/submitKidsClinicSignup.js`, and `src/routes/auth/ResetPassword.svelte`. |
-| `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | `admin-add-role-volunteer`, `create-leader`, `create-signup-for-new-user`, `create-volunteer-and-signup`, `send-daily-admin-summary`, `send-magic-link`, `send-nica-coach-digest`, `send-welcome-with-magic-link`, and `submit-kids-clinic-signup`. The GitHub workflow reads both names from repository secrets. |
+| `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | `admin-add-role-volunteer`, `create-leader`, `create-volunteer-and-signup`, `send-daily-admin-summary`, `send-magic-link`, `send-nica-coach-digest`, `send-welcome-with-magic-link`, and `submit-kids-clinic-signup`. The GitHub workflow reads both names from repository secrets. |
+| `SUPABASE_ANON_KEY` | `create-signup-for-new-user` forwards the authenticated caller for older clients. |
 | `RESEND_API_KEY` | `send-email`, `send-daily-admin-summary`, `send-magic-link`, `send-nica-coach-digest`, `send-welcome-with-magic-link`, and `submit-kids-clinic-signup`. |
 | `DAILY_ADMIN_SUMMARY_SLACK_WEBHOOK_URL` | `send-daily-admin-summary`. |
 | `SLACK_BOT_TOKEN`, `SLACK_SIGNUP_CHANNEL_ID` | `create-volunteer-and-signup`. |
@@ -86,7 +87,7 @@ Function names in the table refer to `supabase/functions/<name>/index.ts`.
 - Supabase setup spans the bootstrap schema, manual root SQL patches, and timestamped migrations. Which patches have already run in production needs confirmation. The Quick Start references an untracked `.env.example` and lists Node 18, which falls below the locked Vite requirement.
 - `npm audit --package-lock-only` reported 11 affected packages (one critical, eight high, two moderate), including jsPDF, Vite, and Svelte. Production reachability remains unverified.
 - The largest pages are `src/routes/admin/RolesList.svelte` (3,066 lines), `src/routes/admin/VolunteersList.svelte` (2,570), and `src/routes/leader/Dashboard.svelte` (1,983). The two admin pages have parallel create-volunteer-and-signup flows.
-- `src/routes/auth/Signup.svelte` and `src/routes/auth/ResetPassword.svelte` are absent from the current route table. `src/lib/Counter.svelte` appears unused (inferred from the absence of imports). The Slack helper invokes `notify-slack-signup`, whose source is absent from this checkout.
+- `src/routes/auth/Signup.svelte` and `src/routes/auth/ResetPassword.svelte` are absent from the current route table. `src/lib/Counter.svelte` appears unused (inferred from the absence of imports). Organizer-created signup notifications use the server-owned Slack sender.
 
 ## Testing
 
@@ -98,4 +99,4 @@ Function names in the table refer to `supabase/functions/<name>/index.ts`.
 
 1. What schema baseline, root SQL patches, and RLS policies are applied in production, and how should a new environment reproduce them?
 2. Which Vercel and Supabase projects serve production and staging, and which environment can engineers use to test signups and outbound notifications?
-3. Which Edge Functions and schedulers are active in production, including the externally referenced `notify-slack-signup` function and the alternative NICA digest schedulers?
+3. Which Edge Functions and schedulers are active in production, including the alternative NICA digest schedulers?
