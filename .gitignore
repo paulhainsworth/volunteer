@@ -37,3 +37,7 @@ supabase/.temp/
 
 # Local agent instructions
 /AGENTS.md
+
+# Generated browser tests
+/playwright-report/
+/test-results/
