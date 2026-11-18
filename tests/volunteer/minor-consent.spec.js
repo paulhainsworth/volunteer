@@ -274,7 +274,23 @@ test('MG-09 guardian confirmation should escape display names in HTML', async ({
   await expect.poll(() => emails.length).toBe(2);
   const confirmation = emails.find(({ to }) => to === guardian.parent_guardian_email);
   expect(confirmation).toBeDefined();
-  // volunteerSignup.js interpolates the guardian name into the email without HTML escaping.
-  test.fail();
   expect(confirmation.html).toContain('&lt;b&gt;Fixture &amp; Guardian&lt;/b&gt;');
+});
+
+test('MG-09 standalone guardian confirmation escapes display names', async ({ page, backend }) => {
+  const submit = await openForm(page, backend, 'waiver');
+  backend.handle('POST', signWaiver, () => {
+    backend.reply('POST', waiverStatus, true);
+    return { body: null };
+  });
+  const emails = [];
+  backend.handle('POST', mail, (request) => {
+    emails.push(request.postDataJSON());
+    return { body: { success: true } };
+  });
+  await fillGuardian(page, 'Fixture & Guardian');
+  await submit.click();
+  await expect.poll(() => emails.length).toBe(1);
+  expect(emails[0].html).toContain('Fixture &amp; Guardian');
+  expect(emails[0].html).toContain('/my-signups');
 });
