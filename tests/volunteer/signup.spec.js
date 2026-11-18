@@ -48,10 +48,12 @@ test('a failed confirmation keeps the role form available and sends no email', a
 });
 
 test('a returning volunteer sees the existing signup instead of a second checkout form', async ({ page, backend }) => {
-  await signInFixture(page, backend);
+  await signInFixture(page, backend, 'volunteer', {
+    signups: [{ id: 'fixture-signup', role_id: role.id, status: 'confirmed', role }],
+  });
+  await expect(page.getByRole('heading', { name: role.name, exact: true })).toBeVisible();
   backend.reply('GET', '/rest/v1/volunteer_roles', role);
   backend.reply('POST', '/rest/v1/rpc/get_confirmed_signup_counts', [{ role_id: role.id, cnt: 1 }]);
-  backend.reply('GET', '/rest/v1/signups', [{ id: 'fixture-signup', role_id: role.id, role }]);
   await page.goto(`/#/signup/${role.id}`);
   await expect(page.getByText("You're signed up!")).toBeVisible();
   expect(backend.calls('POST', confirmation)).toBe(0);

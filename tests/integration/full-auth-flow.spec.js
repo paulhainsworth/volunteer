@@ -51,11 +51,13 @@ test('first login collects an emergency contact before opening volunteer opportu
   expect(backend.calls('PATCH', '/rest/v1/profiles')).toBe(1);
 });
 
-test('a signed-in volunteer cannot open the organizer roles screen', async ({ page, backend }) => {
-  await signInFixture(page, backend);
-  backend.reply('GET', '/rest/v1/volunteer_roles', []);
-  await page.goto('/#/admin/roles');
-  await expect(page).toHaveURL(/#\/volunteer$/);
-  await expect(page.getByRole('heading', { name: 'Volunteer Opportunities' })).toBeVisible();
-  expect(backend.calls('GET', '/rest/v1/volunteer_leader_domains')).toBe(0);
-});
+for (const role of ['volunteer', 'volunteer_leader']) {
+  test(`the ${role} cannot open the organizer roles screen`, async ({ page, backend }) => {
+    await signInFixture(page, backend, role);
+    backend.reply('GET', '/rest/v1/volunteer_roles', []);
+    await page.goto('/#/admin/roles');
+    await expect(page).toHaveURL(/#\/volunteer$/);
+    await expect(page.getByRole('heading', { name: 'Volunteer Opportunities' })).toBeVisible();
+    expect(backend.calls('GET', '/rest/v1/volunteer_leader_domains')).toBe(0);
+  });
+}
