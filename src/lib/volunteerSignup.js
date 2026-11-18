@@ -9,6 +9,12 @@ import { formatRoleScheduleDate, formatTimeRange } from './utils/timeDisplay';
 
 const SITE_URL = typeof window !== 'undefined' ? `${window.location.origin}/#` : '';
 
+const htmlEntities = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (character) => htmlEntities[character]);
+}
+
 export async function createVolunteerAndSignup(pii, roleId, waiverVersion) {
   const {
     first_name,
@@ -117,17 +123,17 @@ export async function sendParentGuardianConfirmationEmail({
       subject: `Confirmation: You signed the waiver for ${volunteerName} – Berkeley Omnium 2026`,
       html: `
         <h2>Parent/Guardian confirmation</h2>
-        <p>Hi ${parent_guardian_name || 'there'},</p>
-        <p>You signed the liability waiver on behalf of <strong>${volunteerName}</strong>, who is now signed up to volunteer at the 2026 Berkeley Omnium.</p>
+        <p>Hi ${escapeHtml(parent_guardian_name || 'there')},</p>
+        <p>You signed the liability waiver on behalf of <strong>${escapeHtml(volunteerName)}</strong>, who is now signed up to volunteer at the 2026 Berkeley Omnium.</p>
         <p><strong>Role details:</strong></p>
         <ul>
-          <li><strong>${role.name}</strong></li>
-          <li>Date: ${roleDate}</li>
-          <li>Time: ${roleTime}</li>
-          ${role.location ? `<li>Location: ${role.location}</li>` : ''}
+          <li><strong>${escapeHtml(role.name)}</strong></li>
+          <li>Date: ${escapeHtml(roleDate)}</li>
+          <li>Time: ${escapeHtml(roleTime)}</li>
+          ${role.location ? `<li>Location: ${escapeHtml(role.location)}</li>` : ''}
         </ul>
-        <p><a href="${roleUrl}">View role details</a></p>
-        <p>${volunteerName} will also receive a confirmation and welcome email at the address they provided.</p>
+        <p><a href="${escapeHtml(roleUrl)}">View role details</a></p>
+        <p>${escapeHtml(volunteerName)} will also receive a confirmation and welcome email at the address they provided.</p>
         <p>– Berkeley Omnium Volunteer Team</p>
       `
     }
@@ -152,10 +158,10 @@ export async function sendParentGuardianWaiverSignedEmail({
       subject: `Confirmation: You signed the waiver for ${volunteerName} – Berkeley Omnium 2026`,
       html: `
         <h2>Parent/Guardian confirmation</h2>
-        <p>Hi ${parent_guardian_name || 'there'},</p>
-        <p>You signed the liability waiver on behalf of <strong>${volunteerName}</strong>. They are all set to volunteer at the 2026 Berkeley Omnium.</p>
-        <p>When ${volunteerName} signs in to the volunteer hub, they can view their signups and role details.</p>
-        <p><a href="${mySignupsUrl}">Volunteer hub – My Signups</a></p>
+        <p>Hi ${escapeHtml(parent_guardian_name || 'there')},</p>
+        <p>You signed the liability waiver on behalf of <strong>${escapeHtml(volunteerName)}</strong>. They are all set to volunteer at the 2026 Berkeley Omnium.</p>
+        <p>When ${escapeHtml(volunteerName)} signs in to the volunteer hub, they can view their signups and role details.</p>
+        <p><a href="${escapeHtml(mySignupsUrl)}">Volunteer hub – My Signups</a></p>
         <p>– Berkeley Omnium Volunteer Team</p>
       `
     }
