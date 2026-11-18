@@ -79,6 +79,27 @@ test('canonical bootstrap provisions a fresh local Supabase database', () => {
   expect(repeated.stderr).toContain('Bootstrap requires an empty volunteer schema');
 });
 
+test('the read-only baseline report handles absent and present migration history', () => {
+  const report = '/repo/scripts/sql/CHECK_DATABASE_BASELINE.sql';
+  const withoutHistory = sql('fresh', ['-Atf', report]);
+  expect(withoutHistory.status, withoutHistory.stderr).toBe(0);
+  expect(withoutHistory.stdout).toContain('public.waivers.declared_minor|t');
+  expect(withoutHistory.stdout).toContain('public.sign_volunteer_waiver(jsonb)|t');
+  expect(withoutHistory.stdout).toContain('Supabase migration history table is missing.');
+
+  const seeded = sql('fresh', ['-c', `
+    CREATE SCHEMA supabase_migrations;
+    CREATE TABLE supabase_migrations.schema_migrations (version text PRIMARY KEY);
+    INSERT INTO supabase_migrations.schema_migrations VALUES ('20261118000300');
+  `]);
+  expect(seeded.status, seeded.stderr).toBe(0);
+
+  const withHistory = sql('fresh', ['-Atf', report]);
+  expect(withHistory.status, withHistory.stderr).toBe(0);
+  expect(withHistory.stdout).toContain('20261118000300');
+  expect(withHistory.stdout).not.toContain('migration history table is missing');
+});
+
 test('explicit baseline patches support migrations, profile editing, and scoped cleanup', () => {
   bootstrap('patched');
   for (const patch of baselinePatches) apply('patched', patch);
