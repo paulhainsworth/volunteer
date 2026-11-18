@@ -2,6 +2,8 @@
 
 A modern, full-featured web application for managing race volunteers at bicycle events. Built with Svelte, Supabase, and deployed on Vercel.
 
+Start with the [documentation index](docs/README.md), [local development guide](docs/local-development.md), or [production readiness roadmap](PRODUCTION_READINESS_ROADMAP.md).
+
 ## ✨ Features
 
 ### For Race Organizers (Admins)
