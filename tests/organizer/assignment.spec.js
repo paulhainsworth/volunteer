@@ -1,5 +1,15 @@
 import { test, expect, profile, role, signInFixture } from '../helpers/browser.js';
 
+async function fillAdminAssignment(page, email) {
+  await page.getByRole('link', { name: 'Users', exact: true }).click();
+  await page.getByRole('button', { name: '+ Add Volunteer' }).click();
+  await page.getByLabel(/First Name/).fill('New');
+  await page.getByLabel(/Last Name/).fill('Volunteer');
+  await page.getByLabel(/Email Address/).fill(email);
+  await page.getByLabel(/Team \/ Club Affiliation/).selectOption('fixture-team');
+  await page.getByLabel('Select a role').selectOption(role.id);
+}
+
 test('an organizer creates one volunteer assignment and requests a welcome email', async ({ page, backend }) => {
   const assignment = '/functions/v1/create-volunteer-and-signup';
   const welcome = '/functions/v1/send-welcome-with-magic-link';
@@ -19,13 +29,7 @@ test('an organizer creates one volunteer assignment and requests a welcome email
     return { body: { volunteerId: newVolunteer.id } };
   });
 
-  await page.getByRole('link', { name: 'Users', exact: true }).click();
-  await page.getByRole('button', { name: '+ Add Volunteer' }).click();
-  await page.getByLabel(/First Name/).fill('New');
-  await page.getByLabel(/Last Name/).fill('Volunteer');
-  await page.getByLabel(/Email Address/).fill(newVolunteer.email);
-  await page.getByLabel(/Team \/ Club Affiliation/).selectOption('fixture-team');
-  await page.getByLabel('Select a role').selectOption(role.id);
+  await fillAdminAssignment(page, newVolunteer.email);
   const confirmation = page.waitForEvent('dialog');
   await page.getByRole('button', { name: 'Create Volunteer' }).click({ noWaitAfter: true });
   const dialog = await confirmation;
@@ -44,4 +48,23 @@ test('the leader dashboard displays roles assigned to the leader', async ({ page
   await page.getByRole('link', { name: 'My Roles' }).click();
   await expect(page.getByRole('heading', { name: 'Volunteer Leader Dashboard' })).toBeVisible();
   await expect(page.getByText(role.name, { exact: true })).toBeVisible();
+});
+
+
+test('a rejected organizer assignment shows an error and sends no welcome email', async ({ page, backend }) => {
+  await signInFixture(page, backend, 'admin');
+  backend.handle('GET', '/rest/v1/profiles', (_request, url) => ({
+    body: url.searchParams.has('id') ? [{ ...profile, role: 'admin' }] : [],
+  }));
+  backend.reply('GET', '/rest/v1/volunteer_contacts', []);
+  backend.reply('GET', '/rest/v1/volunteer_roles', [role]);
+  backend.reply('GET', '/rest/v1/team_club_affiliations', [{ id: 'fixture-team', name: 'Fixture Club' }]);
+  const assignment = '/functions/v1/create-volunteer-and-signup';
+  backend.reply('POST', assignment, { error: 'Fixture role is full' });
+  await fillAdminAssignment(page, 'new@example.invalid');
+  await page.getByRole('button', { name: 'Create Volunteer' }).click();
+  await expect(page.getByText('Failed to create volunteer: Fixture role is full').last()).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Create Volunteer' })).toBeEnabled();
+  expect(backend.calls('POST', assignment)).toBe(1);
+  expect(backend.calls('POST', '/functions/v1/send-welcome-with-magic-link')).toBe(0);
 });

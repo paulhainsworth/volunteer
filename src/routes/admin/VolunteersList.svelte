@@ -4,7 +4,7 @@
   import { auth } from '../../lib/stores/auth';
   import { affiliations } from '../../lib/stores/affiliations';
   import { supabase } from '../../lib/supabaseClient';
-  import { sendWelcomeEmail } from '../../lib/volunteerSignup';
+  import { createVolunteerAsAdmin } from '../../lib/adminVolunteerSignup';
 
   import { push } from 'svelte-spa-router';
   import { format } from 'date-fns';
@@ -681,43 +681,6 @@
     addVolunteerSuggestions = [];
   }
 
-  async function ensureActiveAdminSession() {
-    const { data: sessionData } = await supabase.auth.getSession();
-    if (!sessionData?.session) {
-      throw new Error('Your admin session is not active in this tab. Please refresh this page or sign in again, then retry.');
-    }
-
-    const session = sessionData.session;
-    const expiresAt = session.expires_at || 0;
-    const nowInSeconds = Math.floor(Date.now() / 1000);
-
-    // Avoid a blocking refresh when the current token is still comfortably valid.
-    if (expiresAt > nowInSeconds + 300) {
-      return session;
-    }
-
-    const refreshResult = await Promise.race([
-      supabase.auth.refreshSession(),
-      new Promise((resolve) => setTimeout(() => resolve({ data: { session: null }, error: new Error('Session refresh timed out') }), 5000))
-    ]);
-
-    if (refreshResult?.data?.session) {
-      return refreshResult.data.session;
-    }
-
-    if (expiresAt > nowInSeconds + 60) {
-      return session;
-    }
-
-    throw new Error('Your admin session expired. Please refresh this page or sign in again, then retry.');
-  }
-
-  function sendWelcomeEmailInBackground(options) {
-    void sendWelcomeEmail(options).catch((err) => {
-      console.warn('Welcome email did not complete:', err);
-    });
-  }
-
   async function createVolunteer() {
     if (!addVolunteerForm.email || !addVolunteerForm.first_name || !addVolunteerForm.last_name) {
       error = 'Email, first name, and last name are required';
@@ -732,7 +695,6 @@
     error = '';
 
     try {
-      const activeSession = await ensureActiveAdminSession();
       const createdVolunteerEmail = addVolunteerForm.email.trim();
 
       // Create user via edge function (service role) so the admin stays logged in; client signUp() would switch session to the new user.
@@ -745,25 +707,7 @@
       };
       if (addVolunteerForm.role_id) body.role_id = addVolunteerForm.role_id;
 
-      const { data: fnData, error: fnError } = await supabase.functions.invoke('create-volunteer-and-signup', {
-        body,
-        headers: {
-          Authorization: `Bearer ${activeSession.access_token}`
-        }
-      });
-
-      if (fnError) throw fnError;
-      if (fnData?.error) throw new Error(typeof fnData.error === 'string' ? fnData.error : fnData.error?.message || 'Failed to create volunteer');
-      const volunteerId = fnData?.volunteerId;
-      if (!volunteerId) throw new Error('User creation failed');
-
-
-      // Don't block the admin UI on email generation/delivery after the volunteer record already exists.
-      sendWelcomeEmailInBackground({
-        to: createdVolunteerEmail,
-        first_name: addVolunteerForm.first_name,
-        promptWaiverAndEmergencyContact: true
-      });
+      await createVolunteerAsAdmin(body);
 
       // Refresh volunteers list
       await volunteers.fetchVolunteers();
