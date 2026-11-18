@@ -1,6 +1,7 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
   import { auth } from '../../lib/stores/auth';
+  import { assignVolunteerAsLeader } from '../../lib/organizerVolunteerSignup';
   import { affiliations } from '../../lib/stores/affiliations';
   import { supabase } from '../../lib/supabaseClient';
   import { push } from 'svelte-spa-router';
@@ -539,7 +540,7 @@ const shareTimers = {};
         ? [leader.email, leader.phone].filter(Boolean).join(leader.email && leader.phone ? ' • ' : '')
         : '';
 
-      await supabase.functions.invoke('send-email', {
+      const { data, error } = await supabase.functions.invoke('send-email', {
         body: {
           to: email,
           subject,
@@ -560,6 +561,9 @@ const shareTimers = {};
           `
         }
       });
+      if (error || data?.success !== true) {
+        throw new Error('Invite delivery failed.');
+      }
     } catch (err) {
       console.error('Invite email error:', err);
       throw new Error('Volunteer added, but email notification could not be sent automatically.');
@@ -570,7 +574,7 @@ const shareTimers = {};
     const roleId = role.id;
     const form = volunteerForms[roleId];
 
-    if (!form) return;
+    if (!form || addStates[roleId]?.loading) return;
 
     const firstName = form.first_name.trim();
     const lastName = form.last_name.trim();
@@ -608,89 +612,7 @@ const shareTimers = {};
     };
 
     try {
-      let volunteerId;
-      const { data: existingProfile, error: profileLookupError } = await supabase
-        .from('profiles')
-        .select('id, first_name, last_name, email, phone, team_club_affiliation_id')
-        .ilike('email', email)
-        .maybeSingle();
-
-      if (profileLookupError) throw profileLookupError;
-
-      if (existingProfile) {
-        volunteerId = existingProfile.id;
-        const updates = {};
-        if (!existingProfile.first_name && firstName) updates.first_name = firstName;
-        if (!existingProfile.last_name && lastName) updates.last_name = lastName;
-        if (phone && phone !== existingProfile.phone) updates.phone = phone;
-
-        if (affiliationId && existingProfile.team_club_affiliation_id !== affiliationId) {
-          updates.team_club_affiliation_id = affiliationId;
-        }
-        if (Object.keys(updates).length > 0) {
-          const { error: updateProfileError } = await supabase
-            .from('profiles')
-            .update(updates)
-            .eq('id', volunteerId);
-
-          if (updateProfileError) throw updateProfileError;
-        }
-
-        const { data: existingSignup, error: existingSignupError } = await supabase
-          .from('signups')
-          .select('id, status')
-          .eq('volunteer_id', volunteerId)
-          .eq('role_id', roleId)
-          .maybeSingle();
-
-        if (existingSignupError) throw existingSignupError;
-
-        if (existingSignup) {
-          if (existingSignup.status === 'cancelled') {
-            const { error: reactivateError } = await supabase
-              .from('signups')
-              .update({
-                status: 'confirmed',
-                phone: phone || null,
-                waiver_signed: false
-              })
-              .eq('id', existingSignup.id);
-
-            if (reactivateError) throw reactivateError;
-          } else {
-            throw new Error('This volunteer is already signed up for this role.');
-          }
-        } else {
-          const { error: signupError } = await supabase.from('signups').insert({
-            role_id: roleId,
-            volunteer_id: volunteerId,
-            status: 'confirmed',
-            phone: phone || null,
-            waiver_signed: false
-          });
-
-          if (signupError) throw signupError;
-        }
-      } else {
-        const { data: fnData, error: fnError } = await supabase.functions.invoke(
-          'create-volunteer-and-signup',
-          {
-            body: {
-              role_id: roleId,
-              email,
-              first_name: firstName,
-              last_name: lastName,
-              phone: phone || null,
-              team_club_affiliation_id: affiliationId || null
-            }
-          }
-        );
-
-        if (fnError) throw fnError;
-        if (fnData?.error) throw new Error(typeof fnData.error === 'string' ? fnData.error : fnData.error?.message || 'Failed to create volunteer');
-        volunteerId = fnData?.volunteerId;
-        if (!volunteerId) throw new Error('No volunteer ID returned');
-      }
+      await assignVolunteerAsLeader({ roleId, email, firstName, lastName, phone, affiliationId });
 
       try {
         await sendRoleInviteEmail({ email, firstName, role });

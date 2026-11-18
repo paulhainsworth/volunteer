@@ -1,3 +1,4 @@
+import { createOrganizerSignup } from './organizerVolunteerSignup';
 import { supabase } from './supabaseClient';
 import { sendWelcomeEmail } from './volunteerSignup';
 
@@ -41,16 +42,7 @@ function sendWelcomeEmailInBackground(options) {
 
 export async function createVolunteerAsAdmin(body) {
   const activeSession = await ensureActiveAdminSession();
-  const { data, error } = await supabase.functions.invoke('create-volunteer-and-signup', {
-    body,
-    headers: { Authorization: `Bearer ${activeSession.access_token}` }
-  });
-
-  if (error) throw error;
-  if (data?.error) {
-    throw new Error(typeof data.error === 'string' ? data.error : data.error.message || 'Failed to create volunteer');
-  }
-  if (!data?.volunteerId) throw new Error('Volunteer creation failed.');
+  await createOrganizerSignup(body, { Authorization: `Bearer ${activeSession.access_token}` });
 
   sendWelcomeEmailInBackground({
     to: body.email,

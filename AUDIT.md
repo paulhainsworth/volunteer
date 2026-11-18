@@ -71,7 +71,7 @@ Updated November 18, 2026. Merged code and local checks are recorded here. The c
 | [#12](https://github.com/paulhainsworth/volunteer/issues/12) | Target-checked cleanup runner with rollback previews in [PR #33](https://github.com/paulhainsworth/volunteer/pull/33). | Target mismatch, rollback, and scoped apply were verified on disposable data. |
 | [#6](https://github.com/paulhainsworth/volunteer/issues/6) | SQL layout in [PR #26](https://github.com/paulhainsworth/volunteer/pull/26) and local bootstrap runner in [PR #34](https://github.com/paulhainsworth/volunteer/pull/34). | Blank local bootstrap passes. Hosted baseline, upgrades, and effective policies remain open. |
 | [#13](https://github.com/paulhainsworth/volunteer/issues/13) | Redacted failure counts in [PR #35](https://github.com/paulhainsworth/volunteer/pull/35). | Synthetic failure handling passes. Missed-schedule monitoring and alert ownership remain open. |
-| [#14](https://github.com/paulhainsworth/volunteer/issues/14) | Shared admin assignment operation in [PR #36](https://github.com/paulhainsworth/volunteer/pull/36). | Organizer success and rejection pass. Leader writes and larger component refactoring remain open. |
+| [#14](https://github.com/paulhainsworth/volunteer/issues/14) | Shared admin assignment operation in [PR #36](https://github.com/paulhainsworth/volunteer/pull/36). | Admin and leader creation share the same assignment request. Offline tests cover leader creation, reactivation, repeat submission, and delivery failure. Further UI decomposition can follow independently. |
 
 ## Minor and guardian consent verification
 
