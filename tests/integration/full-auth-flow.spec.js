@@ -3,11 +3,13 @@ import { test, expect, profile, signInFixture } from '../helpers/browser.js';
 for (const [role, nav] of [['volunteer', 'Browse Roles'], ['volunteer_leader', 'My Roles'], ['admin', 'Dashboard']]) {
   test(`magic link signs in the ${role} session and sign-out clears it`, async ({ page, backend }) => {
     backend.reply('POST', '/auth/v1/logout', {});
+    backend.reply('GET', '/rest/v1/volunteer_roles', []);
     await signInFixture(page, backend, role);
     await expect(page).toHaveURL(/#\/my-signups$/);
     const navigation = page.getByRole('navigation');
     await expect(navigation.getByRole('link', { name: nav, exact: true })).toBeVisible();
     await navigation.getByRole('button', { name: 'Sign Out' }).click();
+    await expect(page).toHaveURL(/#\/auth\/login$/);
     await expect(navigation.getByRole('link', { name: 'Sign In' })).toBeVisible();
     await page.reload();
     await expect(navigation.getByRole('link', { name: 'Sign In' })).toBeVisible();
@@ -47,4 +49,13 @@ test('first login collects an emergency contact before opening volunteer opportu
   await submit.click();
   await expect(page).toHaveURL(/#\/volunteer$/);
   expect(backend.calls('PATCH', '/rest/v1/profiles')).toBe(1);
+});
+
+test('a signed-in volunteer cannot open the organizer roles screen', async ({ page, backend }) => {
+  await signInFixture(page, backend);
+  backend.reply('GET', '/rest/v1/volunteer_roles', []);
+  await page.goto('/#/admin/roles');
+  await expect(page).toHaveURL(/#\/volunteer$/);
+  await expect(page.getByRole('heading', { name: 'Volunteer Opportunities' })).toBeVisible();
+  expect(backend.calls('GET', '/rest/v1/volunteer_leader_domains')).toBe(0);
 });
