@@ -25,7 +25,6 @@ Berkeley Bicycle Club uses this app to staff bicycle races, collect waivers, and
 ├── public/                 # Images and volunteer-role CSV template
 ├── scripts/                # Manual SQL for cron setup, backfills, and cleanup
 ├── src/
-│   ├── assets/             # Bundled source assets
 │   ├── lib/
 │   │   ├── components/     # Layout, role forms, bulk upload, and admin controls
 │   │   ├── data/           # Kids’ clinic waiver content
@@ -40,16 +39,14 @@ Berkeley Bicycle Club uses this app to staff bicycle races, collect waivers, and
 ├── supabase/
 │   ├── functions/          # Signup, clinic registration, email, and digests
 │   └── migrations/         # Timestamped database and policy changes
-├── tests/
-│   ├── auth/               # Magic-link request tests
-│   ├── database/           # Disposable PostgreSQL migration and policy checks
-│   ├── edge/               # Deno handler tests with local provider stubs
-│   ├── helpers/            # Shared browser fixtures
-│   ├── integration/        # Auth callback, session, and onboarding
-│   ├── organizer/          # Assignment, leader roster, and PDF export
-│   └── volunteer/          # Browse, signup, cancellation, and clinic
-├── playwright-report/      # Checked-in generated HTML report
-└── test-results/           # Checked-in execution artifacts
+└── tests/
+    ├── auth/               # Magic-link request tests
+    ├── database/           # Disposable PostgreSQL migration and policy checks
+    ├── edge/               # Deno handler tests with local provider stubs
+    ├── helpers/            # Shared browser fixtures
+    ├── integration/        # Auth callback, session, and onboarding
+    ├── organizer/          # Assignment, leader roster, and PDF export
+    └── volunteer/          # Browse, signup, cancellation, and clinic
 ```
 
 [SUPABASE_SCHEMA.sql](SUPABASE_SCHEMA.sql) is the bootstrap schema. Root-level SQL patches add and repair features such as leader domains and RLS. For example, [ADD_LEADER_DOMAINS.sql](ADD_LEADER_DOMAINS.sql) and [ADD_LEADER_DOMAINS_SAFE.sql](ADD_LEADER_DOMAINS_SAFE.sql) both address leader-domain setup.
@@ -87,7 +84,7 @@ Function names in the table refer to `supabase/functions/<name>/index.ts`.
 - Supabase setup spans the bootstrap schema, manual root SQL patches, and timestamped migrations. Which patches have already run in production needs confirmation. The Quick Start references an untracked `.env.example` and lists Node 18, which falls below the locked Vite requirement.
 - `npm audit --package-lock-only` reported 11 affected packages (one critical, eight high, two moderate), including jsPDF, Vite, and Svelte. Production reachability remains unverified.
 - The largest pages are `src/routes/admin/RolesList.svelte` (3,066 lines), `src/routes/admin/VolunteersList.svelte` (2,570), and `src/routes/leader/Dashboard.svelte` (1,983). The two admin pages have parallel create-volunteer-and-signup flows.
-- `src/routes/auth/Signup.svelte` and `src/routes/auth/ResetPassword.svelte` are absent from the current route table. `src/lib/Counter.svelte` appears unused (inferred from the absence of imports). Organizer-created signup notifications use the server-owned Slack sender.
+- `src/routes/auth/Signup.svelte` and `src/routes/auth/ResetPassword.svelte` are absent from the current route table. Organizer-created signup notifications use the server-owned Slack sender.
 
 ## Testing
 
