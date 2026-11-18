@@ -45,7 +45,7 @@ test('the leader dashboard displays roles assigned to the leader', async ({ page
   backend.reply('GET', '/rest/v1/team_club_affiliations', []);
   backend.reply('GET', '/rest/v1/volunteer_leader_domains', []);
   backend.reply('GET', '/rest/v1/volunteer_roles', [role]);
-  await page.getByRole('link', { name: 'My Roles' }).click();
+  await page.getByRole('link', { name: 'My Roles', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Volunteer Leader Dashboard' })).toBeVisible();
   await expect(page.getByText(role.name, { exact: true })).toBeVisible();
 });
@@ -68,3 +68,72 @@ test('a rejected organizer assignment shows an error and sends no welcome email'
   expect(backend.calls('POST', assignment)).toBe(1);
   expect(backend.calls('POST', '/functions/v1/send-welcome-with-magic-link')).toBe(0);
 });
+
+for (const outcome of ['sent', 'delivery failed', 'assignment rejected', 'reactivated']) {
+  test(`leader assignment handles ${outcome} and avoids repeat submission`, async ({ page, backend }) => {
+    const assignment = '/functions/v1/create-volunteer-and-signup';
+    const email = '/functions/v1/send-email';
+    const signups = '/rest/v1/signups';
+    const emailAddress = 'leader-fixture@example.invalid';
+    const existing = outcome === 'reactivated'
+      ? [{ ...profile, email: emailAddress, team_club_affiliation_id: 'fixture-team' }]
+      : [];
+    await signInFixture(page, backend, 'volunteer_leader');
+    backend.handle('GET', '/rest/v1/profiles', (_, url) => ({
+      body: url.searchParams.has('id') ? [{ ...profile, role: 'volunteer_leader' }] : existing,
+    }));
+    backend.reply('GET', '/rest/v1/team_club_affiliations', [{ id: 'fixture-team', name: 'Fixture Club' }]);
+    backend.reply('GET', '/rest/v1/volunteer_leader_domains', []);
+    backend.reply('GET', '/rest/v1/volunteer_roles', [role]);
+    backend.reply('GET', signups, [{ id: 'fixture-signup', status: 'cancelled' }]);
+    backend.handle('PATCH', signups, (request) => {
+      expect(request.postDataJSON()).toMatchObject({ status: 'confirmed', waiver_signed: false });
+      return { body: {} };
+    });
+    backend.reply('POST', email, outcome === 'delivery failed' ? { error: 'Fixture failure' } : { success: true },
+      outcome === 'delivery failed' ? 502 : 200);
+    let finishAssignment;
+    const pendingAssignment = new Promise((resolve) => { finishAssignment = resolve; });
+    backend.handle('POST', assignment, async (request) => {
+      expect(request.postDataJSON()).toMatchObject({ email: emailAddress, role_id: role.id });
+      await pendingAssignment;
+      return outcome === 'assignment rejected'
+        ? { body: { error: 'Fixture role is full' } }
+        : { body: { volunteerId: profile.id } };
+    });
+
+    await page.getByRole('link', { name: 'My Roles', exact: true }).click();
+    await page.getByLabel(`First name for ${role.name}`).fill('Test');
+    await page.getByLabel(`Last name for ${role.name}`).fill('Volunteer');
+    await page.getByLabel(`Email for ${role.name}`).fill(emailAddress);
+    await page.getByLabel(`Team/club for ${role.name}`).selectOption('fixture-team');
+    await page.getByRole('button', { name: '+ Add', exact: true }).click();
+    if (outcome !== 'reactivated') {
+      try {
+        await expect(page.getByRole('button', { name: 'Adding…' })).toBeDisabled();
+        await expect.poll(() => backend.calls('POST', assignment)).toBe(1);
+        await page.getByLabel(`First name for ${role.name}`).press('Enter');
+        expect(backend.calls('POST', assignment)).toBe(1);
+      } finally {
+        finishAssignment();
+      }
+    }
+
+    if (outcome === 'assignment rejected') {
+      await expect(page.getByText('Fixture role is full')).toBeVisible();
+      expect(backend.calls('POST', email)).toBe(0);
+    } else {
+      const message = outcome === 'delivery failed'
+        ? /Please notify them manually/
+        : /sent a welcome email/;
+      await expect(page.getByText(message)).toBeVisible();
+      expect(backend.calls('POST', email)).toBe(1);
+    }
+    if (outcome === 'reactivated') {
+      expect(backend.calls('PATCH', signups)).toBe(1);
+      expect(backend.calls('POST', assignment)).toBe(0);
+    } else {
+      expect(backend.calls('POST', assignment)).toBe(1);
+    }
+  });
+}
