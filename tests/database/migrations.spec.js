@@ -177,3 +177,63 @@ test('clinic retries reserve one registration and enforce request limits per par
     has_function_privilege('service_role','public.reserve_clinic_registration(jsonb)','EXECUTE');`]);
   expect(grants.stdout.trim()).toBe('f|t');
 });
+
+test('MG-07 signup requires complete guardian consent and stores it once', () => {
+  const minor = '00000000-0000-4000-8000-000000000031';
+  const adult = '00000000-0000-4000-8000-000000000032';
+  const roleId = '00000000-0000-4000-8000-000000000033';
+  const fixture = sql('patched', ['-c', `
+    INSERT INTO auth.users (id, email) VALUES
+      ('${minor}', 'minor@example.invalid'), ('${adult}', 'adult@example.invalid');
+    INSERT INTO volunteer_roles (id, name, event_date, start_time, end_time, positions_total)
+    VALUES ('${roleId}', 'Guardian fixture', '2099-04-18', '08:00', '09:00', 2);
+  `]);
+  expect(fixture.status, fixture.stderr).toBe(0);
+
+  const consent = {
+    version: 1, signature_name: 'Fixture Volunteer', is_minor: true,
+    parent_guardian_name: ' Fixture Guardian ', parent_guardian_email: ' guardian@example.invalid ',
+    parent_signature_name: ' Fixture Signature ', parent_guardian_phone: ' ',
+  };
+  function confirm(volunteer, fields) {
+    return sql('patched', ['-qAtc', `BEGIN; SET LOCAL ROLE authenticated;
+      SELECT set_config('request.jwt.claim.sub', '${volunteer}', true);
+      SELECT confirm_volunteer_signup('${roleId}', NULL, '${JSON.stringify(fields)}')->>'created';
+      COMMIT;`]);
+  }
+
+  for (const field of ['parent_guardian_name', 'parent_guardian_email', 'parent_signature_name']) {
+    for (const value of [undefined, '   ']) {
+      const rejected = confirm(minor, { ...consent, [field]: value });
+      expect(rejected.status).not.toBe(0);
+      expect(rejected.stderr).toContain('Parent or guardian consent is required');
+    }
+  }
+  const blankSignature = confirm(minor, { ...consent, signature_name: '' });
+  expect(blankSignature.status).not.toBe(0);
+  // MG-03: independent confirmation of the rejection behind the browser xfail.
+  expect(blankSignature.stderr).toContain('Review and sign the current waiver');
+  const before = sql('patched', ['-Atc', `SELECT
+    (SELECT count(*) FROM waivers WHERE volunteer_id = '${minor}'),
+    (SELECT count(*) FROM signups WHERE volunteer_id = '${minor}')`]);
+  expect(before.stdout.trim()).toBe('0|0');
+
+  for (const [volunteer, fields, created] of [
+    [minor, consent, 'true'],
+    [minor, consent, 'false'],
+    [adult, { version: 1, signature_name: 'Fixture Adult', is_minor: false }, 'true'],
+  ]) {
+    const saved = confirm(volunteer, fields);
+    expect(saved.status, saved.stderr).toBe(0);
+    expect(saved.stdout.trim().split('\n').at(-1)).toBe(created);
+  }
+
+  const stored = sql('patched', ['-Atc', `SELECT parent_guardian_name, parent_guardian_email,
+    parent_signature_name, parent_guardian_phone IS NULL, parent_signed_at IS NOT NULL
+    FROM waivers WHERE volunteer_id = '${minor}'`]);
+  expect(stored.stdout.trim()).toBe('Fixture Guardian|guardian@example.invalid|Fixture Signature|t|t');
+  const adultStored = sql('patched', ['-Atc', `SELECT count(*) FROM waivers WHERE volunteer_id = '${adult}'
+    AND parent_guardian_name IS NULL AND parent_guardian_email IS NULL
+    AND parent_guardian_phone IS NULL AND parent_signature_name IS NULL AND parent_signed_at IS NULL`]);
+  expect(adultStored.stdout.trim()).toBe('1');
+});
