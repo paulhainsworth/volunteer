@@ -212,9 +212,9 @@ serve(async (req) => {
     })
 
     if (linkError) {
-      console.error('generateLink error:', linkError)
+      console.error('Welcome link generation failed', { status: linkError.status })
       return new Response(
-        JSON.stringify({ error: 'Failed to generate magic link', details: linkError.message }),
+        JSON.stringify({ error: 'Failed to generate magic link' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
@@ -225,7 +225,7 @@ serve(async (req) => {
       (linkData as { properties?: { action_link?: string } })?.properties?.action_link
 
     if (!actionLink) {
-      console.error('No action_link in generateLink response:', linkData)
+      console.error('Welcome link generation returned no action link')
       return new Response(
         JSON.stringify({ error: 'Magic link not returned' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -249,10 +249,9 @@ serve(async (req) => {
     })
 
     if (!res.ok) {
-      const errText = await res.text()
-      console.error('Resend API error:', errText)
+      console.error('Welcome email delivery failed', { status: res.status })
       return new Response(
-        JSON.stringify({ error: 'Failed to send email', details: errText }),
+        JSON.stringify({ error: 'Failed to send welcome email' }),
         { status: res.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
@@ -263,9 +262,9 @@ serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   } catch (error) {
-    console.error('send-welcome-with-magic-link error:', error)
+    console.error('Unexpected welcome email failure', { name: (error as Error).name })
     return new Response(
-      JSON.stringify({ error: (error as Error).message }),
+      JSON.stringify({ error: 'Failed to process welcome email request' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }

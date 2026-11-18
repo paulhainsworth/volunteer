@@ -1,5 +1,5 @@
 <script>
-  import { onMount } from 'svelte';
+  import { onDestroy, onMount } from 'svelte';
   import { signups as signupsStore } from '../../lib/stores/signups';
   import { auth } from '../../lib/stores/auth';
   import { supabase } from '../../lib/supabaseClient';
@@ -22,22 +22,29 @@
   let showContactLeaderModal = false;
   let contactLeaderSignup = null;
 
+  let active = true;
+  onDestroy(() => { active = false; });
+
   onMount(async () => {
-    if (!$auth.user) {
+    const { user, profile } = await auth.waitForReady();
+    if (!active) return;
+
+    if (!user) {
       push('/auth/login');
       return;
     }
 
     // Redirect to onboarding if no emergency contact
-    if (!$auth.profile?.emergency_contact_name) {
+    if (!profile?.emergency_contact_name) {
       push('/onboarding');
       return;
     }
 
     // Redirect to sign waiver if they haven't signed the current waiver (e.g. admin-added volunteer)
-    if ($auth.profile?.role === 'volunteer') {
+    if (profile.role === 'volunteer') {
       try {
-        const status = await waiverStore.checkWaiverStatus($auth.user.id);
+        const status = await waiverStore.checkWaiverStatus(user.id);
+        if (!active) return;
         if (status.needsToSign) {
           push('/volunteer/waiver?return=' + encodeURIComponent('/my-signups'));
           return;
@@ -47,6 +54,7 @@
       }
     }
 
+    if (!active) return;
     try {
       // Fetch signups with domain and leader info
       const { data, error: fetchError } = await supabase
@@ -75,7 +83,7 @@
             )
           )
         `)
-        .eq('volunteer_id', $auth.user.id)
+        .eq('volunteer_id', user.id)
         .eq('status', 'confirmed')
         .order('role(event_date)', { ascending: true });
 
