@@ -93,7 +93,7 @@ Function names in the table refer to `supabase/functions/<name>/index.ts`.
 
 - Run all implemented checks with `npm test`. [tests/run.mjs](tests/run.mjs) runs Playwright and Deno. [tests/README.md](tests/README.md) documents Node, Chromium, Deno, and Docker prerequisites and report paths.
 - Browser tests use a dedicated local Vite server and synthetic Auth, REST, RPC, and function responses. Database checks run in a fresh PostgreSQL container without networking. Edge handler tests use local imports and stub external providers.
-- [TEST_PLAN.md](TEST_PLAN.md) tracks coverage, expected failures, and remaining P2 and P3 work. [The test workflow](.github/workflows/tests.yml) runs the same command in GitHub Actions.
+- [TEST_PLAN.md](TEST_PLAN.md) tracks coverage, expected failures, and remaining P2 and P3 work. Run the suite locally before opening a pull request.
 
 ### Open questions
 
