@@ -34,3 +34,6 @@ dist-ssr
 
 # Supabase CLI cache
 supabase/.temp/
+
+# Local agent instructions
+/AGENTS.md
