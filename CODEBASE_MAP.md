@@ -41,9 +41,13 @@ Berkeley Bicycle Club uses this app to staff bicycle races, collect waivers, and
 │   ├── functions/          # Signup, clinic registration, email, and digests
 │   └── migrations/         # Timestamped database and policy changes
 ├── tests/
-│   ├── auth/               # Auth browser tests
-│   ├── helpers/            # Shared Playwright helpers
-│   └── integration/        # Full auth flow
+│   ├── auth/               # Magic-link request tests
+│   ├── database/           # Disposable PostgreSQL migration and policy checks
+│   ├── edge/               # Deno handler tests with local provider stubs
+│   ├── helpers/            # Shared browser fixtures
+│   ├── integration/        # Auth callback, session, and onboarding
+│   ├── organizer/          # Assignment, leader roster, and PDF export
+│   └── volunteer/          # Browse, signup, cancellation, and clinic
 ├── playwright-report/      # Checked-in generated HTML report
 └── test-results/           # Checked-in execution artifacts
 ```
@@ -82,8 +86,13 @@ Function names in the table refer to `supabase/functions/<name>/index.ts`.
 - Supabase setup spans the bootstrap schema, manual root SQL patches, and timestamped migrations. Which patches have already run in production needs confirmation. The Quick Start references an untracked `.env.example` and lists Node 18, which falls below the locked Vite requirement.
 - `npm audit --package-lock-only` reported 11 affected packages (one critical, eight high, two moderate), including jsPDF, Vite, and Svelte. Production reachability remains unverified.
 - The largest pages are `src/routes/admin/RolesList.svelte` (3,066 lines), `src/routes/admin/VolunteersList.svelte` (2,570), and `src/routes/leader/Dashboard.svelte` (1,983). The two admin pages have parallel create-volunteer-and-signup flows.
-- The checked-in Playwright suite focuses on auth. Volunteer signup, capacity and waiver enforcement, organizer permissions, and kids’ clinic registration lack dedicated coverage. The generated reports in Git reflect earlier runs.
 - `src/routes/auth/Signup.svelte` and `src/routes/auth/ResetPassword.svelte` are absent from the current route table. `src/lib/Counter.svelte` appears unused (inferred from the absence of imports). The Slack helper invokes `notify-slack-signup`, whose source is absent from this checkout.
+
+## Testing
+
+- Run all implemented checks with `npm test`. [tests/run.mjs](tests/run.mjs) runs Playwright and Deno. [tests/README.md](tests/README.md) documents Node, Chromium, Deno, and Docker prerequisites and report paths.
+- Browser tests use a dedicated local Vite server and synthetic Auth, REST, RPC, and function responses. Database checks run in a fresh PostgreSQL container without networking. Edge handler tests use local imports and stub external providers.
+- [TEST_PLAN.md](TEST_PLAN.md) tracks coverage, expected failures, and remaining P2 and P3 work. [The test workflow](.github/workflows/tests.yml) runs the same command in GitHub Actions.
 
 ### Open questions
 
