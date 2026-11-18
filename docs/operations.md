@@ -39,3 +39,9 @@ See [Vercel rewrites](../vercel.json), [Supabase function configuration](../supa
 | Expected digest or Slack alert is missing | Check whether the appropriate digest setting is enabled, which scheduler is active, and the latest function status. Review the [GitHub NICA schedule](../.github/workflows/nica-coach-digest-cron.yml) and [admin summary cron source](../scripts/sql/SETUP_DAILY_ADMIN_SUMMARY_CRON.sql). |
 
 When escalating, include the environment, release commit, affected flow, timestamp with time zone, and a redacted description of the observed outcome.
+
+## Notification monitoring
+
+Assign the NICA scheduler alert to a repository maintainer who receives failed workflow notifications. The scheduled job flags gaps longer than 45 minutes on the next run and keeps delivery results separate from scheduler freshness. Confirm notification routing using an approved environment. If the schedule stops entirely, an independent check of the workflow's last scheduled run is needed.
+
+Assign delivery follow-up to the event's communications owner. Check NICA workflow delivery counts and the admin summary job history. For clinic receipts, use the [24-hour confirmation count](../scripts/sql/CHECK_CLINIC_CONFIRMATION_DELIVERY.sql) in the approved database and correlate unrecorded confirmations with the function's redacted delivery errors. The query excludes the latest five minutes while delivery may still be in progress. Review counts and timestamps in any escalation.

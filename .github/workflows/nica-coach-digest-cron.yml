@@ -17,6 +17,10 @@ on:
         type: boolean
         default: false
 
+permissions:
+  actions: read
+  contents: read
+
 jobs:
   ping:
     runs-on: ubuntu-latest
@@ -39,3 +43,12 @@ jobs:
             -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
             -H "Content-Type: application/json" \
             -d "${BODY}" | python3 scripts/check-nica-digest-response.py
+      - name: Check scheduled run freshness
+        if: ${{ always() && github.event_name == 'schedule' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -o pipefail
+          gh run list --repo "$GITHUB_REPOSITORY" --workflow nica-coach-digest-cron.yml \
+            --branch "$GITHUB_REF_NAME" --event schedule --limit 30 --json databaseId,createdAt \
+            | python3 scripts/check-nica-schedule.py "$GITHUB_RUN_ID"
