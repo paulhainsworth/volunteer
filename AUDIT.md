@@ -84,6 +84,8 @@ The offline MG suite uses synthetic identities and intercepts all email delivery
 | [#41](https://github.com/paulhainsworth/volunteer/issues/41) · Mail provider errors need redaction | [send-email](supabase/functions/send-email/index.ts#L49) currently includes upstream diagnostics in its logs and response. | Tracked by an expected-failure handler test. Related to [#17](https://github.com/paulhainsworth/volunteer/issues/17). |
 | [#42](https://github.com/paulhainsworth/volunteer/issues/42) · Standalone waiver needs shared guardian enforcement | [MG-08 database test](tests/database/migrations.spec.js) verifies that waivers without an age declaration require renewal and that new adult and guardian-signed waivers can be reused for an eligible role. | Implementation uses one server-side rule and preserves older waivers as history. Older waivers are re-collected at next use. Hosted rollout pending. |
 
+[Issue #41](https://github.com/paulhainsworth/volunteer/issues/41) · The offline mail handler test verifies provider diagnostics stay out of logs and error responses.
+
 ## Notification monitoring follow-up
 
 [Issue #13](https://github.com/paulhainsworth/volunteer/issues/13) · Synthetic fixtures verify detection of schedule gaps longer than 45 minutes and count-only clinic receipt checks. The operations guide assigns monitoring by role. GitHub reports the workflow active with no scheduled run after August 11, 2026. The independently runnable freshness check detects this condition. Scheduling the check and confirming where alerts go remain open. See the [operations guide](docs/operations.md#notification-monitoring) and [PR #45](https://github.com/paulhainsworth/volunteer/pull/45).
