@@ -1,11 +1,16 @@
 import { deepStrictEqual, equal } from 'node:assert/strict';
-import { handler, request, setClient } from './stubs.ts';
+import { handler, request, setClient as setStubClient } from './stubs.ts';
 
 Deno.env.set('SUPABASE_URL', 'https://fixture.invalid');
 Deno.env.set('SUPABASE_SERVICE_ROLE_KEY', 'synthetic-service-key');
 Deno.env.set('RESEND_API_KEY', 'synthetic-mail-key');
+Deno.env.set('AUTH_MAIL_ALLOWED_ORIGINS', 'http://127.0.0.1:4179');
 await import('../../supabase/functions/send-magic-link/index.ts');
 const sendLogin = handler();
+
+function setClient(factory: () => Record<string, unknown>) {
+  setStubClient(() => ({ rpc: () => ({ data: true, error: null }), ...factory() }));
+}
 
 Deno.test('a valid public login request sends a single configured confirmation', async () => {
   const email = 'volunteer@example.invalid';
@@ -95,7 +100,7 @@ const sendWelcome = handler();
 
 Deno.test('welcome email reports a delivery failure without returning provider details', async () => {
   setClient(() => ({
-    auth: { admin: { generateLink: () => ({
+    auth: { getUser: () => ({ data: { user: { id: 'fixture-volunteer', email: 'volunteer@example.invalid' } }, error: null }), admin: { generateLink: () => ({
       data: { properties: { action_link: 'https://fixture.invalid/link' } },
       error: null,
     }) } },
@@ -103,13 +108,46 @@ Deno.test('welcome email reports a delivery failure without returning provider d
   const originalFetch = globalThis.fetch;
   globalThis.fetch = () => Promise.resolve(Response.json({ detail: 'internal provider fixture' }, { status: 503 }));
   try {
-    const response = await sendWelcome(request({
-      to: 'volunteer@example.invalid',
-      redirectTo: 'http://127.0.0.1:4179/',
+    const response = await sendWelcome(new Request('https://fixture.invalid/welcome', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer synthetic-volunteer-session' },
+      body: JSON.stringify({ to: 'volunteer@example.invalid', redirectTo: 'http://127.0.0.1:4179/' }),
     }));
     equal(response.status, 503);
     deepStrictEqual(await response.json(), { error: 'Failed to send welcome email' });
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+
+Deno.test('login rejects an unconfigured redirect before contacting Auth', async () => {
+  setClient(() => { throw new Error('Auth provider must not be used'); });
+  const response = await sendLogin(request({
+    to: 'volunteer@example.invalid',
+    redirectTo: 'https://other.example.invalid/',
+  }));
+  equal(response.status, 400);
+});
+
+Deno.test('welcome invitations require an authenticated sender', async () => {
+  setClient(() => ({}));
+  const response = await sendWelcome(request({
+    to: 'volunteer@example.invalid',
+    redirectTo: 'http://127.0.0.1:4179/',
+  }));
+  equal(response.status, 401);
+});
+
+
+Deno.test('public login returns a uniform acknowledgment when the mail limit is reached', async () => {
+  setClient(() => ({
+    rpc: () => ({ data: false, error: null }),
+    auth: { admin: { generateLink() { throw new Error('No sign-in link should be generated'); } } },
+  }));
+  const response = await sendLogin(request({
+    to: 'volunteer@example.invalid', redirectTo: 'http://127.0.0.1:4179/',
+  }));
+  equal(response.status, 200);
+  deepStrictEqual(await response.json(), { success: true });
 });

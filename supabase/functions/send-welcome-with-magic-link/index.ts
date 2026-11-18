@@ -4,6 +4,7 @@
  */
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { allowedMailRedirect } from '../_shared/auth-mail-redirect.ts'
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
@@ -196,19 +197,60 @@ serve(async (req) => {
   try {
     const { to, first_name, redirectTo, promptWaiverAndEmergencyContact }: RequestBody = await req.json()
 
-    if (!to || !redirectTo) {
+    if (typeof to !== 'string' || !to.trim() || !redirectTo) {
       return new Response(
         JSON.stringify({ error: 'Missing required fields: to, redirectTo' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
+    const safeRedirect = allowedMailRedirect(redirectTo, false)
+    if (!safeRedirect) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid sign-in destination' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
     const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+
+    const normalizedEmail = to.trim().toLowerCase()
+    const bearer = req.headers.get('Authorization')?.match(/^Bearer (\S+)$/i)
+    const caller = bearer ? await supabaseAdmin.auth.getUser(bearer[1]) : null
+    if (caller?.error || !caller?.data.user?.id) {
+      return new Response(JSON.stringify({ error: 'Sign in to send a welcome email' }), {
+        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+    if (caller.data.user.email?.trim().toLowerCase() !== normalizedEmail) {
+      const { data: profile, error } = await supabaseAdmin.from('profiles')
+        .select('role').eq('id', caller.data.user.id).maybeSingle()
+      if (error || profile?.role !== 'admin') {
+        return new Response(JSON.stringify({ error: 'Administrator access is required' }), {
+          status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+    }
+
+    const { data: allowed, error: limitError } = await supabaseAdmin.rpc('claim_auth_mail_request', {
+      p_channel: 'welcome', p_email: normalizedEmail,
+    })
+    if (limitError) {
+      console.error('Auth email rate limit unavailable')
+      return new Response(JSON.stringify({ error: 'Email temporarily unavailable' }), {
+        status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+    if (allowed !== true) {
+      return new Response(JSON.stringify({ error: 'Please wait before sending another welcome email' }), {
+        status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
 
     const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
       type: 'magiclink',
-      email: to,
-      options: { redirectTo },
+      email: normalizedEmail,
+      options: { redirectTo: safeRedirect },
     })
 
     if (linkError) {
@@ -242,7 +284,7 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         from: 'Volunteer Manager <notifications@berkeleyomnium.com>',
-        to: [to],
+        to: [normalizedEmail],
         subject: 'Welcome to 2026 Berkeley Omnium',
         html,
       }),
