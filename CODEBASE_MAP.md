@@ -10,7 +10,7 @@ Berkeley Bicycle Club uses this app to staff bicycle races, collect waivers, and
 | Build | Vite 7.1.12 and Svelte Vite plugin 6.2.1. The locked Vite package requires Node.js `^20.19.0 \|\| >=22.12.0`. |
 | Backend | Supabase Auth and PostgreSQL with row-level security (RLS), Supabase JS and PostgREST JS 2.78.0, and TypeScript Edge Functions on Deno |
 | Utilities | date-fns 4.1.0, jsPDF 3.0.4, jsPDF-AutoTable 5.0.7 |
-| Browser tests | Playwright 1.56.1 and axe-core Playwright integration 4.11.0 in the lockfile |
+| Browser tests | Playwright 1.56.1 in the lockfile |
 
 - Install with `npm install`, start with `npm run dev`, build with `npm run build`, and serve the build locally with `npm run preview`. See [package.json](package.json) and [package-lock.json](package-lock.json).
 - Run Chromium tests with `npm test`. The other scripts are `npm run test:ui`, `npm run test:headed`, `npm run test:debug`, and `npm run test:report`. [playwright.config.js](playwright.config.js) starts Vite and uses one worker to avoid conflicts in Supabase.
@@ -33,7 +33,7 @@ Berkeley Bicycle Club uses this app to staff bicycle races, collect waivers, and
 │   │   └── utils/          # CSV parsing, time display, timeouts, and other helpers
 │   └── routes/
 │       ├── admin/          # Roles, volunteers, domains, dashboard, email
-│       ├── auth/           # Login and legacy auth page components
+│       ├── auth/           # Magic-link login
 │       ├── invite/         # Domain invitation flow
 │       ├── leader/         # Volunteer leader dashboard
 │       └── volunteer/      # Browse, sign up, sign waiver, manage signups
@@ -73,7 +73,7 @@ Function names in the table refer to `supabase/functions/<name>/index.ts`.
 
 | Names | Where read |
 | --- | --- |
-| `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` | The three Supabase client modules above, `src/lib/stores/auth.js`, `src/lib/submitKidsClinicSignup.js`, and `src/routes/auth/ResetPassword.svelte`. |
+| `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` | The three Supabase client modules above, `src/lib/stores/auth.js`, and `src/lib/submitKidsClinicSignup.js`. |
 | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | `admin-add-role-volunteer`, `create-leader`, `create-volunteer-and-signup`, `send-daily-admin-summary`, `send-magic-link`, `send-nica-coach-digest`, `send-welcome-with-magic-link`, and `submit-kids-clinic-signup`. The GitHub workflow reads both names from repository secrets. |
 | `SUPABASE_ANON_KEY` | `create-signup-for-new-user` forwards the authenticated caller for older clients. |
 | `RESEND_API_KEY` | `send-email`, `send-daily-admin-summary`, `send-magic-link`, `send-nica-coach-digest`, `send-welcome-with-magic-link`, and `submit-kids-clinic-signup`. |
