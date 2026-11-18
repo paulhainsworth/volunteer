@@ -77,7 +77,7 @@
     // Redirect to sign waiver if volunteer hasn't signed current waiver (e.g. admin-added volunteer)
     if ($auth.user && $auth.profile?.emergency_contact_name && $auth.profile?.role === 'volunteer') {
       try {
-        const status = await waiverStore.checkWaiverStatus($auth.user.id);
+        const status = await waiverStore.checkWaiverStatus();
         if (status.needsToSign) {
           push('/volunteer/waiver?return=' + encodeURIComponent('/volunteer'));
           return;
@@ -1112,7 +1112,7 @@
                 disabled={piiSubmitting}
               />
               <label for="pii-under-18">
-                I will be under 18 on the day of the event
+                {piiRole?.event_date ? 'I will be under 18 on the day of the event' : 'I am under 18 today'}
               </label>
             </div>
             {#if piiIsMinor}

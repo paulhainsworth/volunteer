@@ -43,7 +43,7 @@
     // Redirect to sign waiver if they haven't signed the current waiver (e.g. admin-added volunteer)
     if (profile.role === 'volunteer') {
       try {
-        const status = await waiverStore.checkWaiverStatus(user.id);
+        const status = await waiverStore.checkWaiverStatus();
         if (!active) return;
         if (status.needsToSign) {
           push('/volunteer/waiver?return=' + encodeURIComponent('/my-signups'));

@@ -81,7 +81,7 @@ export function fixtureSession() {
 export async function signInFixture(page, backend, role = 'volunteer', { signups = [], profileFields = {}, search = '' } = {}) {
   backend.reply('GET', '/auth/v1/user', user);
   backend.reply('GET', '/rest/v1/waiver_settings', waiver);
-  backend.reply('GET', '/rest/v1/waivers', { waiver_version: 1 });
+  backend.reply('POST', '/rest/v1/rpc/volunteer_waiver_is_current', true);
   backend.reply('GET', '/rest/v1/profiles', [{ ...profile, ...profileFields, role }]);
   backend.reply('GET', '/rest/v1/signups', signups);
   const session = fixtureSession();

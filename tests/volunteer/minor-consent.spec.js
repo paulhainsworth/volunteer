@@ -1,6 +1,8 @@
 import { test, expect, fixtureSession, profile, role, signInFixture, user, waiver } from '../helpers/browser.js';
 
 const signup = '/rest/v1/rpc/confirm_volunteer_signup';
+const waiverStatus = '/rest/v1/rpc/volunteer_waiver_is_current';
+const signWaiver = '/rest/v1/rpc/sign_volunteer_waiver';
 const mail = '/functions/v1/send-email';
 const guardian = {
   parent_guardian_name: 'Fixture Guardian',
@@ -24,7 +26,7 @@ async function openForm(page, backend, path) {
   if (path === 'signed-in' || path === 'waiver') {
     await signInFixture(page, backend);
     await expect(page).toHaveURL(/my-signups$/);
-    backend.reply('GET', '/rest/v1/waivers', { code: 'PGRST116' }, 406);
+    backend.reply('POST', waiverStatus, false);
     await page.goto(path === 'waiver' ? waiverPath : signupPath);
     return page.getByRole('button', { name: path === 'waiver' ? 'Sign waiver' : 'Confirm Signup', exact: true });
   }
@@ -45,7 +47,7 @@ async function openForm(page, backend, path) {
 }
 
 function under18(page) {
-  return page.getByRole('checkbox', { name: /I will be under 18/ });
+  return page.getByLabel(/I (?:will be|am) under 18/);
 }
 
 async function fillGuardian(page, name = guardian.parent_guardian_name) {
@@ -88,7 +90,7 @@ for (const path of ['signed-in', 'guest', 'browse', 'waiver']) {
     await expect(page.getByLabel(/parent\/guardian phone/i)).toHaveValue('');
     expect(backend.calls('POST', signup)).toBe(0);
     expect(backend.calls('POST', '/auth/v1/signup')).toBe(0);
-    expect(backend.calls('POST', '/rest/v1/waivers')).toBe(0);
+    expect(backend.calls('POST', signWaiver)).toBe(0);
   });
 }
 
@@ -147,7 +149,7 @@ for (const path of ['guest', 'browse']) {
     const submit = await openForm(page, backend, path);
     backend.reply('POST', '/auth/v1/signup', fixtureSession());
     backend.reply('GET', '/rest/v1/profiles', [profile]);
-    backend.reply('GET', '/rest/v1/waivers', waiver);
+    backend.reply('POST', waiverStatus, true);
     backend.reply('GET', '/rest/v1/signups', []);
     backend.reply('POST', '/functions/v1/send-welcome-with-magic-link', { success: true });
     const emails = [];
@@ -167,14 +169,13 @@ test('MG-05 verification requires entering guardian consent again before reservi
   await submit.click();
   await expect(page.getByText('A spot has not been reserved.', { exact: false })).toBeVisible();
   expect(backend.calls('POST', signup)).toBe(0);
-  expect(backend.calls('POST', '/rest/v1/waivers')).toBe(0);
+  expect(backend.calls('POST', signWaiver)).toBe(0);
   expect(backend.calls('POST', mail)).toBe(0);
 
-  const pendingWaiver = { code: 'PGRST116' };
   const session = fixtureSession();
   backend.reply('GET', '/auth/v1/user', user);
   backend.reply('GET', '/rest/v1/profiles', [profile]);
-  backend.reply('GET', '/rest/v1/waivers', pendingWaiver, 406);
+  backend.reply('POST', waiverStatus, false);
   backend.reply('GET', '/rest/v1/signups', []);
   await page.goto(`/?signup_role=${role.id}#${new URLSearchParams({
     access_token: session.access_token, refresh_token: session.refresh_token,
@@ -194,16 +195,15 @@ test('MG-05 verification requires entering guardian consent again before reservi
 for (const accepted of [true, false]) {
   test(`MG-06 standalone waiver handles accepted=${accepted} with guardian consent`, async ({ page, backend }) => {
     const submit = await openForm(page, backend, 'waiver');
-    backend.handle('POST', '/rest/v1/waivers', (request) => {
-      const payload = request.postDataJSON();
+    backend.handle('POST', signWaiver, (request) => {
+      const payload = request.postDataJSON().p_consent;
       expect(payload).toMatchObject({
-        ...guardian, volunteer_id: user.id, signature_name: 'Test Volunteer',
-        parent_signed_at: expect.any(String), waiver_version: waiver.version, waiver_text: waiver.waiver_text,
+        ...guardian, is_minor: true, signature_name: null, version: waiver.version,
       });
-      expect(payload.parent_guardian_phone).toBe(accepted ? '5550101' : undefined);
+      expect(payload.parent_guardian_phone).toBe(accepted ? '5550101' : null);
       if (!accepted) return { body: { message: 'Fixture waiver save failed' }, status: 400 };
-      backend.reply('GET', '/rest/v1/waivers', waiver);
-      return { body: waiver, status: 201 };
+      backend.reply('POST', waiverStatus, true);
+      return { body: null };
     });
     backend.reply('POST', mail, { success: true });
     await fillGuardian(page);
@@ -220,6 +220,25 @@ for (const accepted of [true, false]) {
     }
   });
 }
+
+test('MG-08 standalone adult without a current age declaration must re-sign', async ({ page, backend }) => {
+  const submit = await openForm(page, backend, 'waiver');
+  await expect(page.getByText('How old are you today?')).toBeVisible();
+  await page.getByRole('checkbox', { name: /I have read/i }).check();
+  await expect(submit).toBeDisabled();
+  await page.getByLabel('I am 18 or older today').check();
+  await page.getByLabel('Digital signature (full name)').fill('Test Volunteer');
+  backend.handle('POST', signWaiver, (request) => {
+    expect(request.postDataJSON().p_consent).toEqual({
+      is_minor: false, signature_name: 'Test Volunteer', version: waiver.version,
+    });
+    backend.reply('POST', waiverStatus, true);
+    return { body: null };
+  });
+  await submit.click();
+  await expect(page).toHaveURL(/#\/my-signups$/);
+  expect(backend.calls('POST', mail)).toBe(0);
+});
 
 test('MG-09 failed guardian mail leaves signup confirmed and logs no contact data', async ({ page, backend }) => {
   const submit = await openForm(page, backend, 'signed-in');
