@@ -42,6 +42,15 @@ When escalating, include the environment, release commit, affected flow, timesta
 
 ## Notification monitoring
 
-Assign the NICA scheduler alert to a repository maintainer who receives failed workflow notifications. The scheduled job flags gaps longer than 45 minutes on the next run and keeps delivery results separate from scheduler freshness. Confirm notification routing using an approved environment. If the schedule stops entirely, an independent check of the workflow's last scheduled run is needed.
+Assign the NICA scheduler alert to a repository maintainer who receives failed workflow notifications. The scheduled job flags gaps longer than 45 minutes on the next run and keeps delivery results separate from scheduler freshness. Confirm notification routing using an approved environment. Run this check from a separate scheduler with read access to the repository's Actions metadata. Route a nonzero exit to the maintainer. The check also works from an authenticated terminal.
+
+```sh
+set -o pipefail
+gh run list --repo paulhainsworth/volunteer --workflow nica-coach-digest-cron.yml \
+  --branch main --event schedule --limit 1 --json databaseId,createdAt \
+  | python3 scripts/check-nica-schedule.py --latest
+```
+
+The check fails when scheduled history is missing or the most recent run is more than 45 minutes old. Use it during periods when the digest is expected to run.
 
 Assign delivery follow-up to the event's communications owner. Check NICA workflow delivery counts and the admin summary job history. For clinic receipts, use the [24-hour confirmation count](../scripts/sql/CHECK_CLINIC_CONFIRMATION_DELIVERY.sql) in the approved database and correlate unrecorded confirmations with the function's redacted delivery errors. The query excludes the latest five minutes while delivery may still be in progress. Review counts and timestamps in any escalation.
