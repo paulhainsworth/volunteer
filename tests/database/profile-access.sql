@@ -14,3 +14,49 @@ BEGIN
 END
 $$;
 ROLLBACK;
+
+
+-- Verify normal account provisioning and role-management permissions.
+INSERT INTO auth.users (id, email)
+VALUES ('00000000-0000-4000-8000-000000000004', 'admin-fixture@example.invalid');
+UPDATE profiles SET role = 'admin' WHERE id = '00000000-0000-4000-8000-000000000004';
+GRANT SELECT ON profiles TO anon;
+BEGIN;
+SET LOCAL ROLE anon;
+DO $$
+BEGIN
+  IF EXISTS (SELECT FROM profiles) THEN
+    RAISE EXCEPTION 'Anonymous profile reads must return no rows';
+  END IF;
+END
+$$;
+ROLLBACK;
+
+BEGIN;
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-000000000001', true);
+DO $$
+BEGIN
+  BEGIN
+    PERFORM public.set_volunteer_profile_role(auth.uid(), 'volunteer_leader');
+    RAISE EXCEPTION 'The role operation must require an administrator';
+  EXCEPTION WHEN insufficient_privilege THEN
+    NULL;
+  END;
+END
+$$;
+ROLLBACK;
+
+BEGIN;
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-000000000004', true);
+SELECT public.set_volunteer_profile_role('00000000-0000-4000-8000-000000000001', 'volunteer_leader');
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT FROM profiles WHERE
+    id = '00000000-0000-4000-8000-000000000001' AND role = 'volunteer_leader') THEN
+    RAISE EXCEPTION 'Authorized role assignment did not persist';
+  END IF;
+END
+$$;
+ROLLBACK;

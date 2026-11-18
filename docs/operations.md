@@ -27,6 +27,8 @@ Apply the [optional assent migration](../supabase/migrations/20261118000200_allo
 
 Coordinate the [shared waiver migration](../supabase/migrations/20261118000300_enforce_shared_volunteer_waiver_policy.sql) and frontend promotion in one release window. The old standalone form requires direct writes that the migration removes. Rehearse adult and minor waiver renewal with fixture accounts, including an account with a waiver that predates the new age declaration. Older records remain in the database for reference.
 
+For the [profile role migration](../supabase/migrations/20261118000400_protect_profile_role_writes.sql), release the updated leader creation function and role-management frontend with the migration. Verify named admin access and rehearse a leader invitation on staging.
+
 See [Vercel rewrites](../vercel.json), [Supabase function configuration](../supabase/config.toml), [migrations](../supabase/migrations/README.md), and the [codebase map](../CODEBASE_MAP.md#configuration).
 
 ## Triage by symptom
