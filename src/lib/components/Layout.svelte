@@ -8,6 +8,7 @@
   $: isKidsLanding = $location === '/kids';
 
   let showMobileMenu = false;
+  let mobileMenuButton;
   let signingOut = false;
 
   onMount(() => {
@@ -37,7 +38,17 @@
   function handleNavClick() {
     showMobileMenu = false;
   }
+
+  function handleMenuKeydown(event) {
+    if (event.key !== 'Escape' || !showMobileMenu || !mobileMenuButton?.offsetWidth) return;
+
+    event.preventDefault();
+    showMobileMenu = false;
+    mobileMenuButton.focus();
+  }
 </script>
+
+<svelte:window on:keydown={handleMenuKeydown} on:hashchange={handleNavClick} />
 
 <div class="app-layout" class:kids-landing={isKidsLanding}>
   {#if !isKidsLanding}
@@ -54,12 +65,20 @@
       </div>
 
       <div class="nav-right">
-        <button class="mobile-menu-btn" on:click={toggleMobileMenu} aria-label="Toggle menu">
+        <button
+          type="button"
+          class="mobile-menu-btn"
+          bind:this={mobileMenuButton}
+          on:click={toggleMobileMenu}
+          aria-label="Toggle menu"
+          aria-expanded={showMobileMenu}
+          aria-controls="main-navigation"
+        >
           <span></span>
           <span></span>
           <span></span>
         </button>
-        <div class="nav-menu" class:active={showMobileMenu}>
+        <div id="main-navigation" class="nav-menu" class:active={showMobileMenu}>
         {#if $auth.user}
           {#if $auth.isAdmin}
             <a href="#/admin" class="nav-link" on:click={handleNavClick}>Dashboard</a>
@@ -184,11 +203,24 @@
   .mobile-menu-btn {
     display: none;
     flex-direction: column;
+    align-items: center;
+    justify-content: center;
     gap: 4px;
     background: none;
     border: none;
+    border-radius: 6px;
     cursor: pointer;
-    padding: 0.5rem;
+    width: 44px;
+    height: 44px;
+  }
+
+  .mobile-menu-btn:active {
+    background: var(--bg-tertiary);
+  }
+
+  .mobile-menu-btn:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
   }
 
   .mobile-menu-btn span {
@@ -329,6 +361,7 @@
 
     .nav-menu {
       position: absolute;
+      z-index: 10;
       top: 100%;
       left: 0;
       right: 0;

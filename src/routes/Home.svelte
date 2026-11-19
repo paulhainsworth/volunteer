@@ -68,8 +68,8 @@
 
 <div class="home">
   <div class="hero">
-    <h1>🚴 Race Volunteer Management</h1>
-    <p class="tagline">Organize, track, and communicate with race volunteers</p>
+    <h1>Find a volunteer shift</h1>
+    <p class="tagline">Help put on the Berkeley Omnium. Find a shift that fits your schedule.</p>
     
     <div class="cta-buttons">
       {#if $auth.user}
@@ -82,7 +82,7 @@
         {/if}
       {/if}
       {#if !$auth.user}
-        <a href="#/volunteer" class="btn btn-secondary btn-see-all">See All Volunteer Roles</a>
+        <a href="#/volunteer" class="btn btn-primary">Browse volunteer shifts</a>
       {:else}
         <a href="#/volunteer" class="btn btn-secondary">Browse Opportunities</a>
       {/if}
@@ -94,12 +94,14 @@
       {#if rolesLoading}
         <p class="roles-loading">Loading roles…</p>
       {:else if rolesLoadFailed}
-        <p class="roles-empty">Roles couldn’t load. Try <a href="#/volunteer">See All Volunteer Roles</a>, or use a private/incognito window or disable browser extensions (e.g. wallet extensions) for this site.</p>
+        <p class="roles-empty">Shifts couldn’t load. Try <a href="#/volunteer">browsing volunteer shifts</a>.</p>
       {:else if homeRoles.length === 0}
         <p class="roles-empty">No volunteer roles yet. Check back soon.</p>
       {:else}
+        <h2>Volunteer shifts</h2>
         <div class="role-cards">
           {#each homeRoles as role (role.id)}
+            {@const openSpots = Math.max((role.positions_total ?? 0) - (role.positions_filled ?? 0), 0)}
             <a href="#/volunteer?info={role.id}" class="role-card">
               <h3 class="role-card-name">{role.name}</h3>
               <p class="role-card-date">{formatRoleScheduleDate(role, 'short')}</p>
@@ -107,7 +109,7 @@
                 <p class="role-card-domain">{role.domain.name}</p>
               {/if}
               {#if role.positions_total != null}
-                <p class="role-card-slots">{role.positions_filled ?? 0} / {role.positions_total} filled</p>
+                <p class="role-card-slots">{openSpots ? `${openSpots} ${openSpots === 1 ? 'spot' : 'spots'} open` : 'Full'}</p>
               {/if}
             </a>
           {/each}
@@ -163,12 +165,11 @@
   .hero h1 {
     font-size: 3rem;
     margin-bottom: 1rem;
-    color: #1a1a1a;
   }
 
   .tagline {
     font-size: 1.5rem;
-    color: #6c757d;
+    color: var(--text-muted);
     margin-bottom: 2rem;
   }
 
@@ -177,10 +178,6 @@
     gap: 1rem;
     justify-content: center;
     flex-wrap: wrap;
-  }
-
-  .btn-see-all {
-    margin-bottom: 0;
   }
 
   .btn {
@@ -192,14 +189,13 @@
     transition: transform 0.2s, box-shadow 0.2s;
   }
 
-  .btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  .btn-primary {
+    background: #0056b3;
+    color: white;
   }
 
-  .btn-primary {
-    background: #007bff;
-    color: white;
+  .btn-primary:active {
+    background: #00458e;
   }
 
   .btn-secondary {
@@ -209,13 +205,17 @@
   }
 
   .roles-section {
-    margin: 2rem 0 4rem;
+    margin: 0.5rem 0 3rem;
+  }
+
+  .roles-section h2 {
+    font-size: 1.375rem;
   }
 
   .roles-loading,
   .roles-empty {
     text-align: center;
-    color: var(--text-secondary, #6c757d);
+    color: var(--text-muted);
     margin: 2rem 0;
   }
 
@@ -226,31 +226,38 @@
 
   .role-cards {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-    gap: 1.5rem;
-    margin-top: 1.5rem;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
+    gap: 1rem;
+    margin-top: 0.75rem;
   }
 
   .role-card {
-    background: white;
-    padding: 1.5rem;
+    background: var(--bg-primary);
+    padding: 1.25rem;
     border-radius: 12px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     text-decoration: none;
     color: inherit;
     transition: transform 0.2s, box-shadow 0.2s;
     border: 1px solid var(--border-color, #e9ecef);
   }
 
-  .role-card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  @media (hover: hover) and (pointer: fine) {
+    .btn:hover,
+    .role-card:hover {
+      text-decoration: none;
+      box-shadow: var(--shadow-md);
+    }
+  }
+
+  .btn:focus-visible,
+  .role-card:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
   }
 
   .role-card-name {
     margin: 0 0 0.5rem;
     font-size: 1.15rem;
-    color: #1a1a1a;
   }
 
   .role-card-date,
@@ -258,7 +265,12 @@
   .role-card-slots {
     margin: 0.25rem 0;
     font-size: 0.9rem;
-    color: #6c757d;
+    color: var(--text-muted);
+  }
+
+  .role-card-slots {
+    font-weight: 600;
+    color: var(--text-primary);
   }
 
   .features {
@@ -299,25 +311,28 @@
   .about {
     text-align: center;
     padding: 3rem 1rem;
-    background: #f8f9fa;
+    background: var(--bg-secondary);
     border-radius: 12px;
     margin: 2rem 0;
   }
 
   .about h2 {
     margin-bottom: 1rem;
-    color: #1a1a1a;
   }
 
   .about p {
     font-size: 1.1rem;
     line-height: 1.6;
-    color: #495057;
+    color: var(--text-muted);
     max-width: 700px;
     margin: 0 auto;
   }
 
   @media (max-width: 768px) {
+    .hero {
+      padding: 1rem 0 2rem;
+    }
+
     .hero h1 {
       font-size: 2rem;
     }
