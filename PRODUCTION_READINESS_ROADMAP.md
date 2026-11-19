@@ -26,7 +26,7 @@ As of this review, the offline suite and audit links are merged. The login and s
 
 | Order | Deliverable | Complete when | Tracking |
 | --- | --- | --- | --- |
-| 1 | Verify the hosted database baseline | The local bootstrap is verified. Confirm migration history, effective policies, and an upgrade rehearsal before a hosted deployment. | [#6](https://github.com/paulhainsworth/volunteer/issues/6), [#8](https://github.com/paulhainsworth/volunteer/issues/8) |
+| 1 | Verify the hosted database baseline | The disposable upgrade and legacy data preservation are verified. Run the hosted baseline report and follow the staged [security rollout checkpoints](docs/operations.md#security-rollout-checkpoints). | [#6](https://github.com/paulhainsworth/volunteer/issues/6), [#8](https://github.com/paulhainsworth/volunteer/issues/8) |
 | 2 | Make volunteer signup consistent | Signup is bound to verified identity. A last-seat race yields at most one confirmed assignment, and failed consent or assignment writes produce an accurate outcome. Retries avoid duplicates. | [#5](https://github.com/paulhainsworth/volunteer/issues/5), [#21](https://github.com/paulhainsworth/volunteer/issues/21) |
 | 3 | Make clinic registration safe to retry | Repeated submission keeps one registration, request limits are tested, and mail failure reports whether the registration was saved. | [#23](https://github.com/paulhainsworth/volunteer/issues/23) |
 | Parallel | Triage dependency advisories | Prioritize findings by actual reachability. Compatible upgrades pass the full offline suite, browser PDF export, and production build. | [#22](https://github.com/paulhainsworth/volunteer/issues/22) |

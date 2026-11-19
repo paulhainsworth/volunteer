@@ -39,6 +39,16 @@ After the existing profile-read rollout, apply [the authorized emergency-contact
 
 See [Vercel rewrites](../vercel.json), [Supabase function configuration](../supabase/config.toml), [migrations](../supabase/migrations/README.md), and the [codebase map](../CODEBASE_MAP.md#configuration).
 
+## Security rollout checkpoints
+
+1. Confirm the approved Supabase target and record the [read-only baseline report](database-bootstrap.md#hosted-setup-and-upgrades). Reconcile the deployed migration ledger and verify named administrator access before changing accounts or database policy.
+2. Rehearse the pending migrations through `20261118000700` on staging. If it still uses older standalone waiver writes, coordinate migration `20261118000300` with the frontend cutover. Confirm the baseline report shows the typed mail claim and UUID-returning waiver function before deploying the matching Edge Functions.
+3. Deploy the affected Edge Functions and verify the approved sign-in callback and email delivery with synthetic accounts. Promote the matching frontend in the coordinated release window. Rehearse staff mail, signup and guardian confirmations, and cancellation notices.
+4. Apply `20261118000800` after the new cancellation flow is live. Verify staff directory access, role changes, own-profile edits, and access to an assigned leader. Clear any temporary email compatibility override and compare the final baseline.
+5. Verify alert routing from an independent scheduler. Resume automatic Vercel deployment after the hosted release is confirmed.
+
+The disposable [database rehearsal](../tests/database/migrations.spec.js) verifies schema checkpoints and preservation of a legacy signup and waiver. Run it with `npm test -- tests/database/migrations.spec.js`.
+
 ## Triage by symptom
 
 | Symptom | First checks |

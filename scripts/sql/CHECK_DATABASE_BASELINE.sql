@@ -14,7 +14,16 @@ FROM (VALUES
   ('public.get_confirmed_signup_counts(uuid[])', to_regprocedure('public.get_confirmed_signup_counts(uuid[])') IS NOT NULL),
   ('public.confirm_volunteer_signup(uuid,text,jsonb)', to_regprocedure('public.confirm_volunteer_signup(uuid,text,jsonb)') IS NOT NULL),
   ('public.reserve_clinic_registration(jsonb)', to_regprocedure('public.reserve_clinic_registration(jsonb)') IS NOT NULL),
-  ('public.sign_volunteer_waiver(jsonb)', to_regprocedure('public.sign_volunteer_waiver(jsonb)') IS NOT NULL)
+  ('public.set_volunteer_profile_role(uuid,text)', to_regprocedure('public.set_volunteer_profile_role(uuid,text)') IS NOT NULL),
+  ('public.claim_auth_mail_request(text,text)', to_regprocedure('public.claim_auth_mail_request(text,text)') IS NOT NULL),
+  ('public.claim_volunteer_mail(uuid,text,uuid)', to_regprocedure('public.claim_volunteer_mail(uuid,text,uuid)') IS NOT NULL),
+  ('public.sign_volunteer_waiver(jsonb) returns uuid',
+    coalesce(pg_get_function_result(to_regprocedure('public.sign_volunteer_waiver(jsonb)')) = 'uuid', false)),
+  ('authenticated profile read policy', EXISTS (
+    SELECT 1 FROM pg_policy
+    WHERE polrelid = to_regclass('public.profiles')
+      AND polname = 'Authenticated profiles are limited to the volunteer and permitted staff'
+  ))
 ) AS baseline(object_name, present)
 ORDER BY object_name;
 

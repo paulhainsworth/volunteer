@@ -84,7 +84,10 @@ test('the read-only baseline report handles absent and present migration history
   const withoutHistory = sql('fresh', ['-Atf', report]);
   expect(withoutHistory.status, withoutHistory.stderr).toBe(0);
   expect(withoutHistory.stdout).toContain('public.waivers.declared_minor|t');
-  expect(withoutHistory.stdout).toContain('public.sign_volunteer_waiver(jsonb)|t');
+  expect(withoutHistory.stdout).toContain('public.sign_volunteer_waiver(jsonb) returns uuid|t');
+  expect(withoutHistory.stdout).toContain('public.claim_auth_mail_request(text,text)|t');
+  expect(withoutHistory.stdout).toContain('public.claim_volunteer_mail(uuid,text,uuid)|t');
+  expect(withoutHistory.stdout).toContain('authenticated profile read policy|t');
   expect(withoutHistory.stdout).toContain('Supabase migration history table is missing.');
 
   const seeded = sql('fresh', ['-c', `
@@ -98,6 +101,62 @@ test('the read-only baseline report handles absent and present migration history
   expect(withHistory.status, withHistory.stderr).toBe(0);
   expect(withHistory.stdout).toContain('20261118000300');
   expect(withHistory.stdout).not.toContain('migration history table is missing');
+});
+
+test('the staged security upgrade preserves existing signups and defers profile restrictions', () => {
+  const database = 'security_rollout';
+  bootstrap(database);
+  for (const patch of baselinePatches) apply(database, patch);
+  apply(database, 'supabase/manual/ADD_PUBLIC_SIGNUP_COUNTS_RLS.sql');
+  const lastLegacyVersion = '20261118000200';
+  const profileReadVersion = '20261118000800';
+  for (const file of migrations.filter((file) => file.slice(0, 14) <= lastLegacyVersion)) {
+    apply(database, `${migrationDirectory}/${file}`);
+  }
+  const volunteer = '00000000-0000-4000-8000-000000000071';
+  const shift = '00000000-0000-4000-8000-000000000072';
+  const seed = sql(database, ['-c', `
+    INSERT INTO auth.users (id, email) VALUES ('${volunteer}', 'rollout@example.invalid');
+    INSERT INTO volunteer_roles (id, name, event_date, start_time, end_time, positions_total)
+      VALUES ('${shift}', 'Existing shift', '2099-04-18', '08:00', '09:00', 1);
+    INSERT INTO waivers (volunteer_id, signature_name, waiver_version, waiver_text)
+      VALUES ('${volunteer}', 'Fixture Volunteer', 1, 'Fixture waiver');
+    INSERT INTO signups (volunteer_id, role_id, status, waiver_signed)
+      VALUES ('${volunteer}', '${shift}', 'confirmed', true);
+  `]);
+  expect(seed.status, seed.stderr).toBe(0);
+
+  const report = '/repo/scripts/sql/CHECK_DATABASE_BASELINE.sql';
+  const before = sql(database, ['-Atf', report]);
+  expect(before.status, before.stderr).toBe(0);
+  expect(before.stdout).toContain('public.sign_volunteer_waiver(jsonb) returns uuid|f');
+  expect(before.stdout).toContain('public.claim_volunteer_mail(uuid,text,uuid)|f');
+
+  for (const file of migrations.filter((file) => {
+    const version = file.slice(0, 14);
+    return version > lastLegacyVersion && version < profileReadVersion;
+  })) {
+    apply(database, `${migrationDirectory}/${file}`);
+  }
+  const staged = sql(database, ['-Atf', report]);
+  expect(staged.status, staged.stderr).toBe(0);
+  expect(staged.stdout).toContain('public.sign_volunteer_waiver(jsonb) returns uuid|t');
+  expect(staged.stdout).toContain('public.claim_volunteer_mail(uuid,text,uuid)|t');
+  expect(staged.stdout).toContain('authenticated profile read policy|f');
+
+  const finalMigration = migrations.find((file) => file.startsWith(profileReadVersion));
+  expect(finalMigration).toBeDefined();
+  apply(database, `${migrationDirectory}/${finalMigration}`);
+  const after = sql(database, ['-Atf', report]);
+  expect(after.status, after.stderr).toBe(0);
+  expect(after.stdout).toContain('authenticated profile read policy|t');
+
+  const preserved = sql(database, ['-Atc', `SELECT s.status, s.waiver_signed,
+    w.signature_name, w.declared_minor IS NULL
+    FROM signups s JOIN waivers w USING (volunteer_id)
+    WHERE s.volunteer_id = '${volunteer}' AND s.role_id = '${shift}'`]);
+  expect(preserved.status, preserved.stderr).toBe(0);
+  expect(preserved.stdout.trim()).toBe('confirmed|t|Fixture Volunteer|t');
 });
 
 test('explicit baseline patches support migrations, profile editing, and scoped cleanup', () => {
