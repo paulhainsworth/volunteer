@@ -92,6 +92,20 @@ The offline MG suite uses synthetic identities and intercepts all email delivery
 
 [Issue #13](https://github.com/paulhainsworth/volunteer/issues/13) · Synthetic fixtures verify detection of schedule gaps longer than 45 minutes and count-only clinic receipt checks. The operations guide assigns monitoring by role. GitHub reports the workflow active with no scheduled run after August 11, 2026. The independently runnable freshness check detects this condition. Scheduling the check and confirming where alerts go remain open. See the [operations guide](docs/operations.md#notification-monitoring) and [PR #45](https://github.com/paulhainsworth/volunteer/pull/45).
 
+## Hosted verification status
+
+The security changes and the Vercel deployment pause are merged. The disposable upgrade rehearsal verifies both schema checkpoints and preserves an existing signup and waiver. The [release checkpoints](docs/operations.md#security-rollout-checkpoints) record what is still needed.
+
+| Issue | Remaining verification |
+| --- | --- |
+| [#6](https://github.com/paulhainsworth/volunteer/issues/6) | Approved hosted target, migration ledger and staged upgrade. |
+| [#13](https://github.com/paulhainsworth/volunteer/issues/13) | GitHub still reports the workflow active, with no recorded scheduled run after August 11, 2026. Confirm an independent scheduler and alert recipient. |
+| [#16](https://github.com/paulhainsworth/volunteer/issues/16) | Verify a named administrator can sign in, then retire any historical shared account. |
+| [#17](https://github.com/paulhainsworth/volunteer/issues/17) | Verify the staged relay, staff delivery and the four volunteer notification flows. |
+| [#18](https://github.com/paulhainsworth/volunteer/issues/18) | Confirm effective directory access for administrators and volunteer leaders. |
+| [#19](https://github.com/paulhainsworth/volunteer/issues/19) | Verify hosted grants and agree on staff access to sensitive profile fields. |
+| [#20](https://github.com/paulhainsworth/volunteer/issues/20) | Verify the approved sign-in callback and delivery from both deployed mail functions. |
+
 ## Five-line summary
 
 1. Profile policy and public directory access are the highest data-exposure risks. Live grants still need verification.
