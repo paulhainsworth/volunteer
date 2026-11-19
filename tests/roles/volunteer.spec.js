@@ -25,6 +25,71 @@ test('dark mode themes the sign-in form and role dialog and persists on reload',
   await expect(page.locator('.domain-section')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
 });
 
+for (const [accountRole, destinations] of [
+  ['volunteer', ['Browse Roles', 'My Signups']],
+  ['volunteer_leader', ['My Roles', 'Browse Roles', 'My Signups']],
+  ['admin', ['Dashboard', 'Roles', 'Domains', 'Users', 'Communications']],
+]) {
+  test(`header fits the desktop and tablet layout for ${accountRole}`, async ({ page, backend }) => {
+    const email = 'fixture.long.volunteer.account.address@example.invalid';
+    await page.setViewportSize({ width: 1256, height: 720 });
+    await signInFixture(page, backend, accountRole, { profileFields: { email } });
+    const nav = page.getByRole('navigation', { name: 'Main', exact: true });
+    const menu = nav.getByRole('button', { name: 'Toggle menu' });
+    const signOut = nav.getByRole('button', { name: 'Sign Out' });
+    const profileLink = nav.getByRole('link', { name: email, exact: true });
+
+    for (const width of [1256, 1101]) {
+      await page.setViewportSize({ width, height: 720 });
+      await expect(menu).toBeHidden();
+      await expect(profileLink).toHaveCSS('text-overflow', 'ellipsis');
+      const controls = [
+        nav.getByRole('link', { name: /Omnium Volunteer Hub/ }),
+        ...destinations.map((name) => nav.getByRole('link', { name, exact: true })),
+        nav.getByRole('button', { name: 'Dark mode' }),
+        profileLink,
+        signOut,
+      ];
+      let right = 0;
+      const header = await nav.boundingBox();
+      for (const control of controls) {
+        await expect(control).toBeVisible();
+        const box = await control.boundingBox();
+        expect(box.x).toBeGreaterThanOrEqual(right - 0.5);
+        expect(Math.abs(box.y + box.height / 2 - header.y - header.height / 2)).toBeLessThan(1);
+        right = box.x + box.width;
+      }
+      expect(right).toBeLessThan(width);
+      for (const label of [controls[0].locator('span'), ...controls.slice(1, -3), signOut]) {
+        expect(await label.evaluate((element) => {
+          const range = document.createRange();
+          range.selectNodeContents(element);
+          return range.getClientRects().length;
+        })).toBe(1);
+      }
+    }
+
+    if (destinations.includes('My Signups')) {
+      await expect(page).toHaveURL(/#\/my-signups$/);
+      await expect(nav.getByRole('link', { name: 'My Signups' })).toHaveAttribute('aria-current', 'page');
+    }
+
+    await page.setViewportSize({ width: 1024, height: 720 });
+    await expect(menu).toBeVisible();
+    await expect(signOut).toBeHidden();
+    await menu.click();
+    for (const name of destinations) {
+      await expect(nav.getByRole('link', { name, exact: true })).toBeVisible();
+    }
+    await expect(profileLink).toBeVisible();
+    await expect(signOut).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(1024);
+    await menu.press('Escape');
+    await expect(menu).toBeFocused();
+    await expect(signOut).toBeHidden();
+  });
+}
+
 test('mobile navigation exposes its state and restores focus on Escape', async ({ page, backend }) => {
   backend.reply('GET', '/rest/v1/volunteer_roles', []);
   await page.setViewportSize({ width: 320, height: 720 });
