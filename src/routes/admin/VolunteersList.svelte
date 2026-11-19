@@ -1,5 +1,5 @@
 <script>
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { volunteers } from '../../lib/stores/volunteers';
   import { auth } from '../../lib/stores/auth';
   import { affiliations } from '../../lib/stores/affiliations';
@@ -67,6 +67,13 @@
   let addVolunteerSuggestionLoading = false;
   let addVolunteerSuggestionTimer = null;
   let selectedAffiliationId = '';
+  let showAffiliationForm = false;
+  let affiliationName = '';
+  let affiliationError = '';
+  let affiliationNotice = '';
+  let savingAffiliation = false;
+  let affiliationToggle;
+  let affiliationInput;
   let showNicaSummary = false;
   let showNicaCoaches = false;
   let nicaCopyFeedback = '';
@@ -89,6 +96,36 @@
       loading = false;
     }
   });
+
+  async function toggleAffiliationForm() {
+    showAffiliationForm = !showAffiliationForm;
+    affiliationError = '';
+    affiliationNotice = '';
+    await tick();
+    if (showAffiliationForm) affiliationInput?.focus();
+    else affiliationToggle?.focus();
+  }
+
+  async function addAffiliation() {
+    const name = affiliationName.trim();
+    if (savingAffiliation || !name) return;
+    affiliationError = '';
+    savingAffiliation = true;
+    try {
+      const affiliation = await affiliations.createAffiliation(name);
+      affiliationNotice = `Added ${affiliation.name}. It is now available in affiliation pickers.`;
+      affiliationName = '';
+      showAffiliationForm = false;
+    } catch (err) {
+      if (err.code === '23505') affiliationError = 'This team or club affiliation already exists.';
+      else if (err.code === '22023') affiliationError = 'Enter a name from 1 to 100 characters.';
+      else affiliationError = 'Could not add the affiliation. Please try again.';
+    } finally {
+      savingAffiliation = false;
+      await tick();
+      if (!showAffiliationForm) affiliationToggle?.focus();
+    }
+  }
 
   function sortVolunteers(volunteers) {
     return [...volunteers].sort((a, b) => {
@@ -836,8 +873,30 @@
       <button class="btn btn-primary" on:click={openAddVolunteerModal}>
         + Add Volunteer
       </button>
+      {#if $auth.isAdmin}
+        <button type="button" class="btn btn-secondary" bind:this={affiliationToggle}
+          aria-expanded={showAffiliationForm} aria-controls="add-affiliation-form"
+          on:click={toggleAffiliationForm} disabled={savingAffiliation}>
+          Add team or club
+        </button>
+      {/if}
     </div>
   </div>
+
+  {#if showAffiliationForm && $auth.isAdmin}
+    <form id="add-affiliation-form" class="affiliation-form" on:submit|preventDefault={addAffiliation}>
+      <div class="affiliation-field">
+        <label for="new-affiliation-name">Team or club name</label>
+        <input id="new-affiliation-name" bind:this={affiliationInput} bind:value={affiliationName}
+          type="text" maxlength="100" required disabled={savingAffiliation} />
+      </div>
+      <button type="submit" class="btn btn-primary" disabled={savingAffiliation || !affiliationName.trim()}>
+        {savingAffiliation ? 'Adding…' : 'Add affiliation'}
+      </button>
+      {#if affiliationError}<p class="affiliation-error" role="alert">{affiliationError}</p>{/if}
+    </form>
+  {/if}
+  {#if affiliationNotice}<p class="affiliation-notice" role="status">{affiliationNotice}</p>{/if}
 
   {#if error}
     <div class="alert alert-error">{error}</div>
@@ -1609,6 +1668,45 @@
     align-items: center;
     gap: 1rem;
     flex-wrap: wrap;
+  }
+
+  .affiliation-form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    gap: 0.75rem;
+    padding: 1rem;
+    margin-bottom: 1.25rem;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+  }
+
+  .affiliation-field {
+    display: grid;
+    gap: 0.25rem;
+    flex: 1 1 15rem;
+    min-width: 0;
+  }
+
+  .affiliation-field input {
+    min-height: 44px;
+    padding: 0.5rem 0.75rem;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border: 1px solid var(--input-border);
+    border-radius: var(--radius-md);
+    font-size: 1rem;
+  }
+
+  .affiliation-error {
+    flex-basis: 100%;
+    color: var(--danger-text);
+  }
+
+  .affiliation-notice {
+    margin-bottom: 1rem;
+    color: var(--success-text);
   }
 
   .sr-only {
