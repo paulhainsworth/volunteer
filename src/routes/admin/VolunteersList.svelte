@@ -1,9 +1,10 @@
 <script>
   import { onMount } from 'svelte';
-  import { volunteers } from '../../lib/stores/volunteers';
+  import { activeRosterYear, archivedVolunteers, volunteers } from '../../lib/stores/volunteers';
   import { auth } from '../../lib/stores/auth';
   import { affiliations } from '../../lib/stores/affiliations';
   import { supabase } from '../../lib/supabaseClient';
+  import { isArchivedShift } from '../../lib/volunteerSeason';
   import { createVolunteerAsAdmin } from '../../lib/adminVolunteerSignup';
 
   import { push } from 'svelte-spa-router';
@@ -12,14 +13,18 @@
     formatRoleScheduleDate,
     formatTimeRange,
     getTodayDateInPacific,
-    isFlexibleTime
+    getRoleScheduleSortTime,
+    isFlexibleTime,
+    isRoleScheduleInPast
   } from '../../lib/utils/timeDisplay';
 
   function upcomingVolunteerRolesOrFilter() {
     const today = getTodayDateInPacific();
-    if (!today) return '';
-    const monthStart = `${today.slice(0, 7)}-01`;
-    return `event_date.gte.${today},and(event_date.is.null,completion_month.gte.${monthStart}),and(event_date.is.null,completion_month.is.null)`;
+    const seasonStart = $activeRosterYear ? `${$activeRosterYear}-01-01` : '';
+    const cutoff = seasonStart > today ? seasonStart : today;
+    if (!cutoff) return '';
+    const monthStart = `${cutoff.slice(0, 7)}-01`;
+    return `event_date.gte.${cutoff},and(event_date.is.null,completion_month.gte.${monthStart}),and(event_date.is.null,completion_month.is.null)`;
   }
   import { NICA_BENEFICIARIES } from '../../lib/nicaBeneficiaries';
   import {
@@ -33,6 +38,11 @@
   let loading = true;
   let error = '';
   let searchQuery = '';
+  let showArchived = false;
+  let assignedShiftId = '';
+  $: allRosterVolunteers = [...$volunteers, ...$archivedVolunteers];
+  $: shownVolunteers = showArchived ? $archivedVolunteers : assignedShiftId ? allRosterVolunteers : $volunteers;
+  $: assignedShifts = collectAssignedShifts(allRosterVolunteers);
   let viewMode = 'table'; // 'cards' or 'table'
   let sortColumn = 'last_name';
   let sortDirection = 'asc';
@@ -51,6 +61,7 @@
   let saving = false;
   let availableRoles = [];
   let userSignups = [];
+  $: userSignupGroups = groupUserSignups(userSignups, $activeRosterYear);
   let loadingRoles = false;
   let selectedRoleId = '';
   let showAddVolunteerModal = false;
@@ -138,9 +149,40 @@
     }
   }
 
+  function collectAssignedShifts(people) {
+    const shifts = new Map();
+    for (const volunteer of people) {
+      for (const { role } of volunteer.confirmedSignups) {
+        if (role) shifts.set(role.id, role);
+      }
+    }
+    return [...shifts.values()].sort((a, b) =>
+      a.name.localeCompare(b.name) || getRoleScheduleSortTime(a) - getRoleScheduleSortTime(b)
+    );
+  }
+
+  function groupUserSignups(signups, activeYear) {
+    const current = [];
+    const past = [];
+    const ordered = [...signups].sort((a, b) => getRoleScheduleSortTime(a.role) - getRoleScheduleSortTime(b.role));
+    for (const signup of ordered) {
+      const group = isArchivedShift(signup.role, activeYear) || isRoleScheduleInPast(signup.role) ? past : current;
+      group.push(signup);
+    }
+    return [
+      { label: 'Current Signups', signups: current },
+      { label: 'Past Signups', signups: past.reverse() }
+    ];
+  }
+
   // Make sorting reactive to sort column, direction, and affiliation filter
   $: filteredVolunteers = (() => {
-    let filtered = $volunteers;
+    let filtered = shownVolunteers;
+    if (assignedShiftId) {
+      filtered = filtered.filter((volunteer) =>
+        volunteer.confirmedSignups.some((signup) => signup.role?.id === assignedShiftId)
+      );
+    }
     if (selectedAffiliationId) {
       filtered = filtered.filter(v => (v.team_club_affiliation_id || '') === selectedAffiliationId);
     }
@@ -293,7 +335,7 @@
 
   function exportToCSV() {
     const headers = ['First Name', 'Last Name', 'Email', 'Phone', 'Total Signups', 'Total Hours', 'Waiver Signed'];
-    const rows = $volunteers.map(v => [
+    const rows = (assignedShiftId ? filteredVolunteers : shownVolunteers).map(v => [
       v.first_name || '',
       v.last_name || '',
       v.email,
@@ -369,7 +411,7 @@
         positions_filled: confirmedCountByRole[role.id] ?? 0
       }));
 
-      // Fetch user's current signups
+      // Fetch the user's confirmed signup history
       const { data: signupsData, error: signupsError } = await supabase
         .from('signups')
         .select(`
@@ -763,9 +805,14 @@
     const headers = ['Volunteer Name', 'Email', 'Phone', 'Role', 'Event Date', 'Start Time', 'End Time'];
     const rows = [];
 
-    $volunteers.forEach(volunteer => {
-      volunteer.signups.forEach(signup => {
+    const people = assignedShiftId ? filteredVolunteers : shownVolunteers;
+    people.forEach(volunteer => {
+      const signups = assignedShiftId
+        ? volunteer.confirmedSignups.filter((signup) => signup.role?.id === assignedShiftId)
+        : volunteer.signups;
+      signups.forEach(signup => {
         const r = signup.role;
+        if (!r) return;
         const start = isFlexibleTime(r) ? 'Flexible' : (r.start_time || '');
         const end = isFlexibleTime(r) ? 'Flexible' : (r.end_time || '');
         rows.push([
@@ -801,7 +848,7 @@
   <div class="header">
     <div>
       <h1>Users</h1>
-      <p>Manage all registered users, their roles, and signups</p>
+      <p>Manage users and signups. <a href="#/admin/volunteers/season">Season rollover</a></p>
     </div>
     
     <div class="header-actions">
@@ -843,12 +890,19 @@
     <div class="alert alert-error">{error}</div>
   {/if}
 
+  {#if $activeRosterYear && !loading}
+    <p class="roster-season">
+      <label><input type="checkbox" bind:checked={showArchived} /> View archived volunteers</label>
+      <span>Active roster starts in {$activeRosterYear}.</span>
+    </p>
+  {/if}
+
   {#if loading}
     <div class="loading">Loading volunteers...</div>
-  {:else if $volunteers.length === 0}
+  {:else if shownVolunteers.length === 0}
     <div class="empty">
-      <h2>No volunteers yet</h2>
-      <p>Volunteers will appear here once they sign up</p>
+      <h2>{showArchived ? 'No archived volunteers' : 'No volunteers yet'}</h2>
+      {#if !showArchived}<p>Volunteers will appear here once they sign up</p>{/if}
     </div>
   {:else}
     <div class="controls">
@@ -860,7 +914,7 @@
         />
       </div>
 
-      <div class="filter-affiliation">
+      <div class="roster-filter">
         <label for="filter-affiliation" class="filter-label">Affiliation</label>
         <select
           id="filter-affiliation"
@@ -874,6 +928,16 @@
         </select>
       </div>
       
+      <div class="roster-filter">
+        <label for="filter-assigned-shift" class="filter-label">Assigned shift</label>
+        <select id="filter-assigned-shift" bind:value={assignedShiftId}>
+          <option value="">All shifts</option>
+          {#each assignedShifts as shift (shift.id)}
+            <option value={shift.id}>{shift.name} · {formatRoleScheduleDate(shift, 'long')} · {formatTimeRange(shift)}</option>
+          {/each}
+        </select>
+      </div>
+
       <div class="view-toggle">
         <button
           class="view-btn {viewMode === 'cards' ? 'active' : ''}"
@@ -891,6 +955,10 @@
         </button>
       </div>
     </div>
+
+    {#if assignedShiftId && !showArchived && $archivedVolunteers.length > 0}
+      <p class="filter-hint">Shift matches include archived volunteers.</p>
+    {/if}
 
     <div class="nica-toggle-row">
       <button
@@ -947,7 +1015,9 @@
       </div>
     {/if}
 
-    {#if viewMode === 'table'}
+    {#if filteredVolunteers.length === 0}
+      <p class="no-signups">No volunteers match these filters.</p>
+    {:else if viewMode === 'table'}
       <div class="table-view">
         <table>
           <thead>
@@ -1030,6 +1100,9 @@
                 </td>
                 <td on:click|stopPropagation>
                   <div class="table-actions">
+                    <button type="button" class="btn btn-xs btn-secondary" on:click|stopPropagation={() => openEditModal(volunteer)}>
+                      View signups
+                    </button>
                     {#if volunteer.role === 'volunteer'}
                       <button 
                         class="btn btn-xs btn-secondary"
@@ -1149,6 +1222,9 @@
           </div>
           
           <div class="volunteer-actions">
+            <button type="button" class="btn btn-sm btn-secondary" on:click={() => openEditModal(volunteer)}>
+              View signups
+            </button>
             {#if volunteer.role === 'volunteer'}
               <button 
                 class="btn btn-sm btn-secondary"
@@ -1344,33 +1420,36 @@
         {#if loadingRoles}
           <div class="loading-signups">Loading roles...</div>
         {:else}
-          <!-- Current Signups -->
-          {#if userSignups.length > 0}
-            <div class="signups-section">
-              <h4>Current Signups ({userSignups.length})</h4>
-              <div class="signups-list-modal">
-                {#each userSignups as signup (signup.id)}
-                  <div class="signup-item-modal">
-                    <div class="signup-info">
-                      <strong>{signup.role.name}</strong>
-                      <span class="signup-meta">
-                        {formatRoleScheduleDate(signup.role, 'long')} •
-                        {formatTimeRange(signup.role)}
-                      </span>
+          {#each userSignupGroups as group (group.label)}
+            {#if group.signups.length > 0}
+              <div class="signups-section">
+                <h4>{group.label} ({group.signups.length})</h4>
+                <div class="signups-list-modal">
+                  {#each group.signups as signup (signup.id)}
+                    <div class="signup-item-modal">
+                      <div class="signup-info">
+                        <strong>{signup.role?.name || 'Shift unavailable'}</strong>
+                        {#if signup.role}
+                          <span class="signup-meta">
+                            {formatRoleScheduleDate(signup.role, 'long')} · {formatTimeRange(signup.role)}
+                          </span>
+                        {/if}
+                      </div>
+                      <button
+                        class="btn btn-xs btn-danger"
+                        on:click={() => removeUserSignup(signup.id)}
+                        title="Remove signup"
+                      >
+                        ✕ Remove
+                      </button>
                     </div>
-                    <button 
-                      class="btn btn-xs btn-danger"
-                      on:click={() => removeUserSignup(signup.id)}
-                      title="Remove signup"
-                    >
-                      ✕ Remove
-                    </button>
-                  </div>
-                {/each}
+                  {/each}
+                </div>
               </div>
-            </div>
-          {:else}
-            <p class="no-signups">No current signups</p>
+            {/if}
+          {/each}
+          {#if userSignups.length === 0}
+            <p class="no-signups">No confirmed signups</p>
           {/if}
 
           <!-- Assign to Role -->
@@ -1580,6 +1659,19 @@
 {/if}
 
 <style>
+  .roster-season {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1rem;
+    margin-bottom: 1rem;
+    color: var(--text-muted);
+  }
+
+  .header a {
+    color: var(--link-hover);
+    text-decoration: underline;
+  }
+
   .volunteers-page {
     max-width: 1400px;
     margin: 0 auto;
@@ -1757,22 +1849,25 @@
     box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
   }
 
-  .filter-affiliation {
+  .roster-filter {
     display: flex;
     flex-direction: row;
     align-items: center;
     gap: 0.5rem;
   }
 
-  .filter-affiliation .filter-label {
+  .roster-filter .filter-label {
     font-size: 0.875rem;
     font-weight: 600;
     color: var(--text-muted);
     white-space: nowrap;
   }
 
-  .filter-affiliation select {
-    min-width: 200px;
+  .roster-filter select {
+    min-width: 0;
+    width: 13rem;
+    max-width: 100%;
+    color: var(--text-primary);
     padding: 0.75rem;
     border: 1px solid var(--input-border);
     border-radius: 6px;
@@ -1782,10 +1877,16 @@
     box-sizing: border-box;
   }
 
-  .filter-affiliation select:focus {
+  .roster-filter select:focus {
     outline: none;
     border-color: var(--primary-color);
     box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+  }
+
+  .filter-hint {
+    margin: -1rem 0 1rem;
+    color: var(--text-muted);
+    font-size: 0.9rem;
   }
 
   .view-toggle {
@@ -2359,6 +2460,15 @@
     }
 
     .search-box {
+      width: 100%;
+      min-width: 0;
+    }
+
+    .roster-filter {
+      display: grid;
+    }
+
+    .roster-filter select {
       width: 100%;
     }
 

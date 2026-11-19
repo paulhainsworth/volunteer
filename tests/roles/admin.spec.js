@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { test, expect, fixtureSession, profile, role, signInFixture } from '../helpers/browser.js';
 
 const roles = '/rest/v1/volunteer_roles';
@@ -98,6 +99,145 @@ test('admin updates the event year and publishes website messages', async ({ pag
   await expect(spotlight.getByRole('heading', { name: role.name })).toBeVisible();
 });
 
+test('admin previews and starts the 2027 roster while keeping staff and returning volunteers', async ({ page, backend }) => {
+  const seasonEndpoint = '/rest/v1/volunteer_season';
+  const previewEndpoint = '/rest/v1/rpc/preview_volunteer_season';
+  const oldShift = { ...role, event_date: '2026-04-19' };
+  const newShift = { ...role, event_date: '2027-04-17' };
+  const oldSignup = { id: 'past-assignment', status: 'confirmed', role: oldShift };
+  const currentSignup = { id: 'new-assignment', status: 'confirmed', role: newShift };
+  let activeYear = null;
+  let archivedSignupList = [oldSignup];
+  backend.handle('GET', seasonEndpoint, () => ({ body: [{ active_year: activeYear }] }));
+  backend.handle('POST', previewEndpoint, (request) => {
+    expect(request.postDataJSON()).toEqual({ p_active_year: 2027 });
+    return { body: { archived_shifts: 1, inactive_volunteers: 1, retained_staff: 2 } };
+  });
+  backend.handle('PATCH', seasonEndpoint, (request, url) => {
+    expect(url.searchParams.get('active_year')).toBe('is.null');
+    expect(request.postDataJSON()).toEqual({ active_year: 2027 });
+    activeYear = 2027;
+    return { body: { active_year: activeYear } };
+  });
+  await signInFixture(page, backend, 'admin');
+  await expect(page).toHaveURL(/#\/my-signups$/);
+  mockAdminReads(backend);
+  backend.handle('GET', '/rest/v1/profiles', () => ({ body: [
+    { ...profile, role: 'admin' },
+    { ...profile, id: 'archived', first_name: 'Prior', last_name: 'Volunteer', email: 'prior@example.invalid', signups: archivedSignupList },
+    { ...profile, id: 'returning', first_name: 'Returning', last_name: 'Volunteer', email: 'returning@example.invalid', signups: [oldSignup, currentSignup] },
+    { ...profile, id: 'leader', role: 'volunteer_leader', first_name: 'Kept', last_name: 'Leader', email: 'leader@example.invalid', signups: [oldSignup] },
+  ] }));
+  backend.reply('GET', '/rest/v1/email_digest_settings', [{ admin_daily_volunteer_summary_enabled: true }]);
+
+  await page.getByRole('link', { name: 'Users', exact: true }).click();
+  const priorVolunteer = page.getByRole('link', { name: 'prior@example.invalid' });
+  await expect(priorVolunteer).toBeVisible();
+  await page.getByRole('link', { name: 'Season rollover' }).click();
+  await page.getByLabel('New roster year').fill('2027');
+  await page.getByRole('button', { name: 'Preview rollover' }).click();
+  await expect(page.getByRole('region', { name: 'Preview for 2027' })).toContainText('1 regular volunteer moves');
+  const start = page.getByRole('button', { name: 'Start 2027 roster' });
+  await expect(start).toBeDisabled();
+  expect(backend.calls('PATCH', seasonEndpoint)).toBe(0);
+  await page.getByLabel('Confirm the roster rollover to 2027').check();
+  await start.click();
+  await expect(page.getByRole('status')).toContainText('starts in 2027');
+  expect(backend.calls('PATCH', seasonEndpoint)).toBe(1);
+
+  await page.getByRole('link', { name: 'Back to Users' }).click();
+  await expect(page.getByText('Active roster starts in 2027.')).toBeVisible();
+  await expect(priorVolunteer).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'returning@example.invalid' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'leader@example.invalid' })).toBeVisible();
+  await page.getByLabel('View archived volunteers').check();
+  await expect(priorVolunteer).toBeVisible();
+
+  await page.getByRole('link', { name: 'Communications', exact: true }).click();
+  await expect(page.getByText('All Volunteers (3)', { exact: true })).toBeVisible();
+  activeYear = 2028;
+  await page.getByLabel('Subject').fill('Fixture notice');
+  await page.getByLabel('Message', { exact: true }).fill('Fixture body');
+  await page.getByRole('button', { name: 'Send Email to 3 Recipients' }).click();
+  await expect(page.getByText('The roster year changed. Reload Communications to review the current recipients.')).toBeVisible();
+  expect(backend.calls('POST', '/functions/v1/send-email')).toBe(0);
+  activeYear = 2027;
+
+
+  archivedSignupList = [oldSignup, currentSignup];
+  await page.getByRole('link', { name: 'Users', exact: true }).click();
+  await expect(priorVolunteer).toBeVisible();
+});
+
+test('admin finds past assignments across active and archived volunteers', async ({ page, backend }) => {
+  await page.clock.setFixedTime(new Date('2026-11-18T20:00:00Z'));
+  await signInFixture(page, backend, 'admin');
+  await expect(page).toHaveURL(/#\/my-signups$/);
+  mockAdminReads(backend);
+  backend.reply('GET', '/rest/v1/volunteer_season', [{ active_year: 2027 }]);
+
+  const pastShift = { ...role, id: '00000000-0000-4000-8000-000000000101', event_date: '2026-04-19' };
+  const currentShift = { ...role, event_date: '2027-04-17' };
+  const past = { id: 'past-assignment', role_id: pastShift.id, status: 'confirmed', role: pastShift };
+  const current = { id: 'current-assignment', role_id: currentShift.id, status: 'confirmed', role: currentShift };
+  const people = [
+    { ...profile, id: 'archived', first_name: 'Prior', email: 'prior@example.invalid', signups: [past] },
+    { ...profile, id: 'returning', first_name: 'Returning', email: 'returning@example.invalid', signups: [past, current] },
+    { ...profile, id: 'new', first_name: 'New', email: 'new@example.invalid', signups: [current, { ...past, status: 'cancelled' }] },
+  ];
+  backend.reply('GET', '/rest/v1/profiles', people);
+  backend.handle('GET', '/rest/v1/signups', (_, url) => {
+    const id = url.searchParams.get('volunteer_id')?.replace('eq.', '');
+    return { body: people.find((person) => person.id === id)?.signups.filter((signup) => signup.status === 'confirmed') ?? [] };
+  });
+
+  await page.getByRole('link', { name: 'Users', exact: true }).click();
+  const archived = page.getByRole('link', { name: 'prior@example.invalid' });
+  const returning = page.getByRole('link', { name: 'returning@example.invalid' });
+  const newcomer = page.getByRole('link', { name: 'new@example.invalid' });
+  const filter = page.getByLabel('Assigned shift');
+  await expect(filter.getByRole('option', { name: /Course Marshal.+April 19, 2026/ })).toHaveCount(1);
+  await expect(filter.getByRole('option', { name: /Course Marshal.+April 17, 2027/ })).toHaveCount(1);
+  await expect(archived).toHaveCount(0);
+  await expect(returning).toBeVisible();
+  await expect(newcomer).toBeVisible();
+
+  await filter.selectOption(pastShift.id);
+  await expect(archived).toBeVisible();
+  await expect(returning).toBeVisible();
+  await expect(newcomer).toHaveCount(0);
+
+  const downloaded = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export Roster' }).click();
+  const csv = await readFile(await (await downloaded).path(), 'utf8');
+  expect(csv).toContain('prior@example.invalid');
+  expect(csv).toContain('returning@example.invalid');
+  expect(csv).toContain('2026-04-19');
+  expect(csv).not.toContain('2027-04-17');
+  expect(csv).not.toContain('new@example.invalid');
+
+  await page.getByRole('row').filter({ has: returning }).getByRole('button', { name: 'View signups' }).click();
+  await expect(page.getByRole('heading', { name: 'Past Signups (1)' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Current Signups (1)' })).toBeVisible();
+  await expect(page.getByText('Sunday, April 19, 2026 · 8:00 AM – 10:00 AM', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Close', exact: true }).click();
+
+  await page.getByLabel('View archived volunteers').check();
+  await expect(archived).toBeVisible();
+  await expect(returning).toHaveCount(0);
+  await page.getByLabel('View archived volunteers').uncheck();
+  await filter.selectOption(currentShift.id);
+  await expect(archived).toHaveCount(0);
+  await expect(returning).toBeVisible();
+  await expect(newcomer).toBeVisible();
+
+  await page.setViewportSize({ width: 390, height: 840 });
+  await page.getByTitle('Card view').click();
+  const filterBox = await filter.boundingBox();
+  expect(filterBox.x + filterBox.width).toBeLessThanOrEqual(390);
+  await expect(page.getByRole('button', { name: 'View signups' })).toHaveCount(2);
+});
+
 test('admin inline assignment fields match both themes and fit phone width', async ({ page, backend }) => {
   await page.setViewportSize({ width: 1256, height: 900 });
   await signInFixture(page, backend, 'admin');
@@ -124,10 +264,10 @@ test('admin inline assignment fields match both themes and fit phone width', asy
   await expect(critical).toHaveCSS('background-color', 'rgb(27, 30, 36)');
   await expect(add).toHaveCSS('min-height', '44px');
   await expect(add).toHaveCSS('background-color', 'rgb(0, 86, 179)');
-  const desktopRow = await add.boundingBox();
-  for (const field of inputs) {
-    expect((await field.boundingBox()).y).toBeCloseTo(desktopRow.y, 0);
-  }
+  const desktopTops = await page.locator('.admin-role-inline-add__grid').evaluate((grid) =>
+    [...grid.querySelectorAll('input, select, button')].map((field) => field.getBoundingClientRect().top)
+  );
+  expect(Math.max(...desktopTops) - Math.min(...desktopTops)).toBeLessThan(1);
   await firstName.focus();
   await expect(firstName).toHaveCSS('outline-width', '2px');
   await affiliation.selectOption('fixture-team');
@@ -399,7 +539,7 @@ test('admin assigns an existing volunteer to a role and cancels that assignment'
   await expect(page.getByRole('heading', { name: 'Current Signups (1)' })).toBeVisible();
   page.once('dialog', (dialog) => dialog.accept());
   await page.getByTitle('Remove signup').click();
-  await expect(page.getByText('No current signups')).toBeVisible();
+  await expect(page.getByText('No confirmed signups')).toBeVisible();
 });
 
 test('admin copies the NICA summary and manages team coaches and their digest', async ({ page, backend, context }) => {

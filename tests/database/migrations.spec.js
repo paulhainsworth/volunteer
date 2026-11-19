@@ -469,3 +469,72 @@ test('website messages are publicly readable and editable only by administrators
     'f|f|f|f', 'public|2026', 'leader|0', 'volunteer|0', 'admin|2027|2', 'outdated|0', 'published|2027',
   ]));
 });
+
+test('a roster rollover preserves historical signups and staff while closing old shifts', () => {
+  const results = sql('fresh', ['-qAtc', `
+    BEGIN;
+    -- Match the public read grant in the live Supabase project for this policy check.
+    GRANT SELECT ON public.volunteer_roles TO anon;
+    INSERT INTO auth.users (id, email, raw_user_meta_data) VALUES
+      ('00000000-0000-4000-8000-000000000181', 'season-admin@example.invalid', '{}'),
+      ('00000000-0000-4000-8000-000000000182', 'season-leader@example.invalid', '{}'),
+      ('00000000-0000-4000-8000-000000000183', 'season-inactive@example.invalid', '{}'),
+      ('00000000-0000-4000-8000-000000000184', 'season-returning@example.invalid', '{}');
+    UPDATE public.profiles SET role = 'admin' WHERE email = 'season-admin@example.invalid';
+    UPDATE public.profiles SET role = 'volunteer_leader' WHERE email = 'season-leader@example.invalid';
+    INSERT INTO public.volunteer_roles (id, name, event_date, completion_month, positions_total, leader_id) VALUES
+      ('00000000-0000-4000-8000-000000000185', 'Season history fixture', '2026-04-19', NULL, 5, '00000000-0000-4000-8000-000000000182'),
+      ('00000000-0000-4000-8000-000000000186', 'Season month fixture', NULL, '2026-04-01', 5, NULL),
+      ('00000000-0000-4000-8000-000000000187', 'Season active fixture', '2027-04-17', NULL, 5, '00000000-0000-4000-8000-000000000182'),
+      ('00000000-0000-4000-8000-000000000188', 'Season flexible fixture', NULL, NULL, 5, NULL);
+    INSERT INTO public.signups (volunteer_id, role_id, status) VALUES
+      ('00000000-0000-4000-8000-000000000182', '00000000-0000-4000-8000-000000000185', 'confirmed'),
+      ('00000000-0000-4000-8000-000000000183', '00000000-0000-4000-8000-000000000185', 'confirmed'),
+      ('00000000-0000-4000-8000-000000000184', '00000000-0000-4000-8000-000000000185', 'confirmed'),
+      ('00000000-0000-4000-8000-000000000184', '00000000-0000-4000-8000-000000000187', 'confirmed');
+    INSERT INTO public.waivers (volunteer_id, signature_name, waiver_text)
+      VALUES ('00000000-0000-4000-8000-000000000183', 'Fixture Volunteer', 'Fixture waiver');
+    SELECT has_column_privilege('anon', 'public.volunteer_season', 'active_year', 'UPDATE'),
+           has_function_privilege('anon', 'public.preview_volunteer_season(integer)', 'EXECUTE');
+    SET LOCAL ROLE authenticated;
+    SELECT set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-000000000182', true);
+    WITH changed AS (UPDATE public.volunteer_season SET active_year = 2027 RETURNING id)
+    SELECT 'leader|' || count(*) FROM changed;
+    DO $test$ BEGIN
+      PERFORM public.preview_volunteer_season(2027);
+      RAISE EXCEPTION 'Expected the preview to require an administrator';
+    EXCEPTION WHEN insufficient_privilege THEN NULL;
+    END $test$;
+    SELECT set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-000000000183', true);
+    WITH changed AS (UPDATE public.volunteer_season SET active_year = 2027 RETURNING id)
+    SELECT 'volunteer|' || count(*) FROM changed;
+    SELECT set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-000000000181', true);
+    SELECT 'preview', archived_shifts, inactive_volunteers, retained_staff
+    FROM public.preview_volunteer_season(2027);
+    UPDATE public.volunteer_season SET active_year = 2027 WHERE active_year IS NULL
+    RETURNING 'started|' || active_year;
+    SET LOCAL ROLE anon;
+    SELECT 'public|' || string_agg(name, ',' ORDER BY name)
+    FROM public.volunteer_roles WHERE name LIKE 'Season % fixture';
+    RESET ROLE;
+    SELECT 'history|' || count(*) FROM public.signups WHERE role_id = '00000000-0000-4000-8000-000000000185';
+    SELECT 'waivers|' || count(*) FROM public.waivers WHERE volunteer_id = '00000000-0000-4000-8000-000000000183';
+    SELECT 'leaders|' || count(*) FROM public.volunteer_roles WHERE leader_id = '00000000-0000-4000-8000-000000000182';
+    DO $test$ BEGIN
+      INSERT INTO public.signups (volunteer_id, role_id, status)
+      VALUES ('00000000-0000-4000-8000-000000000184', '00000000-0000-4000-8000-000000000186', 'confirmed');
+      RAISE EXCEPTION 'Expected archived signup to fail';
+    EXCEPTION WHEN raise_exception THEN
+      IF SQLERRM <> 'This volunteer shift belongs to an archived season' THEN RAISE; END IF;
+    END $test$;
+    INSERT INTO public.signups (volunteer_id, role_id, status) VALUES
+      ('00000000-0000-4000-8000-000000000183', '00000000-0000-4000-8000-000000000187', 'confirmed');
+    SELECT 'returning|' || inactive_volunteers FROM public.preview_volunteer_season(2027);
+    ROLLBACK;
+  `]);
+  expect(results.status, results.stderr).toBe(0);
+  expect(results.stdout.trim().split('\n')).toEqual(expect.arrayContaining([
+    'f|f', 'leader|0', 'volunteer|0', 'preview|2|1|2', 'started|2027',
+    'public|Season active fixture,Season flexible fixture', 'history|3', 'waivers|1', 'leaders|2', 'returning|0',
+  ]));
+});

@@ -17,6 +17,22 @@ async function openRoster(page, backend, signups) {
   await expect(page.getByRole('heading', { name: role.name })).toBeVisible();
 }
 
+test('leader keeps the same team and sees its active-season shift', async ({ page, backend }) => {
+  await signInFixture(page, backend, 'volunteer_leader');
+  await expect(page).toHaveURL(/#\/my-signups$/);
+  const team = { id: 'fixture-team', name: 'Course Team', leader_id: user.id };
+  const currentRole = { ...role, name: '2027 Course Marshal', event_date: '2027-04-17', domain: team };
+  backend.reply('GET', '/rest/v1/volunteer_season', [{ active_year: 2027 }]);
+  backend.reply('GET', '/rest/v1/volunteer_leader_domains', [team]);
+  backend.handle('GET', '/rest/v1/volunteer_roles', (_, url) => {
+    expect(url.searchParams.get('or')).toContain('event_date.gte.2027-01-01');
+    return { body: url.searchParams.has('domain_id') ? [currentRole] : [] };
+  });
+  await page.getByRole('link', { name: 'My Roles', exact: true }).click();
+  await expect(page.getByRole('heading', { name: currentRole.name })).toBeVisible();
+  await expect(page.getByText(team.name, { exact: true })).toBeVisible();
+});
+
 test('leader shares an invite link for the assigned role', async ({ page, backend }) => {
   await page.addInitScript(() => {
     Object.defineProperty(navigator, 'share', { value: undefined });

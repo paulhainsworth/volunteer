@@ -2,7 +2,8 @@
   import { onMount } from 'svelte';
   import { auth } from '../../lib/stores/auth';
   import { roles } from '../../lib/stores/roles';
-  import { volunteers } from '../../lib/stores/volunteers';
+  import { activeRosterYear, volunteers } from '../../lib/stores/volunteers';
+  import { readVolunteerSeason } from '../../lib/volunteerSeason';
   import { waiver as waiverStore } from '../../lib/stores/waiver';
   import { supabase } from '../../lib/supabaseClient';
   import { push } from 'svelte-spa-router';
@@ -274,6 +275,7 @@ Berkeley Omnium Volunteer Team`;
     }
 
     const recipientsToSend = recipients;
+    const recipientRosterYear = $activeRosterYear;
     if (recipientsToSend.length === 0) {
       error = 'No recipients selected.';
       return;
@@ -282,6 +284,12 @@ Berkeley Omnium Volunteer Team`;
     sending = true;
 
     try {
+      const currentRosterYear = (await readVolunteerSeason())?.active_year ?? null;
+      if (currentRosterYear !== recipientRosterYear) {
+        error = 'The roster year changed. Reload Communications to review the current recipients.';
+        return;
+      }
+
       const {
         data: { session },
         error: sessionErr
