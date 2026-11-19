@@ -103,6 +103,22 @@ test('homepage explains the 2026 volunteer impact and serves a favicon', async (
   await expect(impact.getByRole('link', { name: 'Berkeley Omnium', exact: true })).toHaveAttribute('href', 'https://berkeleyomnium.com/');
   await expect(impact.getByRole('link', { name: 'Where the proceeds go' })).toHaveAttribute('href', 'https://berkeleyomnium.com/impact');
   await expect(impact.getByRole('link', { name: 'Berkeley Bicycle Club' })).toHaveAttribute('href', 'https://berkeleybikeclub.org/');
+  const teams = impact.getByRole('list', { name: 'NICA teams supported in 2026' });
+  const teamLinks = [
+    ['Albany High School', 'https://www.instagram.com/ahscougarsmtb/'],
+    ['Berkeley High School', 'https://www.berkeleymtbteam.com/'],
+    ['El Cerrito High School', 'https://echsmtb.com/'],
+    ['Oakland Composite', 'https://oaklandcompositemtb.com/'],
+    ['Oakland Technical High School', 'https://www.facebook.com/OaklandTechMTB'],
+    ['Skyline High School', 'https://skylinehighbiketeam.com/'],
+  ];
+  await expect(teams.getByRole('link')).toHaveCount(teamLinks.length);
+  for (const [name, url] of teamLinks) {
+    const link = teams.getByRole('link', { name, exact: true });
+    await expect(link).toBeVisible();
+    await expect(link).toHaveAttribute('href', url);
+    await expect(link).toHaveCSS('min-height', '44px');
+  }
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
 
   await expect(page).toHaveTitle('Berkeley Omnium Volunteer Hub');
