@@ -192,7 +192,7 @@
   .onboarding-container {
     max-width: 800px;
     margin: 0 auto;
-    background: white;
+    background: var(--bg-primary);
     border-radius: 12px;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
     overflow: hidden;
@@ -203,6 +203,10 @@
     color: white;
     padding: 3rem 2rem;
     text-align: center;
+  }
+
+  :global([data-theme='dark']) .welcome-section {
+    background: var(--bg-tertiary);
   }
 
   .welcome-section h1 {
@@ -248,11 +252,11 @@
 
   .form-section h2 {
     margin: 0 0 0.5rem 0;
-    color: #1a1a1a;
+    color: var(--text-primary);
   }
 
   .form-intro {
-    color: #6c757d;
+    color: var(--text-secondary);
     margin-bottom: 2rem;
     line-height: 1.5;
   }
@@ -264,9 +268,9 @@
   }
 
   .alert-error {
-    background: #f8d7da;
-    color: #721c24;
-    border: 1px solid #f5c6cb;
+    background: var(--danger-surface);
+    color: var(--danger-text);
+    border: 1px solid var(--danger-border);
   }
 
   .form-row {
@@ -283,14 +287,14 @@
     display: block;
     margin-bottom: 0.5rem;
     font-weight: 600;
-    color: #1a1a1a;
+    color: var(--text-primary);
   }
 
   input,
   select {
     width: 100%;
     padding: 0.75rem;
-    border: 1px solid #ced4da;
+    border: 1px solid var(--input-border);
     border-radius: 6px;
     font-size: 1rem;
     font-family: inherit;
@@ -299,22 +303,22 @@
   input:focus,
   select:focus {
     outline: none;
-    border-color: #007bff;
+    border-color: var(--primary-color);
     box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
   }
 
   input:disabled,
   select:disabled {
-    background: #f8f9fa;
+    background: var(--bg-secondary);
     cursor: not-allowed;
   }
 
   .privacy-note {
-    background: #e7f3ff;
-    border-left: 4px solid #007bff;
+    background: var(--info-surface);
+    border-left: 4px solid var(--primary-color);
     padding: 1rem;
     margin-bottom: 1.5rem;
-    color: #004085;
+    color: var(--info-text);
     font-size: 0.9rem;
   }
 

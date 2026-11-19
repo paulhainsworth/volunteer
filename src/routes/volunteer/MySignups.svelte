@@ -513,11 +513,11 @@ END:VCALENDAR`;
 
   .header h1 {
     margin: 0 0 0.5rem 0;
-    color: #1a1a1a;
+    color: var(--text-primary);
   }
 
   .header p {
-    color: #6c757d;
+    color: var(--text-secondary);
     margin: 0;
   }
 
@@ -533,12 +533,12 @@ END:VCALENDAR`;
   .stat-value {
     font-size: 2rem;
     font-weight: bold;
-    color: #007bff;
+    color: var(--primary-color);
   }
 
   .stat-label {
     font-size: 0.9rem;
-    color: #6c757d;
+    color: var(--text-secondary);
   }
 
   .loading,
@@ -546,11 +546,11 @@ END:VCALENDAR`;
   .empty {
     text-align: center;
     padding: 4rem 2rem;
-    color: #6c757d;
+    color: var(--text-secondary);
   }
 
   .empty h2 {
-    color: #1a1a1a;
+    color: var(--text-primary);
     margin: 0 0 1rem 0;
     font-size: 1.75rem;
   }
@@ -562,7 +562,7 @@ END:VCALENDAR`;
   }
 
   .error {
-    color: #dc3545;
+    color: var(--danger-color);
   }
 
   .signups-section {
@@ -571,7 +571,7 @@ END:VCALENDAR`;
 
   .signups-section h2 {
     margin: 0 0 1rem 0;
-    color: #1a1a1a;
+    color: var(--text-primary);
   }
 
   .signups-list {
@@ -580,8 +580,8 @@ END:VCALENDAR`;
   }
 
   .signup-card {
-    background: white;
-    border: 1px solid #dee2e6;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
     border-radius: 12px;
     padding: 1.5rem;
     transition: box-shadow 0.2s;
@@ -605,7 +605,7 @@ END:VCALENDAR`;
 
   .signup-header h3 {
     margin: 0;
-    color: #1a1a1a;
+    color: var(--text-primary);
   }
 
   .upcoming-badge {
@@ -613,8 +613,8 @@ END:VCALENDAR`;
     border-radius: 20px;
     font-size: 0.85rem;
     font-weight: 600;
-    background: #d4edda;
-    color: #155724;
+    background: var(--success-surface);
+    color: var(--success-text);
     white-space: nowrap;
   }
 
@@ -623,8 +623,8 @@ END:VCALENDAR`;
     border-radius: 20px;
     font-size: 0.85rem;
     font-weight: 600;
-    background: #e2e3e5;
-    color: #383d41;
+    background: var(--bg-tertiary);
+    color: var(--text-muted);
     white-space: nowrap;
   }
 
@@ -639,7 +639,7 @@ END:VCALENDAR`;
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    color: #495057;
+    color: var(--text-muted);
   }
 
   .icon {
@@ -647,7 +647,7 @@ END:VCALENDAR`;
   }
 
   .description {
-    color: #6c757d;
+    color: var(--text-secondary);
     line-height: 1.5;
     margin: 1rem 0;
     font-size: 0.95rem;
@@ -684,18 +684,18 @@ END:VCALENDAR`;
   }
 
   .btn-secondary {
-    background: white;
-    color: #6c757d;
+    background: var(--bg-primary);
+    color: var(--text-secondary);
     border: 1px solid #6c757d;
   }
 
   .btn-secondary:hover {
-    background: #f8f9fa;
+    background: var(--bg-secondary);
   }
 
   .btn-danger {
-    background: white;
-    color: #dc3545;
+    background: var(--bg-primary);
+    color: var(--danger-color);
     border: 1px solid #dc3545;
   }
 
@@ -716,11 +716,11 @@ END:VCALENDAR`;
   .domain-badge {
     display: inline-block;
     padding: 0.5rem 1rem;
-    background: #e7f3ff;
-    border: 1px solid #b3d9ff;
+    background: var(--info-surface);
+    border: 1px solid var(--info-border);
     border-radius: 20px;
     font-size: 0.9rem;
-    color: #004085;
+    color: var(--info-text);
     font-weight: 500;
   }
 
@@ -740,7 +740,7 @@ END:VCALENDAR`;
   }
 
   .modal-content {
-    background: white;
+    background: var(--bg-primary);
     border-radius: 16px;
     max-width: 550px;
     width: 100%;
@@ -754,7 +754,7 @@ END:VCALENDAR`;
     position: absolute;
     top: 1rem;
     right: 1rem;
-    background: #f8f9fa;
+    background: var(--bg-secondary);
     border: none;
     width: 36px;
     height: 36px;
@@ -764,25 +764,25 @@ END:VCALENDAR`;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #6c757d;
+    color: var(--text-secondary);
     transition: background 0.2s, color 0.2s;
     z-index: 1;
   }
 
   .modal-close:hover {
-    background: #e2e3e5;
-    color: #1a1a1a;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
   }
 
   .modal-header {
     padding: 2rem 2rem 1rem 2rem;
-    border-bottom: 1px solid #dee2e6;
+    border-bottom: 1px solid var(--border-color);
     padding-right: 4rem;
   }
 
   .modal-header h2 {
     margin: 0;
-    color: #1a1a1a;
+    color: var(--text-primary);
     font-size: 1.5rem;
   }
 
@@ -792,17 +792,17 @@ END:VCALENDAR`;
 
   .warning-text {
     font-size: 1.1rem;
-    color: #495057;
+    color: var(--text-muted);
     margin: 0 0 1.5rem 0;
     line-height: 1.5;
   }
 
   .warning-text strong {
-    color: #1a1a1a;
+    color: var(--text-primary);
   }
 
   .role-info-box {
-    background: #fff3cd;
+    background: var(--warning-surface);
     border: 1px solid #ffc107;
     border-radius: 8px;
     padding: 1.5rem;
@@ -814,7 +814,7 @@ END:VCALENDAR`;
     gap: 0.75rem;
     align-items: center;
     margin-bottom: 0.75rem;
-    color: #495057;
+    color: var(--text-muted);
   }
 
   .role-info-box .detail:last-child {
@@ -827,17 +827,17 @@ END:VCALENDAR`;
 
   .info-text {
     font-size: 0.95rem;
-    color: #6c757d;
+    color: var(--text-secondary);
     margin: 0;
     padding: 1rem;
-    background: #e7f3ff;
+    background: var(--info-surface);
     border-radius: 6px;
-    border-left: 4px solid #007bff;
+    border-left: 4px solid var(--primary-color);
   }
 
   .modal-actions {
     padding: 1.5rem 2rem 2rem 2rem;
-    border-top: 1px solid #dee2e6;
+    border-top: 1px solid var(--border-color);
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
@@ -873,8 +873,8 @@ END:VCALENDAR`;
   }
 
   .btn-danger-outline {
-    background: white;
-    color: #dc3545;
+    background: var(--bg-primary);
+    color: var(--danger-color);
     border: 2px solid #dc3545;
     padding: 1rem;
     font-size: 1rem;
@@ -893,13 +893,13 @@ END:VCALENDAR`;
 
   .info-text-primary {
     font-size: 1rem;
-    color: #495057;
+    color: var(--text-muted);
     margin: 0 0 1rem 0;
     line-height: 1.6;
   }
 
   .suggestions-list {
-    background: #f8f9fa;
+    background: var(--bg-secondary);
     border-left: 4px solid #17a2b8;
     border-radius: 6px;
     padding: 1.5rem 1.5rem 1.5rem 2.5rem;
@@ -907,7 +907,7 @@ END:VCALENDAR`;
   }
 
   .suggestions-list li {
-    color: #495057;
+    color: var(--text-muted);
     margin-bottom: 0.75rem;
     line-height: 1.5;
   }
@@ -917,7 +917,7 @@ END:VCALENDAR`;
   }
 
   .role-context {
-    background: #fff3cd;
+    background: var(--warning-surface);
     border: 1px solid #ffc107;
     border-radius: 8px;
     padding: 1.25rem;
@@ -927,32 +927,32 @@ END:VCALENDAR`;
   .role-context h3 {
     margin: 0 0 0.5rem 0;
     font-size: 0.9rem;
-    color: #856404;
+    color: var(--warning-text);
     text-transform: uppercase;
     letter-spacing: 0.5px;
   }
 
   .role-context p {
     margin: 0.25rem 0;
-    color: #495057;
+    color: var(--text-muted);
   }
 
   .role-context strong {
-    color: #1a1a1a;
+    color: var(--text-primary);
     font-size: 1.1rem;
   }
 
   .leader-contact-section {
-    background: white;
-    border: 1px solid #dee2e6;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
     border-radius: 8px;
     padding: 0;
     overflow: hidden;
   }
 
   .no-leader-notice {
-    background: #e7f3ff;
-    border: 1px solid #b3d9ff;
+    background: var(--info-surface);
+    border: 1px solid var(--info-border);
     border-radius: 8px;
     padding: 1.5rem;
     text-align: center;
@@ -960,11 +960,11 @@ END:VCALENDAR`;
 
   .no-leader-notice p {
     margin: 0.5rem 0;
-    color: #495057;
+    color: var(--text-muted);
   }
 
   .no-leader-notice a {
-    color: #007bff;
+    color: var(--primary-color);
     text-decoration: none;
     font-weight: 600;
   }

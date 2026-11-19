@@ -1,5 +1,30 @@
 import { test, expect, ownProfile, profile, role, signInFixture } from '../helpers/browser.js';
 
+test('dark mode themes the sign-in form and role dialog and persists on reload', async ({ page, backend }) => {
+  backend.reply('GET', '/rest/v1/volunteer_roles', [role]);
+  backend.reply('GET', '/rest/v1/team_club_affiliations', []);
+  backend.reply('POST', '/rest/v1/rpc/get_confirmed_signup_counts', []);
+  await page.goto('/#/auth/login');
+  const themeToggle = page.getByRole('button', { name: 'Dark mode' });
+  const login = page.locator('.auth-card');
+  await expect(login).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+  await themeToggle.click();
+  await expect(themeToggle).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('html')).toHaveCSS('color-scheme', 'dark');
+  await expect(login).toHaveCSS('background-color', 'rgb(27, 30, 36)');
+
+  await page.goto('/#/volunteer');
+  await page.getByRole('button', { name: /General Opportunities/ }).click();
+  await page.getByRole('button', { name: 'Info', exact: true }).click();
+  await expect(page.locator('.modal-content')).toHaveCSS('background-color', 'rgb(27, 30, 36)');
+
+  await page.reload();
+  await expect(themeToggle).toHaveAttribute('aria-pressed', 'true');
+  await themeToggle.click();
+  await expect(page.locator('html')).toHaveCSS('color-scheme', 'light');
+  await expect(page.locator('.domain-section')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+});
+
 test('mobile navigation exposes its state and restores focus on Escape', async ({ page, backend }) => {
   backend.reply('GET', '/rest/v1/volunteer_roles', []);
   await page.setViewportSize({ width: 320, height: 720 });

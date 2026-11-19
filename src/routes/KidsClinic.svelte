@@ -242,10 +242,11 @@
     --cream: #faf6ef;
     --blue-deep: #1a56b0;
     --blue-brush: #2563c4;
+    --clinic-heading: var(--blue-deep);
     --orange: #e85d04;
     --green: #15803d;
     background: var(--cream);
-    color: #111827;
+    color: var(--text-primary);
     min-height: 100vh;
     padding: 1.5rem 1rem 3rem;
     max-width: 720px;
@@ -253,10 +254,17 @@
     font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   }
 
+  :global([data-theme='dark']) .kids-page {
+    --cream: var(--bg-page);
+    --clinic-heading: var(--info-text);
+    --orange: #ffa95f;
+    --green: #96e7b5;
+  }
+
   .submitted-banner {
-    background: #d1fae5;
-    border: 1px solid #6ee7b7;
-    color: #065f46;
+    background: var(--success-surface);
+    border: 1px solid var(--success-border);
+    color: var(--success-text);
     padding: 1rem 1.25rem;
     border-radius: 10px;
     margin-bottom: 1.5rem;
@@ -265,13 +273,13 @@
   }
 
   .submitted-banner.banner-warn {
-    background: #fef3c7;
-    border-color: #f59e0b;
-    color: #92400e;
+    background: var(--warning-surface);
+    border-color: var(--warning-border);
+    color: var(--warning-text);
   }
 
   .submitted-banner.banner-warn a {
-    color: #1a56b0;
+    color: var(--clinic-heading);
     font-weight: 700;
   }
 
@@ -284,7 +292,7 @@
     margin: 0 0 0.5rem;
     font-size: clamp(1.35rem, 4vw, 1.85rem);
     font-weight: 800;
-    color: var(--blue-deep);
+    color: var(--clinic-heading);
     text-transform: uppercase;
     letter-spacing: 0.02em;
     line-height: 1.2;
@@ -294,7 +302,7 @@
     margin: 0 0 1rem;
     font-size: 0.78rem;
     font-weight: 700;
-    color: var(--blue-deep);
+    color: var(--clinic-heading);
     text-transform: uppercase;
     letter-spacing: 0.04em;
     line-height: 1.35;
@@ -461,7 +469,7 @@
 
   .footer-contact a,
   .footer-link a {
-    color: var(--blue-deep);
+    color: var(--clinic-heading);
     font-weight: 700;
   }
 
@@ -472,14 +480,14 @@
   .signup-heading {
     margin: 0 0 0.5rem;
     font-size: 1.35rem;
-    color: var(--blue-deep);
+    color: var(--clinic-heading);
   }
 
   .signup-lead {
     margin: 0 0 1.25rem;
     font-size: 0.95rem;
     line-height: 1.5;
-    color: #374151;
+    color: var(--text-muted);
   }
 
   .signup-form {
@@ -506,16 +514,16 @@
     gap: 0.35rem;
     font-size: 0.88rem;
     font-weight: 600;
-    color: #374151;
+    color: var(--text-muted);
   }
 
   .field input,
   .field select {
     padding: 0.55rem 0.65rem;
     border-radius: 8px;
-    border: 1px solid #d1d5db;
+    border: 1px solid var(--input-border);
     font-size: 1rem;
-    background: #fff;
+    background: var(--bg-primary);
   }
 
   .field input:focus-visible,
@@ -533,15 +541,15 @@
   .waiver-label {
     font-size: 0.88rem;
     font-weight: 700;
-    color: #374151;
+    color: var(--text-muted);
   }
 
   .waiver-scroll {
     max-height: 220px;
     overflow: auto;
-    border: 1px solid #cbd5e1;
+    border: 1px solid var(--input-border);
     border-radius: 8px;
-    background: #fff;
+    background: var(--bg-primary);
     padding: 0.75rem 1rem;
   }
 
@@ -552,7 +560,7 @@
     line-height: 1.35;
     white-space: pre-wrap;
     word-break: break-word;
-    color: #1f2937;
+    color: var(--text-primary);
   }
 
   .consent-row {
@@ -573,7 +581,7 @@
 
   .form-error {
     margin: 0;
-    color: #b91c1c;
+    color: var(--danger-text);
     font-size: 0.9rem;
     font-weight: 600;
   }

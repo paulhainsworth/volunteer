@@ -262,7 +262,7 @@
 
 <style>
   .role-form {
-    background: white;
+    background: var(--bg-primary);
     padding: 2rem;
     border-radius: 12px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
@@ -282,7 +282,7 @@
     display: block;
     margin-bottom: 0.5rem;
     font-weight: 600;
-    color: #1a1a1a;
+    color: var(--text-primary);
   }
 
   input,
@@ -290,7 +290,7 @@
   select {
     width: 100%;
     padding: 0.75rem;
-    border: 1px solid #ced4da;
+    border: 1px solid var(--input-border);
     border-radius: 6px;
     font-size: 1rem;
     font-family: inherit;
@@ -300,21 +300,21 @@
   textarea:focus,
   select:focus {
     outline: none;
-    border-color: #007bff;
+    border-color: var(--primary-color);
     box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
   }
 
   input:disabled,
   textarea:disabled,
   select:disabled {
-    background: #f8f9fa;
+    background: var(--bg-secondary);
     cursor: not-allowed;
   }
 
   small {
     display: block;
     margin-top: 0.25rem;
-    color: #6c757d;
+    color: var(--text-secondary);
     font-size: 0.875rem;
   }
 
@@ -324,7 +324,7 @@
     justify-content: flex-end;
     margin-top: 2rem;
     padding-top: 1.5rem;
-    border-top: 1px solid #dee2e6;
+    border-top: 1px solid var(--border-color);
   }
 
   .btn {
@@ -351,22 +351,22 @@
   }
 
   .btn-secondary {
-    background: white;
-    color: #6c757d;
+    background: var(--bg-primary);
+    color: var(--text-secondary);
     border: 1px solid #6c757d;
   }
 
   .btn-secondary:hover:not(:disabled) {
-    background: #f8f9fa;
+    background: var(--bg-secondary);
   }
 
   .schedule-hint {
     margin: 0 0 1rem;
     padding: 0.75rem 1rem;
-    background: #f8f9fa;
+    background: var(--bg-secondary);
     border-radius: 6px;
     font-size: 0.9rem;
-    color: #495057;
+    color: var(--text-muted);
     line-height: 1.5;
   }
 

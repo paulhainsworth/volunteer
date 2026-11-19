@@ -205,17 +205,17 @@
   .header h1 {
     margin: 0 0 0.5rem 0;
     font-size: 1.5rem;
-    color: #1a1a1a;
+    color: var(--text-primary);
   }
 
   .header p {
     margin: 0;
-    color: #6c757d;
+    color: var(--text-secondary);
     font-size: 1rem;
   }
 
   .loading {
-    color: #6c757d;
+    color: var(--text-secondary);
     padding: 2rem 0;
   }
 
@@ -226,31 +226,31 @@
   }
 
   .alert-error {
-    background: #f8d7da;
-    color: #721c24;
-    border: 1px solid #f5c6cb;
+    background: var(--danger-surface);
+    color: var(--danger-text);
+    border: 1px solid var(--danger-border);
   }
 
   .waiver-section {
     margin-bottom: 1.5rem;
     padding: 1.25rem;
-    background: #f8f9fa;
-    border: 1px solid #dee2e6;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
     border-radius: 8px;
   }
 
   .waiver-section h2 {
     margin: 0 0 0.75rem 0;
     font-size: 1.1rem;
-    color: #212529;
+    color: var(--text-primary);
   }
 
   .waiver-text {
     max-height: 280px;
     overflow-y: auto;
     padding: 0.75rem;
-    background: #fff;
-    border: 1px solid #dee2e6;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
     border-radius: 6px;
     font-size: 0.9rem;
     line-height: 1.5;
@@ -278,14 +278,14 @@
     margin-bottom: 0.35rem;
     font-weight: 600;
     font-size: 0.9rem;
-    color: #1a1a1a;
+    color: var(--text-primary);
   }
 
   .form-group input {
     width: 100%;
     max-width: 400px;
     padding: 0.6rem 0.75rem;
-    border: 1px solid #ced4da;
+    border: 1px solid var(--input-border);
     border-radius: 6px;
     font-size: 1rem;
   }
@@ -293,22 +293,22 @@
   .parent-consent-section {
     margin: 1rem 0;
     padding: 1rem;
-    background: #fff;
-    border: 1px solid #dee2e6;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
     border-radius: 8px;
   }
 
   .parent-consent-section h3 {
     margin: 0 0 0.5rem 0;
     font-size: 1rem;
-    color: #212529;
+    color: var(--text-primary);
   }
 
   .parent-consent-intro,
   .parent-attestation {
     margin: 0 0 0.75rem 0;
     font-size: 0.9rem;
-    color: #495057;
+    color: var(--text-muted);
     line-height: 1.4;
   }
 
