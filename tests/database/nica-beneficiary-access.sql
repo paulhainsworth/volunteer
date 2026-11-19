@@ -34,7 +34,9 @@ BEGIN
   END IF;
   SELECT a.affiliation_id INTO STRICT occupied_id
   FROM public.nica_beneficiary_affiliations a JOIN public.nica_beneficiaries b ON a.beneficiary_id = b.id
-  WHERE b.label = 'Albany';
+  WHERE b.label = 'Albany'
+  ORDER BY a.affiliation_id
+  LIMIT 1;
 
   new_id := public.save_nica_beneficiary(NULL, ' Fixture Team ', ARRAY[fixture_id]);
   PERFORM public.save_nica_beneficiary(new_id, 'Renamed Team', ARRAY[fixture_id]);
