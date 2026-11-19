@@ -1,4 +1,4 @@
-import { test, expect, profile, signInFixture } from '../helpers/browser.js';
+import { test, expect, ownProfile, profile, signInFixture } from '../helpers/browser.js';
 
 for (const [role, nav] of [['volunteer', 'Browse Roles'], ['volunteer_leader', 'My Roles'], ['admin', 'Dashboard']]) {
   test(`magic link signs in the ${role} session and sign-out clears it`, async ({ page, backend }) => {
@@ -37,7 +37,7 @@ test('first login collects an emergency contact before opening volunteer opportu
   backend.reply('GET', '/rest/v1/volunteer_roles', []);
   backend.handle('PATCH', '/rest/v1/profiles', (request) => {
     expect(request.postDataJSON()).toMatchObject({ emergency_contact_relationship: 'Friend' });
-    backend.reply('GET', '/rest/v1/profiles', [profile]);
+    backend.reply('POST', ownProfile, profile);
     return { body: {} };
   });
   await page.getByLabel(/Emergency Contact Name/).fill('Test Contact');

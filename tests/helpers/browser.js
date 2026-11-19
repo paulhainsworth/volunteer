@@ -26,6 +26,9 @@ export const profile = {
   emergency_contact_phone: '5550100',
 };
 
+export const ownProfile = '/rest/v1/rpc/get_own_volunteer_profile';
+export const emergencyContacts = '/rest/v1/rpc/get_volunteer_emergency_contacts';
+
 export const waiver = { id: 'fixture-waiver', version: 1, waiver_text: 'Synthetic waiver terms' };
 
 export const test = base.extend({
@@ -82,7 +85,8 @@ export async function signInFixture(page, backend, role = 'volunteer', { signups
   backend.reply('GET', '/auth/v1/user', user);
   backend.reply('GET', '/rest/v1/waiver_settings', waiver);
   backend.reply('POST', '/rest/v1/rpc/volunteer_waiver_is_current', true);
-  backend.reply('GET', '/rest/v1/profiles', [{ ...profile, ...profileFields, role }]);
+  backend.reply('POST', ownProfile, { ...profile, ...profileFields, role });
+  backend.reply('POST', emergencyContacts, []);
   backend.reply('GET', '/rest/v1/signups', signups);
   const session = fixtureSession();
   const params = new URLSearchParams({

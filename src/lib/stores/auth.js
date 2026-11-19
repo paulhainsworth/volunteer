@@ -1,5 +1,6 @@
 import { writable, get } from 'svelte/store';
 import { supabase, clearPersistedSupabaseAuthKeys } from '../supabaseClient';
+import { readOwnProfile } from '../profileAccess';
 import { TimeoutError, withSupabaseReadTimeout, withTimeout } from '../utils/withTimeout';
 
 /** Whole bootstrap (session + profile retries) — outer safety net only */
@@ -47,11 +48,7 @@ function createAuthStore() {
       while (!profile && retries < maxRetries) {
         try {
           const { data, error } = await withSupabaseReadTimeout(
-            () => supabase
-              .from('profiles')
-              .select('*')
-              .eq('id', session.user.id)
-              .maybeSingle(),
+            readOwnProfile,
             'auth.applySession.profile',
             PROFILE_READ_TIMEOUT_MS
           );

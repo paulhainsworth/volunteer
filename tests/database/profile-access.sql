@@ -1,6 +1,6 @@
 INSERT INTO auth.users (id, email)
 VALUES ('00000000-0000-4000-8000-000000000001', 'volunteer@example.invalid');
-GRANT SELECT, UPDATE ON profiles TO authenticated;
+GRANT UPDATE ON profiles TO authenticated;
 
 BEGIN;
 SET LOCAL ROLE authenticated;
@@ -20,12 +20,11 @@ ROLLBACK;
 INSERT INTO auth.users (id, email)
 VALUES ('00000000-0000-4000-8000-000000000004', 'admin-fixture@example.invalid');
 UPDATE profiles SET role = 'admin' WHERE id = '00000000-0000-4000-8000-000000000004';
-GRANT SELECT ON profiles TO anon;
 BEGIN;
 SET LOCAL ROLE anon;
 DO $$
 BEGIN
-  IF EXISTS (SELECT FROM profiles) THEN
+  IF EXISTS (SELECT id FROM profiles) THEN
     RAISE EXCEPTION 'Anonymous profile reads must return no rows';
   END IF;
 END

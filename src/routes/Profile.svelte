@@ -3,6 +3,7 @@
   import { auth } from '../lib/stores/auth';
   import { affiliations } from '../lib/stores/affiliations';
   import { supabase } from '../lib/supabaseClient';
+  import { readOwnProfile } from '../lib/profileAccess';
   import { push } from 'svelte-spa-router';
 
   let loading = true;
@@ -31,13 +32,9 @@
       await affiliations.fetchAffiliations();
 
       // Fetch current profile
-      const { data, error: fetchError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', $auth.user.id)
-        .single();
-
+      const { data, error: fetchError } = await readOwnProfile();
       if (fetchError) throw fetchError;
+      if (!data) throw new Error('Profile not found.');
 
       formData = {
         first_name: data.first_name || '',

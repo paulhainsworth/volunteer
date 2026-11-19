@@ -1,4 +1,4 @@
-import { test, expect, fixtureSession, profile, role, signInFixture, user, waiver } from '../helpers/browser.js';
+import { test, expect, ownProfile, fixtureSession, profile, role, signInFixture, user, waiver } from '../helpers/browser.js';
 
 const signup = '/rest/v1/rpc/confirm_volunteer_signup';
 const waiverStatus = '/rest/v1/rpc/volunteer_waiver_is_current';
@@ -149,7 +149,7 @@ for (const path of ['guest', 'browse']) {
   test(`MG-04 ${path} immediate session sends guardian consent and one role email`, async ({ page, backend }) => {
     const submit = await openForm(page, backend, path);
     backend.reply('POST', '/auth/v1/signup', fixtureSession());
-    backend.reply('GET', '/rest/v1/profiles', [profile]);
+    backend.reply('POST', ownProfile, profile);
     backend.reply('POST', waiverStatus, true);
     backend.reply('GET', '/rest/v1/signups', []);
     backend.reply('POST', '/functions/v1/send-welcome-with-magic-link', { success: true });
@@ -175,7 +175,7 @@ test('MG-05 verification requires entering guardian consent again before reservi
 
   const session = fixtureSession();
   backend.reply('GET', '/auth/v1/user', user);
-  backend.reply('GET', '/rest/v1/profiles', [profile]);
+  backend.reply('POST', ownProfile, profile);
   backend.reply('POST', waiverStatus, false);
   backend.reply('GET', '/rest/v1/signups', []);
   await page.goto(`/?signup_role=${role.id}#${new URLSearchParams({

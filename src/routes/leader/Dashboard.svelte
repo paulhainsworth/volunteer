@@ -2,6 +2,7 @@
   import { onMount, onDestroy } from 'svelte';
   import { auth } from '../../lib/stores/auth';
   import { assignVolunteerAsLeader } from '../../lib/organizerVolunteerSignup';
+  import { fetchEmergencyContacts } from '../../lib/profileAccess';
   import { affiliations } from '../../lib/stores/affiliations';
   import { supabase } from '../../lib/supabaseClient';
   import { push } from 'svelte-spa-router';
@@ -30,6 +31,25 @@ const shareTimers = {};
   let emailBody = '';
   let sendingEmail = false;
   let emailSuccess = '';
+  let emergencyContact = null;
+  let emergencyContactRequest = 0;
+
+  async function openEmergencyContact(signup) {
+    closeActionMenu();
+    const request = ++emergencyContactRequest;
+    emergencyContact = { signupId: signup.id, loading: true };
+    try {
+      const [contact] = await fetchEmergencyContacts([signup.volunteer.id]);
+      if (request === emergencyContactRequest) emergencyContact = { signupId: signup.id, contact };
+    } catch {
+      if (request === emergencyContactRequest) emergencyContact = { signupId: signup.id, error: true };
+    }
+  }
+
+  function closeEmergencyContact() {
+    emergencyContactRequest++;
+    emergencyContact = null;
+  }
 
   function waitForAuthReady() {
     return new Promise(resolve => {
@@ -1185,11 +1205,34 @@ Examples:
                             </button>
                             {#if menuOpen}
                               <div class="actions-menu" on:click|stopPropagation>
+                                {#if signup.volunteer?.id}
+                                  <button type="button" on:click={() => openEmergencyContact(signup)}>View emergency contact</button>
+                                {/if}
                                 <button type="button" on:click={() => startEditing(role.id, signup)}>Edit volunteer</button>
                                 <button type="button" class="danger" on:click={() => deleteVolunteerFromRole(role, signup)}>Remove volunteer</button>
                               </div>
                             {/if}
                           </div>
+                          {#if emergencyContact?.signupId === signup.id}
+                            <div aria-live="polite">
+                              {#if emergencyContact.loading}
+                                <p>Loading emergency contact…</p>
+                              {:else if emergencyContact.error}
+                                <p>Could not load emergency contact.</p>
+                              {:else if emergencyContact.contact?.emergency_contact_name}
+                                <p><strong>Emergency contact:</strong> {emergencyContact.contact.emergency_contact_name}</p>
+                                {#if emergencyContact.contact.emergency_contact_phone}
+                                  <p>{emergencyContact.contact.emergency_contact_phone}</p>
+                                {/if}
+                                {#if emergencyContact.contact.emergency_contact_relationship}
+                                  <p>{emergencyContact.contact.emergency_contact_relationship}</p>
+                                {/if}
+                              {:else}
+                                <p>No emergency contact available.</p>
+                              {/if}
+                              <button type="button" on:click={closeEmergencyContact}>Hide emergency contact</button>
+                            </div>
+                          {/if}
                         </td>
                       </tr>
                     {/if}

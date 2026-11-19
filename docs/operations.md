@@ -35,6 +35,8 @@ For the [profile role migration](../supabase/migrations/20261118000400_protect_p
 
 Apply the [authenticated profile read migration](../supabase/migrations/20261118000800_scope_authenticated_profile_reads.sql) after the frontend switches to server-owned volunteer notifications. Legacy cancellation emails depend on client-side administrator profile reads. Verify own-profile editing and contact with an assigned leader during staging smoke checks.
 
+After the existing profile-read rollout, apply [the authorized emergency-contact read migration](../supabase/migrations/20261118000900_add_authorized_emergency_contact_reads.sql) before promoting the frontend that uses it. Apply [the direct-read restriction](../supabase/migrations/20261118001000_restrict_direct_emergency_contact_reads.sql) after the new frontend is live. Rehearse own-profile editing, administrator roster access, and the leader roster’s emergency-contact action, then verify another volunteer cannot read those fields.
+
 See [Vercel rewrites](../vercel.json), [Supabase function configuration](../supabase/config.toml), [migrations](../supabase/migrations/README.md), and the [codebase map](../CODEBASE_MAP.md#configuration).
 
 ## Triage by symptom
