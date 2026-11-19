@@ -74,6 +74,7 @@ function createVolunteersStore() {
           ...volunteer,
           ...contactsByProfile.get(volunteer.id),
           signups: confirmedSignups,
+          confirmedSignups: confirmed,
           totalSignups: confirmedSignups.length,
           totalHours: Math.round(totalHours * 10) / 10,
           hasSignedWaiver: volunteer.waivers && volunteer.waivers.length > 0

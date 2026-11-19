@@ -8,6 +8,8 @@ As an administrator, open **Users → Season rollover**, enter the first active 
 
 Volunteers with only prior confirmed shifts move to **Users → View archived volunteers** and are excluded from the default mailing lists. A confirmed active-season signup brings them back. Admins and volunteer leaders keep their roles and team assignments. Accounts, signups, and waivers stay on file. The roster year and the year in website messages are set independently.
 
+In **Users**, select an **Assigned shift** to find everyone with a confirmed signup for that shift, including archived volunteers. Turn on **View archived volunteers** to limit results to archived accounts. **View signups** opens each person’s current and past assignments. **Export Roster** downloads the matched shift when the filter is set.
+
 ## Update website messages for the next Omnium
 
 Sign in as an administrator and open **Communications → Edit website messages**. Set the event year, edit the welcome and thank-you copy, and select **Publish messages**. Use `{year}` in a message to insert the saved event year. Clear the Volunteer Opportunities banner or homepage thank-you to hide it. The Opportunities banner appears to signed-out visitors when open critical shifts match their filters.

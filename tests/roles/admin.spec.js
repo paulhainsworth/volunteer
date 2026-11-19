@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { test, expect, fixtureSession, profile, role, signInFixture } from '../helpers/browser.js';
 
 const roles = '/rest/v1/volunteer_roles';
@@ -168,6 +169,75 @@ test('admin previews and starts the 2027 roster while keeping staff and returnin
   await expect(priorVolunteer).toBeVisible();
 });
 
+test('admin finds past assignments across active and archived volunteers', async ({ page, backend }) => {
+  await page.clock.setFixedTime(new Date('2026-11-18T20:00:00Z'));
+  await signInFixture(page, backend, 'admin');
+  await expect(page).toHaveURL(/#\/my-signups$/);
+  mockAdminReads(backend);
+  backend.reply('GET', '/rest/v1/volunteer_season', [{ active_year: 2027 }]);
+
+  const pastShift = { ...role, id: '00000000-0000-4000-8000-000000000101', event_date: '2026-04-19' };
+  const currentShift = { ...role, event_date: '2027-04-17' };
+  const past = { id: 'past-assignment', role_id: pastShift.id, status: 'confirmed', role: pastShift };
+  const current = { id: 'current-assignment', role_id: currentShift.id, status: 'confirmed', role: currentShift };
+  const people = [
+    { ...profile, id: 'archived', first_name: 'Prior', email: 'prior@example.invalid', signups: [past] },
+    { ...profile, id: 'returning', first_name: 'Returning', email: 'returning@example.invalid', signups: [past, current] },
+    { ...profile, id: 'new', first_name: 'New', email: 'new@example.invalid', signups: [current, { ...past, status: 'cancelled' }] },
+  ];
+  backend.reply('GET', '/rest/v1/profiles', people);
+  backend.handle('GET', '/rest/v1/signups', (_, url) => {
+    const id = url.searchParams.get('volunteer_id')?.replace('eq.', '');
+    return { body: people.find((person) => person.id === id)?.signups.filter((signup) => signup.status === 'confirmed') ?? [] };
+  });
+
+  await page.getByRole('link', { name: 'Users', exact: true }).click();
+  const archived = page.getByRole('link', { name: 'prior@example.invalid' });
+  const returning = page.getByRole('link', { name: 'returning@example.invalid' });
+  const newcomer = page.getByRole('link', { name: 'new@example.invalid' });
+  const filter = page.getByLabel('Assigned shift');
+  await expect(filter.getByRole('option', { name: /Course Marshal.+April 19, 2026/ })).toHaveCount(1);
+  await expect(filter.getByRole('option', { name: /Course Marshal.+April 17, 2027/ })).toHaveCount(1);
+  await expect(archived).toHaveCount(0);
+  await expect(returning).toBeVisible();
+  await expect(newcomer).toBeVisible();
+
+  await filter.selectOption(pastShift.id);
+  await expect(archived).toBeVisible();
+  await expect(returning).toBeVisible();
+  await expect(newcomer).toHaveCount(0);
+
+  const downloaded = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export Roster' }).click();
+  const csv = await readFile(await (await downloaded).path(), 'utf8');
+  expect(csv).toContain('prior@example.invalid');
+  expect(csv).toContain('returning@example.invalid');
+  expect(csv).toContain('2026-04-19');
+  expect(csv).not.toContain('2027-04-17');
+  expect(csv).not.toContain('new@example.invalid');
+
+  await page.getByRole('row').filter({ has: returning }).getByRole('button', { name: 'View signups' }).click();
+  await expect(page.getByRole('heading', { name: 'Past Signups (1)' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Current Signups (1)' })).toBeVisible();
+  await expect(page.getByText('Sunday, April 19, 2026 · 8:00 AM – 10:00 AM', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Close', exact: true }).click();
+
+  await page.getByLabel('View archived volunteers').check();
+  await expect(archived).toBeVisible();
+  await expect(returning).toHaveCount(0);
+  await page.getByLabel('View archived volunteers').uncheck();
+  await filter.selectOption(currentShift.id);
+  await expect(archived).toHaveCount(0);
+  await expect(returning).toBeVisible();
+  await expect(newcomer).toBeVisible();
+
+  await page.setViewportSize({ width: 390, height: 840 });
+  await page.getByTitle('Card view').click();
+  const filterBox = await filter.boundingBox();
+  expect(filterBox.x + filterBox.width).toBeLessThanOrEqual(390);
+  await expect(page.getByRole('button', { name: 'View signups' })).toHaveCount(2);
+});
+
 test('admin inline assignment fields match both themes and fit phone width', async ({ page, backend }) => {
   await page.setViewportSize({ width: 1256, height: 900 });
   await signInFixture(page, backend, 'admin');
@@ -194,10 +264,10 @@ test('admin inline assignment fields match both themes and fit phone width', asy
   await expect(critical).toHaveCSS('background-color', 'rgb(27, 30, 36)');
   await expect(add).toHaveCSS('min-height', '44px');
   await expect(add).toHaveCSS('background-color', 'rgb(0, 86, 179)');
-  const desktopRow = await add.boundingBox();
-  for (const field of inputs) {
-    expect((await field.boundingBox()).y).toBeCloseTo(desktopRow.y, 0);
-  }
+  const desktopTops = await page.locator('.admin-role-inline-add__grid').evaluate((grid) =>
+    [...grid.querySelectorAll('input, select, button')].map((field) => field.getBoundingClientRect().top)
+  );
+  expect(Math.max(...desktopTops) - Math.min(...desktopTops)).toBeLessThan(1);
   await firstName.focus();
   await expect(firstName).toHaveCSS('outline-width', '2px');
   await affiliation.selectOption('fixture-team');
@@ -469,7 +539,7 @@ test('admin assigns an existing volunteer to a role and cancels that assignment'
   await expect(page.getByRole('heading', { name: 'Current Signups (1)' })).toBeVisible();
   page.once('dialog', (dialog) => dialog.accept());
   await page.getByTitle('Remove signup').click();
-  await expect(page.getByText('No current signups')).toBeVisible();
+  await expect(page.getByText('No confirmed signups')).toBeVisible();
 });
 
 test('admin copies the NICA summary and manages team coaches and their digest', async ({ page, backend, context }) => {
