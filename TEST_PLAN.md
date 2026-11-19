@@ -8,7 +8,7 @@ Reviewed [CODEBASE_MAP.md](CODEBASE_MAP.md), [AUDIT.md](AUDIT.md), local `AGENTS
 
 The app has no identified checkout or payment flow. Live projects, real email delivery, Slack, Google Sheets, production scheduling, and actual deployment are outside automated scope. Visual redesign, load testing, and application fixes are also outside this change.
 
-[package.json](package.json) already provides `npm test` using Playwright, plus UI, headed, debug, and report scripts. [playwright.config.js](playwright.config.js) starts Vite on port 5173, runs Chromium with one worker, and configures HTML output and CI retries. [tests/](tests/) has auth and full-auth-flow specs. Some cover standalone signup and password-reset routes absent from [src/App.svelte](src/App.svelte). Existing test documentation describes shared Supabase state and manual cleanup, so validate and replace those assumptions before running anything. The checked-in [GitHub workflow](.github/workflows/nica-coach-digest-cron.yml) schedules the NICA digest. GitHub Actions runs the scheduled digest. Run tests locally.
+[package.json](package.json) provides `npm test` for the offline Playwright and Deno suites, plus UI, headed, debug, and report commands. [playwright.config.js](playwright.config.js) starts a dedicated Vite server at `127.0.0.1:4179` and runs Chromium with one worker. The release and recording configurations preview the production build at `127.0.0.1:4180`. Both use synthetic data. GitHub video recording is opt-in. See the [test runbook](tests/README.md) for prerequisites and commands.
 
 ## Test tools and isolation
 
@@ -168,8 +168,8 @@ When adding, removing, or changing a feature, update its entry here and its test
 
 ### Bugs captured
 
-- [Profile.svelte](src/routes/Profile.svelte) redirects a signed-in volunteer to login if they reload Edit Profile before session hydration finishes. Saving the emergency-contact edit succeeds in its own test.
-- [Communications.svelte](src/routes/admin/Communications.svelte) stays on “Sending…” after Auth refresh returns successfully. The mail relay receives no request in the fixture test. Toggling the daily summary succeeds in its own test.
-- [Communications.svelte](src/routes/admin/Communications.svelte) shows zero recipients for role and schedule filters when the [role store](src/lib/stores/roles.js) loaded signup counts without volunteer records.
+- Reloading Edit Profile before session hydration finishes redirects a signed-in volunteer to login. [Profile.svelte](src/routes/Profile.svelte#L25)
+- Admin Communications stays on “Sending…” after Auth refresh returns successfully. The mail relay receives no request in the fixture test. [Communications.svelte](src/routes/admin/Communications.svelte#L282)
+- Admin Communications shows zero recipients for role and schedule filters when the role store loaded signup counts without volunteer records. [Communications.svelte](src/routes/admin/Communications.svelte#L402), [roles.js](src/lib/stores/roles.js#L75)
 
 The role specs mark these regressions as Playwright expected failures so an unexpected pass prompts removal of the marker.
