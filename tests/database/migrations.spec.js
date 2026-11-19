@@ -73,6 +73,16 @@ test('canonical bootstrap provisions a fresh local Supabase database', () => {
     to_regprocedure('public.volunteer_waiver_is_current(uuid)') IS NOT NULL`]);
   expect(objects.stdout.trim()).toBe('nica_coaches|t|t');
 
+  const retired = sql('fresh', ['-Atc', `SELECT
+    (SELECT count(*) FROM public.nica_beneficiaries),
+    EXISTS (SELECT FROM public.nica_beneficiary_affiliations),
+    has_function_privilege('authenticated', 'public.create_team_club_affiliation(text)', 'EXECUTE'),
+    has_function_privilege('authenticated', 'public.save_nica_beneficiary(uuid,text,uuid[])', 'EXECUTE'),
+    has_table_privilege('authenticated', 'public.nica_beneficiaries', 'SELECT'),
+    EXISTS (SELECT FROM public.team_club_affiliations)`]);
+  expect(retired.status, retired.stderr).toBe(0);
+  expect(retired.stdout.trim()).toBe('6|t|f|f|f|t');
+
   const repeated = docker(['exec', '-e', 'PGDATABASE=fresh', '-e', 'PGUSER=postgres', name,
     'sh', '/repo/scripts/bootstrap-local-db.sh']);
   expect(repeated.status).not.toBe(0);
@@ -169,8 +179,6 @@ test('explicit baseline patches support migrations, profile editing, and scoped 
   for (const file of migrations) apply('patched', `${migrationDirectory}/${file}`);
   apply('patched', 'tests/database/profile-access.sql');
   apply('patched', 'tests/database/emergency-contact-access.sql');
-  apply('patched', 'tests/database/affiliation-access.sql');
-  apply('patched', 'tests/database/nica-beneficiary-access.sql');
   apply('patched', 'tests/database/cleanup-scope.sql');
   apply('patched', 'tests/database/auth-mail-rate-limit.sql');
   apply('patched', 'tests/database/volunteer-mail-notifications.sql');

@@ -43,13 +43,27 @@ export function formatNicaNumber(num) {
 }
 
 /**
+ * @param {{ affiliationNames: string[] }} beneficiary
+ * @param {Array<{ id: string, name: string }>} affiliationsList
+ * @returns {Set<string>}
+ */
+export function getMatchingAffiliationIds(beneficiary, affiliationsList) {
+  return new Set(
+    affiliationsList
+      .filter((entry) => beneficiary.affiliationNames.includes(entry.name))
+      .map((entry) => entry.id),
+  );
+}
+
+/**
  * Total weighted volunteer spots for a beneficiary (same formula as the NICA table).
- * @param {{ affiliationIds: string[] }} beneficiary
+ * @param {{ affiliationNames: string[] }} beneficiary
+ * @param {Array<{ id: string, name: string }>} affiliationsList
  * @param {Array<{ team_club_affiliation_id?: string | null, signups?: unknown[] }>} volunteersList
  * @returns {number}
  */
-export function volunteerSpotsForBeneficiary(beneficiary, volunteersList) {
-  const matchingAffiliationIds = new Set(beneficiary.affiliationIds);
+export function volunteerSpotsForBeneficiary(beneficiary, affiliationsList, volunteersList) {
+  const matchingAffiliationIds = getMatchingAffiliationIds(beneficiary, affiliationsList);
   return volunteersList
     .filter((volunteer) => matchingAffiliationIds.has(volunteer.team_club_affiliation_id || ''))
     .reduce((sum, volunteer) => sum + nicaVolunteerSpots(volunteer), 0);
