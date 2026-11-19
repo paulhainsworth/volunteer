@@ -283,61 +283,68 @@
   </div>
 
   <div class="admin-role-inline-add__grid">
-    <input
-      type="text"
-      class="input"
-      placeholder="First name"
-      value={form.first_name}
-      on:input={(event) => updateField('first_name', event.currentTarget.value)}
-      on:keydown={handleKeydown}
-      disabled={loading || roleIsFull}
-      aria-label={`First name for ${role.name}`}
-    />
-    <input
-      type="text"
-      class="input"
-      placeholder="Last name"
-      value={form.last_name}
-      on:input={(event) => updateField('last_name', event.currentTarget.value)}
-      on:keydown={handleKeydown}
-      disabled={loading || roleIsFull}
-      aria-label={`Last name for ${role.name}`}
-    />
-    <input
-      type="email"
-      class="input"
-      placeholder="Email address"
-      value={form.email}
-      on:input={(event) => updateField('email', event.currentTarget.value)}
-      on:keydown={handleKeydown}
-      disabled={loading || roleIsFull}
-      aria-label={`Email for ${role.name}`}
-    />
-    <input
-      type="tel"
-      class="input"
-      placeholder="Phone (optional)"
-      value={form.phone}
-      on:input={(event) => updateField('phone', event.currentTarget.value)}
-      on:keydown={handleKeydown}
-      disabled={loading || roleIsFull}
-      aria-label={`Phone for ${role.name}`}
-    />
-    <select
-      class="input"
-      value={form.team_club_affiliation_id}
-      on:change={(event) => updateField('team_club_affiliation_id', event.currentTarget.value)}
-      disabled={loading || roleIsFull}
-      aria-label={`Team/club for ${role.name}`}
-    >
-      <option value="">Team/Club *</option>
-      {#each affiliations as affiliation (affiliation.id)}
-        <option value={affiliation.id}>{affiliation.name}</option>
-      {/each}
-    </select>
+    <label class="field">
+      <span>First name</span>
+      <input
+        type="text"
+        value={form.first_name}
+        on:input={(event) => updateField('first_name', event.currentTarget.value)}
+        on:keydown={handleKeydown}
+        disabled={loading || roleIsFull}
+        aria-label={`First name for ${role.name}`}
+      />
+    </label>
+    <label class="field">
+      <span>Last name</span>
+      <input
+        type="text"
+        value={form.last_name}
+        on:input={(event) => updateField('last_name', event.currentTarget.value)}
+        on:keydown={handleKeydown}
+        disabled={loading || roleIsFull}
+        aria-label={`Last name for ${role.name}`}
+      />
+    </label>
+    <label class="field">
+      <span>Email address</span>
+      <input
+        type="email"
+        value={form.email}
+        on:input={(event) => updateField('email', event.currentTarget.value)}
+        on:keydown={handleKeydown}
+        disabled={loading || roleIsFull}
+        aria-label={`Email for ${role.name}`}
+      />
+    </label>
+    <label class="field">
+      <span>Phone (optional)</span>
+      <input
+        type="tel"
+        value={form.phone}
+        on:input={(event) => updateField('phone', event.currentTarget.value)}
+        on:keydown={handleKeydown}
+        disabled={loading || roleIsFull}
+        aria-label={`Phone for ${role.name}`}
+      />
+    </label>
+    <label class="field">
+      <span>Team/Club <span aria-hidden="true">*</span></span>
+      <select
+        value={form.team_club_affiliation_id}
+        on:change={(event) => updateField('team_club_affiliation_id', event.currentTarget.value)}
+        disabled={loading || roleIsFull}
+        aria-label={`Team/club for ${role.name}`}
+        aria-required="true"
+      >
+        <option value="">Select a team or club</option>
+        {#each affiliations as affiliation (affiliation.id)}
+          <option value={affiliation.id}>{affiliation.name}</option>
+        {/each}
+      </select>
+    </label>
     <button
       type="button"
-      class="btn btn-primary admin-role-inline-add__button"
+      class="admin-role-inline-add__button"
       on:click={addVolunteer}
       disabled={loading || roleIsFull}
     >
@@ -383,6 +390,7 @@
 
 <style>
   .admin-role-inline-add {
+    container-type: inline-size;
     display: flex;
     flex-direction: column;
     gap: 0.85rem;
@@ -423,14 +431,61 @@
 
   .admin-role-inline-add__grid {
     display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 0.75rem;
-    align-items: center;
+    align-items: end;
+  }
+
+  .field {
+    display: grid;
+    gap: 0.375rem;
+    min-width: 0;
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    font-weight: 600;
+  }
+
+  .field input,
+  .field select {
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    padding: 0.5rem 0.625rem;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border: 1px solid var(--input-border);
+    border-radius: 6px;
+    font-size: 1rem;
   }
 
   .admin-role-inline-add__button {
-    width: 100%;
-    justify-self: stretch;
+    min-height: 44px;
+    padding: 0.5rem 0.75rem;
+    background: #0056b3;
+    color: white;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .admin-role-inline-add__button:hover:enabled {
+    background: #00458e;
+  }
+
+  .field input:focus-visible,
+  .field select:focus-visible,
+  .admin-role-inline-add__button:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+  }
+
+  .field input:disabled,
+  .field select:disabled,
+  .admin-role-inline-add__button:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
   }
 
   .admin-role-inline-add__loading {
@@ -510,20 +565,20 @@
     border: 1px solid var(--success-border);
   }
 
-  @media (max-width: 1200px) {
+  @container (min-width: 58rem) {
     .admin-role-inline-add__grid {
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1.25fr) auto;
     }
   }
 
-  @media (max-width: 768px) {
+  @container (max-width: 28rem) {
     .admin-role-inline-add__header {
       flex-direction: column;
-      align-items: stretch;
+      align-items: flex-start;
     }
 
     .admin-role-inline-add__grid {
-      grid-template-columns: 1fr;
+      grid-template-columns: minmax(0, 1fr);
     }
   }
 </style>

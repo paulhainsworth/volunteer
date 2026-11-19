@@ -2680,8 +2680,19 @@ import {
 
   .critical-input-wrap input {
     width: 4.25rem;
+    min-height: 36px;
     padding: 0.35rem 0.45rem;
     text-align: center;
+    border: 1px solid var(--input-border);
+    border-radius: 6px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-size: 1rem;
+  }
+
+  .critical-input-wrap input:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
   }
 
   .critical-helper {
@@ -2974,6 +2985,31 @@ import {
 
     table {
       min-width: 800px;
+    }
+
+    .roles-group-table {
+      container-type: inline-size;
+    }
+
+    .volunteers-row td {
+      padding: 0;
+    }
+
+    .volunteers-container {
+      position: sticky;
+      left: 0;
+      width: 100cqw;
+      padding: 1rem;
+    }
+
+    .volunteer-item {
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    .volunteer-info {
+      min-width: 0;
+      overflow-wrap: anywhere;
     }
 
     .leaders-summary {
