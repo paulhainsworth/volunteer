@@ -153,23 +153,23 @@ Run `npm run test:roles` to record the browser suite against the production bund
 
 | Role | Feature | Automated browser evidence | Additional coverage needed |
 | --- | --- | --- | --- |
-| Volunteer and public visitor | Magic-link request, role navigation, sign-out, onboarding, and profile edits | [Login](tests/auth/login.spec.js), [session and onboarding](tests/integration/full-auth-flow.spec.js), [profile and invite](tests/roles/volunteer.spec.js) | Hosted link delivery and changing an account email. Profile reload is a known failure. |
+| Volunteer and public visitor | Magic-link request, role navigation, sign-out, onboarding, and profile edits and reload | [Login](tests/auth/login.spec.js), [session and onboarding](tests/integration/full-auth-flow.spec.js), [profile and invite](tests/roles/volunteer.spec.js) | Hosted link delivery and changing an account email |
 | Volunteer and public visitor | Browse and filter opportunities, fill counts, team invite, signup, cancellation, and My Signups | [Browse](tests/volunteer/browse-roles.spec.js), [signup and cancellation](tests/volunteer/signup.spec.js), [team invite](tests/roles/volunteer.spec.js) | Native sharing and other mobile browser behavior |
 | Volunteer and public visitor | Adult and minor waivers, guardian delivery requests, kids’ clinic and registration errors | [Minor consent](tests/volunteer/minor-consent.spec.js), [kids’ clinic](tests/volunteer/kids-clinic.spec.js) | Hosted email delivery and waiver content approved by the event owner |
 | Volunteer leader | Assigned roster, additions, reactivation, rejected writes, duplicate submission, emergency details, editing, and removal | [Assignments](tests/organizer/assignment.spec.js), [leader review](tests/roles/leader.spec.js) | Hosted permission checks with assigned and unassigned test accounts |
 | Volunteer leader | Share an invite, email assigned volunteers, and add or remove roles from their domain | [Leader review](tests/roles/leader.spec.js) | Native sharing and mail delivery in a separate approved environment |
 | Administrator | Dashboard, role create/edit/duplicate/delete, CSV template/import/export, featured and critical role flags | [Admin review](tests/roles/admin.spec.js) | CSV bulk import with mixed success and deleting a role with signups |
 | Administrator | Create, edit, and delete domains; assign an existing leader to a domain; promote a volunteer to leader; add and cancel a roster assignment for an existing volunteer; create a volunteer and assign a shift | [Admin review](tests/roles/admin.spec.js), [assignments](tests/organizer/assignment.spec.js) | Create a new account inline while assigning a domain, and change user details |
-| Administrator | Compose email, select recipients by role, schedule, or unsigned waiver, toggle daily summaries, manage NICA coaches, copy a NICA summary, and export a NICA roster | [Admin review](tests/roles/admin.spec.js), [PDF export](tests/organizer/pdf-export.spec.js) | Delivery diagnostics and hosted scheduler delivery. Admin sending and role/schedule filtering are known failures. |
+| Administrator | Send email after session refresh, select recipients by role, schedule, or unsigned waiver, toggle daily summaries, manage NICA coaches, copy a NICA summary, and export a NICA roster | [Admin review](tests/roles/admin.spec.js), [PDF export](tests/organizer/pdf-export.spec.js) | Live provider delivery, delivery diagnostics, and hosted scheduler delivery |
 | Administrator and volunteer leader | Search the event directory during its enabled window; expiry redirect | [Directory review](tests/roles/volunteer.spec.js), [database access matrix](tests/database/migrations.spec.js) | Hosted access matrix |
 | Public visitor | Home redirects and board biographies | Home is exercised during auth routing. [Board review](tests/roles/volunteer.spec.js) checks biography expansion with stubbed images. | Static navigation destinations |
 
 When adding, removing, or changing a feature, update its entry here and its tests in the same PR. Record the affected roles, the scenario and its pass criteria, the test file, any fixture changes, and any remaining gaps. Run the affected cases, then run `npm run test:roles` for a full browser review. Save the GitHub artifact link with the tested commit when a recording is needed for review.
 
-### Bugs captured
+### Regression checks from the recorded role review
 
-- Reloading Edit Profile before session hydration finishes redirects a signed-in volunteer to login. [Profile.svelte](src/routes/Profile.svelte#L25)
-- Admin Communications stays on “Sending…” after Auth refresh returns successfully. The mail relay receives no request in the fixture test. [Communications.svelte](src/routes/admin/Communications.svelte#L282)
-- Admin Communications shows zero recipients for role and schedule filters when the role store loaded signup counts without volunteer records. [Communications.svelte](src/routes/admin/Communications.svelte#L402), [roles.js](src/lib/stores/roles.js#L75)
+Run `npm run test:roles -- tests/roles/volunteer.spec.js tests/roles/admin.spec.js` for these checks with synthetic profiles, Auth tokens, signup records, and relay responses.
 
-The role specs mark these regressions as Playwright expected failures so an unexpected pass prompts removal of the marker.
+- A signed-in reload restores the profile form and stays on its route. A signed-out visit redirects to sign-in without reading a profile. [Profile.svelte](src/routes/Profile.svelte)
+- Auth refresh releases the client before profile hydration. The admin form sends one relay request and reports success after the mocked refresh. [Auth store](src/lib/stores/auth.js), [Communications.svelte](src/routes/admin/Communications.svelte)
+- Role and schedule filters use confirmed signup records. A role excludes cancelled assignments, a date counts volunteers once across shifts, and a completion month includes its assigned volunteers. [Communications.svelte](src/routes/admin/Communications.svelte)

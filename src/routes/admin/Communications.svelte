@@ -400,21 +400,15 @@ Berkeley Omnium Volunteer Team`;
       return unsignedVolunteers;
     }
     if (recipientType === 'role' && selectedRoleId) {
-      const role = $roles.find((r) => r.id === selectedRoleId);
-      const signups = role?.signups?.filter((s) => s.status === 'confirmed') || [];
-      return signups.map((s) => s.volunteer).filter(Boolean);
+      return volunteersWithConfirmedSignups.filter((volunteer) =>
+        volunteer.signups.some((signup) => signup.role?.id === selectedRoleId)
+      );
     }
     if (recipientType === 'date' && selectedDate) {
-      const dateRoles = $roles.filter((r) => getRoleScheduleGroupKey(r) === selectedDate);
-      const byId = new Map();
-      dateRoles.forEach((role) => {
-        role.signups?.forEach((signup) => {
-          if (signup.status === 'confirmed' && signup.volunteer) {
-            byId.set(signup.volunteer.id, signup.volunteer);
-          }
-        });
-      });
-      return Array.from(byId.values());
+      const roleIds = new Set($roles.filter((role) => getRoleScheduleGroupKey(role) === selectedDate).map((role) => role.id));
+      return volunteersWithConfirmedSignups.filter((volunteer) =>
+        volunteer.signups.some((signup) => roleIds.has(signup.role?.id))
+      );
     }
     return [];
   })();
