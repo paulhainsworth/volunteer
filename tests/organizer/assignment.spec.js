@@ -105,6 +105,7 @@ for (const outcome of ['sent', 'delivery failed', 'assignment rejected', 'reacti
     const assignment = '/functions/v1/create-volunteer-and-signup';
     const email = '/functions/v1/send-email';
     const signups = '/rest/v1/signups';
+    const contacts = '/rest/v1/volunteer_contacts';
     const emailAddress = 'leader-fixture@example.invalid';
     const existing = outcome === 'reactivated'
       ? [{ ...profile, email: emailAddress, team_club_affiliation_id: 'fixture-team' }]
@@ -113,6 +114,7 @@ for (const outcome of ['sent', 'delivery failed', 'assignment rejected', 'reacti
     backend.handle('GET', '/rest/v1/profiles', (_, url) => ({
       body: url.searchParams.has('id') ? [{ ...profile, role: 'volunteer_leader' }] : existing,
     }));
+    backend.reply('GET', contacts, []);
     backend.reply('GET', '/rest/v1/team_club_affiliations', [{ id: 'fixture-team', name: 'Fixture Club' }]);
     backend.reply('GET', '/rest/v1/volunteer_leader_domains', []);
     backend.reply('GET', '/rest/v1/volunteer_roles', [role]);
@@ -137,6 +139,7 @@ for (const outcome of ['sent', 'delivery failed', 'assignment rejected', 'reacti
     await page.getByLabel(`First name for ${role.name}`).fill('Test');
     await page.getByLabel(`Last name for ${role.name}`).fill('Volunteer');
     await page.getByLabel(`Email for ${role.name}`).fill(emailAddress);
+    await expect.poll(() => backend.calls('GET', contacts)).toBeGreaterThan(0);
     await page.getByLabel(`Team/club for ${role.name}`).selectOption('fixture-team');
     await page.getByRole('button', { name: '+ Add', exact: true }).click();
     if (outcome !== 'reactivated') {
