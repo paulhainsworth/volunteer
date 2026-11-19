@@ -10,6 +10,7 @@ The Berkeley Bicycle Club volunteer hub helps race organizers staff events, trac
 | Waivers and clinic registration | Collect consent for volunteer signups and kids’ clinic registration. Volunteer waivers require an age declaration and guardian consent for minors. Waivers collected before age declarations require renewal. | Consent gating, concurrent seat allocation, rollback on rejected writes, clinic retry deduplication, and delivery status when email fails. |
 | Organizer tools | Assign volunteers to roles, view a leader’s roster, and export NICA team rosters as PDFs. | Organizer assignment, leader roster visibility, and a real PDF download with fixture data. |
 | Team and club affiliations | Admins can add a team or club from the Users screen. The new name is available in affiliation pickers. | Admin creation, duplicate handling, immediate selection, and database authorization. |
+| NICA beneficiaries | Admins can create or rename beneficiaries and choose which affiliations count toward each team. The summary, PDF exports, and coach digest use the saved mapping. | Admin creation and edits, exclusive affiliation assignment, retained existing teams, PDF grouping, and mocked coach digest delivery. |
 | Database setup and notifications | Apply schema migrations and send confirmations and scheduled summaries. | Migration and cleanup behavior in disposable PostgreSQL, selected Edge Function behavior, and the daily-summary opt-out. |
 
 Run the suite with `npm test` after following the [test setup](tests/README.md).

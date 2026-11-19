@@ -6,6 +6,8 @@ Run migrations against your Supabase database so the app schema is up to date.
 
 Apply [the team and club affiliation migration](20261118001100_allow_admins_to_create_team_club_affiliations.sql) before deploying the admin **Add team or club** form. It uses the existing affiliation lookup table from the [bootstrap patch](../bootstrap/ADD_TEAM_CLUB_AFFILIATION.sql), checks the signed-in account’s admin role, and rejects duplicate names without changing existing affiliations.
 
+Apply [the NICA beneficiary migration](20261118001200_manage_nica_beneficiaries.sql), then deploy `send-nica-coach-digest` and the new frontend before editing beneficiary settings. The migration seeds the six existing teams and links any of their known affiliation names already in the database. Admins can link additional affiliations from the Users screen.
+
 ## Option A: Supabase Dashboard (SQL Editor)
 
 1. Open your project in [Supabase Dashboard](https://supabase.com/dashboard) → **SQL Editor**.

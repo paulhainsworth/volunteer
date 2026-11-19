@@ -13,8 +13,11 @@ test('admin can download the selected team roster as a PDF', async ({ page, back
   backend.reply('GET', '/rest/v1/team_club_affiliations', [{
     id: 'fixture-team', name: 'Albany High School Mountain Bike Team',
   }]);
+  backend.reply('GET', '/rest/v1/nica_beneficiaries', [{
+    id: 'fixture-beneficiary', label: 'Albany', nica_beneficiary_affiliations: [{ affiliation_id: 'fixture-team' }],
+  }]);
   await page.getByRole('link', { name: 'Users', exact: true }).click();
-  await page.getByLabel('NICA team for PDF export').selectOption('Albany');
+  await page.getByLabel('NICA team for PDF export').selectOption('fixture-beneficiary');
   const downloadPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: 'NICA Export' }).click();
   const download = await downloadPromise;
