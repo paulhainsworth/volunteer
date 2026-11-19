@@ -54,6 +54,7 @@ test('first login collects an emergency contact before opening volunteer opportu
 for (const role of ['volunteer', 'volunteer_leader']) {
   test(`the ${role} cannot open the organizer roles screen`, async ({ page, backend }) => {
     await signInFixture(page, backend, role);
+    await expect(page).toHaveURL(/#\/my-signups$/);
     backend.reply('GET', '/rest/v1/volunteer_roles', []);
     await page.goto('/#/admin/roles');
     await expect(page).toHaveURL(/#\/volunteer$/);

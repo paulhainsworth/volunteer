@@ -41,3 +41,5 @@ supabase/.temp/
 # Generated browser tests
 /playwright-report/
 /test-results/
+
+/artifacts/role-review/

@@ -1,0 +1,32 @@
+name: Playwright role review videos
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [labeled]
+
+permissions:
+  contents: read
+
+jobs:
+  record:
+    if: github.event_name == 'workflow_dispatch' || (github.event.label.name == 'record-role-videos' && github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npx --no-install playwright install --with-deps chromium
+      - run: npm run test:roles
+      - name: Upload Playwright videos and report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: role-review-${{ github.run_number }}-${{ github.run_attempt }}
+          path: artifacts/role-review/
+          if-no-files-found: warn
+          retention-days: 14
