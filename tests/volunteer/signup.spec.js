@@ -64,9 +64,12 @@ test('volunteer cancellation removes the assignment from My Signups', async ({ p
     signups: [{ id: 'fixture-signup', role_id: role.id, status: 'confirmed', role }],
   });
   backend.reply('PATCH', '/rest/v1/signups', {});
-  backend.handle('GET', '/rest/v1/profiles', (_request, url) => ({
-    body: url.searchParams.has('id') ? [profile] : [],
-  }));
+  backend.handle('POST', '/functions/v1/send-email', (request) => {
+    expect(request.postDataJSON()).toEqual({
+      notification: { kind: 'cancellation', reference: 'fixture-signup' },
+    });
+    return { body: { success: true } };
+  });
   await expect(page.getByText(role.name, { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Cancel Signup', exact: true }).click();
   await page.getByRole('button', { name: 'Yes, Cancel Signup' }).click();

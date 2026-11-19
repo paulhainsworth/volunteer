@@ -32,6 +32,10 @@ await import('../../supabase/functions/send-email/index.ts');
 const sendEmail = handler();
 
 Deno.test('MG-09 guardian mail provider failures redact downstream details', async () => {
+  setClient(() => ({
+    auth: { getUser: () => ({ data: { user: { id: 'fixture-user' } }, error: null }) },
+    from: () => ({ select: () => ({ eq: () => ({ maybeSingle: () => ({ data: { role: 'admin' } }) }) }) }),
+  }));
   const providerDetails = 'Synthetic provider diagnostic for guardian@example.invalid';
   const messages: string[] = [];
   const originalFetch = globalThis.fetch;
@@ -41,6 +45,7 @@ Deno.test('MG-09 guardian mail provider failures redact downstream details', asy
   try {
     const response = await sendEmail(new Request('https://fixture.invalid/email', {
       method: 'POST',
+      headers: { authorization: 'Bearer synthetic-volunteer-session' },
       body: JSON.stringify({
         to: 'guardian@example.invalid', subject: 'Fixture consent confirmation', html: '<p>Fixture</p>',
       }),

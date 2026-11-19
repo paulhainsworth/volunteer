@@ -15,9 +15,8 @@
   } from '../../lib/utils/timeDisplay';
   import {
     createVolunteerAndSignup,
-    sendRoleConfirmationEmail,
-    sendWelcomeEmail,
-    sendParentGuardianConfirmationEmail
+    sendVolunteerNotification,
+    sendWelcomeEmail
   } from '../../lib/volunteerSignup';
   import { signups } from '../../lib/stores/signups';
   import { affiliations } from '../../lib/stores/affiliations';
@@ -560,12 +559,7 @@
         return;
       }
 
-      sendRoleConfirmationEmail({
-        to: result.email,
-        first_name: result.first_name,
-        role: piiRole,
-        roleId: piiRole.id
-      }).catch((err) => console.error('Role confirmation email failed:', err));
+      sendVolunteerNotification('confirmation', piiRole.id).catch((err) => console.error('Role confirmation email failed:', err));
 
       sendWelcomeEmail({
         to: result.email,
@@ -573,14 +567,7 @@
       }).catch((err) => console.error('Welcome email failed:', err));
 
       if (piiIsMinor && piiParentGuardianEmail?.trim()) {
-        sendParentGuardianConfirmationEmail({
-          to: piiParentGuardianEmail.trim(),
-          parent_guardian_name: piiParentGuardianName?.trim() || null,
-          volunteer_first_name: result.first_name,
-          volunteer_last_name: result.last_name,
-          role: piiRole,
-          roleId: piiRole.id
-        }).catch((err) => console.error('Parent/guardian confirmation email failed:', err));
+        sendVolunteerNotification('guardian_signup', piiRole.id).catch((err) => console.error('Parent/guardian confirmation email failed:', err));
       }
 
       closePiiModal();

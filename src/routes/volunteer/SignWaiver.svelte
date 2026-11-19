@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { auth } from '../../lib/stores/auth';
   import { waiver as waiverStore } from '../../lib/stores/waiver';
-  import { sendParentGuardianWaiverSignedEmail } from '../../lib/volunteerSignup';
+  import { sendVolunteerNotification } from '../../lib/volunteerSignup';
   import { push } from 'svelte-spa-router';
 
   let loading = true;
@@ -83,7 +83,7 @@
 
     submitting = true;
     try {
-      await waiverStore.signWaiver({
+      const waiverId = await waiverStore.signWaiver({
         version: waiverVersion,
         is_minor: isMinor,
         signature_name: isMinor ? minorAssent.trim() || null : signatureName.trim(),
@@ -95,12 +95,7 @@
         })
       });
       if (isMinor && parentGuardianEmail?.trim()) {
-        sendParentGuardianWaiverSignedEmail({
-          to: parentGuardianEmail.trim(),
-          parent_guardian_name: parentGuardianName?.trim() || null,
-          volunteer_first_name: $auth.profile?.first_name,
-          volunteer_last_name: $auth.profile?.last_name
-        }).catch((err) => console.error('Parent/guardian confirmation email failed:', err));
+        sendVolunteerNotification('guardian_waiver', waiverId).catch((err) => console.error('Parent/guardian confirmation email failed:', err));
       }
       push(returnUrl);
     } catch (err) {

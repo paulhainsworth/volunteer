@@ -51,8 +51,9 @@ function createWaiverStore() {
     },
 
     signWaiver: async (consent) => {
-      const { error } = await supabase.rpc('sign_volunteer_waiver', { p_consent: consent });
+      const { data, error } = await supabase.rpc('sign_volunteer_waiver', { p_consent: consent });
       if (error) throw error;
+      return data;
     },
 
     updateWaiverText: async (newText) => {

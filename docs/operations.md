@@ -62,3 +62,9 @@ gh run list --repo paulhainsworth/volunteer --workflow nica-coach-digest-cron.ym
 The check fails when scheduled history is missing or the most recent run is more than 45 minutes old. Use it during periods when the digest is expected to run.
 
 Assign delivery follow-up to the event's communications owner. Check NICA workflow delivery counts and the admin summary job history. For clinic receipts, use the [24-hour confirmation count](../scripts/sql/CHECK_CLINIC_CONFIRMATION_DELIVERY.sql) in the approved database and correlate unrecorded confirmations with the function's redacted delivery errors. The query excludes the latest five minutes while delivery may still be in progress. Review counts and timestamps in any escalation.
+
+## Generic email rollout
+
+Apply the [volunteer notification migration](../supabase/migrations/20261118000700_bind_volunteer_mail_to_activity.sql) before deploying `send-email`. The function verifies the sender, chooses templates and recipients from recent signup or waiver activity, and claims each notification once. Generic organizer mail requires an administrator or volunteer-leader session.
+
+Coordinate the frontend and Edge Function release. An operator can set `SEND_EMAIL_STAFF_ONLY=false` temporarily while old frontend clients switch to the typed requests. Clear the override once staff messages and all four volunteer notifications are verified on the new frontend.

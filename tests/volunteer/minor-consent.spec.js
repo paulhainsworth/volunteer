@@ -3,6 +3,7 @@ import { test, expect, fixtureSession, profile, role, signInFixture, user, waive
 const signup = '/rest/v1/rpc/confirm_volunteer_signup';
 const waiverStatus = '/rest/v1/rpc/volunteer_waiver_is_current';
 const signWaiver = '/rest/v1/rpc/sign_volunteer_waiver';
+const fixtureWaiverId = '00000000-0000-4000-8000-000000000098';
 const mail = '/functions/v1/send-email';
 const guardian = {
   parent_guardian_name: 'Fixture Guardian',
@@ -123,8 +124,8 @@ for (const outcome of ['created', 'retry', 'rejected']) {
     await expect(page.getByText(outcome === 'rejected' ? 'Fixture role is full' : "You're all set!")).toBeVisible();
     if (outcome === 'created') {
       await expect.poll(() => emails.length).toBe(2);
-      expect(emails.map(({ to }) => to).sort()).toEqual([guardian.parent_guardian_email, user.email].sort());
-      expect(emails.find(({ to }) => to === guardian.parent_guardian_email).html).toMatch(/Course Marshal[\s\S]*Date:[^<]*2099/);
+      expect(emails.map(({ notification }) => notification.kind).sort()).toEqual(['confirmation', 'guardian_signup']);
+      for (const email of emails) expect(email.notification.reference).toBe(role.id);
     } else {
       expect(emails).toHaveLength(0);
     }
@@ -156,8 +157,8 @@ for (const path of ['guest', 'browse']) {
     mockSignup(backend, emails);
     await fillGuardian(page);
     await submit.click();
-    await expect.poll(() => emails.filter(({ to }) => to === guardian.parent_guardian_email).length).toBe(1);
-    expect(emails.find(({ to }) => to === guardian.parent_guardian_email).html).toContain(role.name);
+    await expect.poll(() => emails.filter(({ notification }) => notification.kind === 'guardian_signup').length).toBe(1);
+    expect(emails.find(({ notification }) => notification.kind === 'guardian_signup').notification.reference).toBe(role.id);
     expect(backend.calls('POST', signup)).toBe(1);
   });
 }
@@ -203,7 +204,7 @@ for (const accepted of [true, false]) {
       expect(payload.parent_guardian_phone).toBe(accepted ? '5550101' : null);
       if (!accepted) return { body: { message: 'Fixture waiver save failed' }, status: 400 };
       backend.reply('POST', waiverStatus, true);
-      return { body: null };
+      return { body: fixtureWaiverId };
     });
     backend.reply('POST', mail, { success: true });
     await fillGuardian(page);
@@ -233,7 +234,7 @@ test('MG-08 standalone adult without a current age declaration must re-sign', as
       is_minor: false, signature_name: 'Test Volunteer', version: waiver.version,
     });
     backend.reply('POST', waiverStatus, true);
-    return { body: null };
+    return { body: fixtureWaiverId };
   });
   await submit.click();
   await expect(page).toHaveURL(/#\/my-signups$/);
@@ -247,7 +248,7 @@ test('MG-09 failed guardian mail leaves signup confirmed and logs no contact dat
   backend.handle('POST', mail, (request) => {
     const email = request.postDataJSON();
     emails.push(email);
-    if (email.to === guardian.parent_guardian_email) {
+    if (email.notification.kind === 'guardian_signup') {
       return { body: { error: 'Fixture private provider error' }, status: 500 };
     }
     return { body: { success: true } };
@@ -261,36 +262,21 @@ test('MG-09 failed guardian mail leaves signup confirmed and logs no contact dat
   expect(logs.join('\n')).not.toMatch(/guardian@example\.invalid|volunteer@example\.invalid|Fixture private provider error/);
 });
 
-test('MG-09 guardian confirmation should escape display names in HTML', async ({ page, backend }) => {
-  const submit = await openForm(page, backend, 'signed-in');
-  const emails = [];
-  backend.reply('POST', signup, { signup: { id: 'fixture-seat' }, created: true });
-  backend.handle('POST', mail, (request) => {
-    emails.push(request.postDataJSON());
-    return { body: { success: true } };
-  });
-  await fillGuardian(page, '<b>Fixture & Guardian</b>');
-  await submit.click();
-  await expect.poll(() => emails.length).toBe(2);
-  const confirmation = emails.find(({ to }) => to === guardian.parent_guardian_email);
-  expect(confirmation).toBeDefined();
-  expect(confirmation.html).toContain('&lt;b&gt;Fixture &amp; Guardian&lt;/b&gt;');
-});
-
-test('MG-09 standalone guardian confirmation escapes display names', async ({ page, backend }) => {
+test('MG-09 standalone guardian notification sends only the stored waiver reference', async ({ page, backend }) => {
   const submit = await openForm(page, backend, 'waiver');
   backend.handle('POST', signWaiver, () => {
     backend.reply('POST', waiverStatus, true);
-    return { body: null };
+    return { body: fixtureWaiverId };
   });
-  const emails = [];
+  const requests = [];
   backend.handle('POST', mail, (request) => {
-    emails.push(request.postDataJSON());
+    requests.push(request.postDataJSON());
     return { body: { success: true } };
   });
   await fillGuardian(page, 'Fixture & Guardian');
   await submit.click();
-  await expect.poll(() => emails.length).toBe(1);
-  expect(emails[0].html).toContain('Fixture &amp; Guardian');
-  expect(emails[0].html).toContain('/my-signups');
+  await expect.poll(() => requests.length).toBe(1);
+  expect(requests[0]).toEqual({
+    notification: { kind: 'guardian_waiver', reference: fixtureWaiverId },
+  });
 });

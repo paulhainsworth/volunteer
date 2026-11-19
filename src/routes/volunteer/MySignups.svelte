@@ -1,6 +1,7 @@
 <script>
   import { onDestroy, onMount } from 'svelte';
   import { signups as signupsStore } from '../../lib/stores/signups';
+  import { sendVolunteerNotification } from '../../lib/volunteerSignup';
   import { auth } from '../../lib/stores/auth';
   import { supabase } from '../../lib/supabaseClient';
   import { push } from 'svelte-spa-router';
@@ -131,7 +132,9 @@
       await signupsStore.cancelSignup(cancellingSignup.id);
       
       // Send email notifications to leader and admins
-      await sendCancellationNotifications(cancellingSignup);
+      await sendVolunteerNotification('cancellation', cancellingSignup.id).catch(() => {
+        console.error('Cancellation notification did not complete');
+      });
       
       // Remove from local array
       mySignups = mySignups.filter(s => s.id !== cancellingSignup.id);
@@ -141,83 +144,6 @@
       error = err.message;
     } finally {
       cancellingId = null;
-    }
-  }
-
-  async function sendCancellationNotifications(signup) {
-    try {
-      const role = signup.role;
-      const volunteer = $auth.profile;
-      
-      // Get the effective leader
-      const leader = getEffectiveLeader(signup);
-      
-      // Get all admins
-      const { data: admins } = await supabase
-        .from('profiles')
-        .select('email, first_name, last_name')
-        .eq('role', 'admin');
-
-      // Prepare email data
-      const emailData = {
-        volunteer_name: `${volunteer.first_name} ${volunteer.last_name}`,
-        volunteer_email: volunteer.email,
-        role_name: role.name,
-        role_date: formatRoleScheduleDate(role, 'long'),
-        role_time: formatTimeRange(role),
-        role_location: role.location || 'N/A'
-      };
-
-      // Send to leader if available
-      if (leader) {
-        await supabase.functions.invoke('send-email', {
-          body: {
-            to: leader.email,
-            subject: `Volunteer Cancellation: ${role.name}`,
-            html: `
-              <h2>Volunteer Cancellation Notice</h2>
-              <p>Hello ${leader.first_name},</p>
-              <p><strong>${emailData.volunteer_name}</strong> has cancelled their signup for:</p>
-              <ul>
-                <li><strong>Role:</strong> ${emailData.role_name}</li>
-                <li><strong>Date:</strong> ${emailData.role_date}</li>
-                <li><strong>Time:</strong> ${emailData.role_time}</li>
-                <li><strong>Location:</strong> ${emailData.role_location}</li>
-              </ul>
-              <p>You may want to reach out to find a replacement volunteer.</p>
-              <p>Contact: ${emailData.volunteer_email}</p>
-            `
-          }
-        });
-      }
-
-      // Send to all admins
-      if (admins && admins.length > 0) {
-        for (const admin of admins) {
-          await supabase.functions.invoke('send-email', {
-            body: {
-              to: admin.email,
-              subject: `Volunteer Cancellation: ${role.name}`,
-              html: `
-                <h2>Volunteer Cancellation Notice</h2>
-                <p>Hello ${admin.first_name},</p>
-                <p><strong>${emailData.volunteer_name}</strong> has cancelled their signup for:</p>
-                <ul>
-                  <li><strong>Role:</strong> ${emailData.role_name}</li>
-                  <li><strong>Date:</strong> ${emailData.role_date}</li>
-                  <li><strong>Time:</strong> ${emailData.role_time}</li>
-                  <li><strong>Location:</strong> ${emailData.role_location}</li>
-                </ul>
-                ${leader ? `<p><strong>Leader notified:</strong> ${leader.first_name} ${leader.last_name} (${leader.email})</p>` : ''}
-                <p>Volunteer contact: ${emailData.volunteer_email}</p>
-              `
-            }
-          });
-        }
-      }
-    } catch (err) {
-      console.error('Failed to send cancellation notifications:', err);
-      // Don't throw error - cancellation should still succeed even if emails fail
     }
   }
 
