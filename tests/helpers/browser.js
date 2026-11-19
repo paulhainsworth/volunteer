@@ -58,6 +58,10 @@ export const test = base.extend({
       handle(method, path, handler) {
         handlers.set(`${method} ${path}`, handler);
       },
+      handleDefault(method, path, handler) {
+        const key = `${method} ${path}`;
+        if (!handlers.has(key)) handlers.set(key, handler);
+      },
       calls(method, path) {
         return requests.filter((key) => key === `${method} ${path}`).length;
       },
@@ -83,10 +87,10 @@ export function fixtureSession() {
 
 export async function signInFixture(page, backend, role = 'volunteer', { signups = [], profileFields = {}, search = '' } = {}) {
   // The home route may render before the magic-link callback reaches My Signups.
-  backend.reply('GET', '/rest/v1/volunteer_roles', []);
+  backend.handleDefault('GET', '/rest/v1/volunteer_roles', () => ({ body: [] }));
   if (role === 'volunteer_leader') {
-    backend.reply('GET', '/rest/v1/team_club_affiliations', []);
-    backend.handle('GET', '/rest/v1/volunteer_leader_domains', (_, url) => {
+    backend.handleDefault('GET', '/rest/v1/team_club_affiliations', () => ({ body: [] }));
+    backend.handleDefault('GET', '/rest/v1/volunteer_leader_domains', (_, url) => {
       expect(url.searchParams.get('leader_id')).toBe(`eq.${user.id}`);
       return { body: [] };
     });
