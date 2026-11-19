@@ -11,6 +11,39 @@ function mockAdminReads(backend) {
   backend.reply('POST', '/rest/v1/rpc/get_confirmed_signup_counts', []);
 }
 
+test('admin adds a team or club and can select it immediately', async ({ page, backend }) => {
+  await signInFixture(page, backend, 'admin');
+  await expect(page).toHaveURL(/#\/my-signups$/);
+  mockAdminReads(backend);
+  backend.reply('GET', '/rest/v1/profiles', [{ ...profile, signups: [], waivers: [] }]);
+  const endpoint = '/rest/v1/rpc/create_team_club_affiliation';
+  const added = { id: 'fixture-team', name: 'Fixture Cycling', sort_order: 999 };
+  backend.handle('POST', endpoint, request => {
+    const name = request.postDataJSON().p_name;
+    if (name === 'Existing Team') return { status: 409, body: { code: '23505', message: 'Duplicate' } };
+    expect(name).toBe(added.name);
+    return { body: added };
+  });
+
+  await page.goto('/#/admin/volunteers');
+  const toggle = page.getByRole('button', { name: 'Add team or club' });
+  const name = page.getByLabel('Team or club name');
+  const save = page.getByRole('button', { name: 'Add affiliation' });
+  await toggle.click();
+  await expect(name).toBeFocused();
+  await expect(save).toBeDisabled();
+  await name.fill('Existing Team');
+  await save.click();
+  await expect(page.getByRole('alert')).toHaveText('This team or club affiliation already exists.');
+  await name.fill(' Fixture Cycling ');
+  await save.click();
+  await expect(page.getByRole('status')).toContainText('Added Fixture Cycling.');
+  await expect(toggle).toBeFocused();
+  await page.getByLabel('Affiliation', { exact: true }).selectOption(added.id);
+  await page.getByRole('button', { name: '+ Add Volunteer' }).click();
+  await page.getByRole('combobox', { name: 'Team / Club Affiliation *', exact: true }).selectOption(added.id);
+});
+
 test('admin dashboard loads role statistics and opens the new role form', async ({ page, backend }) => {
   await signInFixture(page, backend, 'admin');
   await expect(page).toHaveURL(/#\/my-signups$/);

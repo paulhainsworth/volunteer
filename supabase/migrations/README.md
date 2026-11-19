@@ -4,6 +4,8 @@ See the [SQL layout](../README.md) for bootstrap prerequisites, historical patch
 
 Run migrations against your Supabase database so the app schema is up to date.
 
+Apply [the team and club affiliation migration](20261118001100_allow_admins_to_create_team_club_affiliations.sql) before deploying the admin **Add team or club** form. It uses the existing affiliation lookup table from the [bootstrap patch](../bootstrap/ADD_TEAM_CLUB_AFFILIATION.sql), checks the signed-in account’s admin role, and rejects duplicate names without changing existing affiliations.
+
 ## Option A: Supabase Dashboard (SQL Editor)
 
 1. Open your project in [Supabase Dashboard](https://supabase.com/dashboard) → **SQL Editor**.

@@ -8,6 +8,8 @@ Apply the [auth mail rate limit migration](../supabase/migrations/20261118000600
 
 ## Race-day workflow checks
 
+To add an affiliation, open **Admin → Users → Add team or club**. Enter the display name and select **Add affiliation**. The new option is available immediately when adding or editing volunteers.
+
 | Role | Rehearsal |
 | --- | --- |
 | Organizer | Import a representative roles CSV, review the public list and fill counts, assign a leader to a domain, and verify the intended notification arrives. See the [CSV format](../CSV_FORMAT.md) and [domain guide](../DOMAINS_USAGE_GUIDE.md). |
