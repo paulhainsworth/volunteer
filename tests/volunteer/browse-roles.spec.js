@@ -88,6 +88,30 @@ test('homepage leads to volunteer shifts and shows open spots', async ({ page, b
   await expect(page.getByRole('heading', { name: 'Volunteer Opportunities' })).toBeVisible();
 });
 
+test('homepage explains the 2026 volunteer impact and serves a favicon', async ({ page, backend }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  backend.reply('GET', '/rest/v1/volunteer_roles', []);
+  await page.goto('/#/');
+  const impact = page.getByRole('region', { name: 'Your shift supports East Bay youth cycling' });
+  await expect(impact).toBeVisible();
+  const amount = impact.getByText('$28,610', { exact: true });
+  await expect(amount).toBeVisible();
+  await expect(amount).toHaveCSS('color', 'rgb(226, 232, 240)');
+  await expect(impact).toContainText('Raised in 2026');
+  await expect(impact).toContainText('East Bay high school teams supported');
+  await expect(impact.getByText('6', { exact: true })).toBeVisible();
+  await expect(impact.getByRole('link', { name: 'Berkeley Omnium', exact: true })).toHaveAttribute('href', 'https://berkeleyomnium.com/');
+  await expect(impact.getByRole('link', { name: 'Where the proceeds go' })).toHaveAttribute('href', 'https://berkeleyomnium.com/impact');
+  await expect(impact.getByRole('link', { name: 'Berkeley Bicycle Club' })).toHaveAttribute('href', 'https://berkeleybikeclub.org/');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
+
+  await expect(page).toHaveTitle('Berkeley Omnium Volunteer Hub');
+  await expect(page.locator('link[rel="icon"]')).toHaveAttribute('href', '/favicon.svg');
+  const favicon = await page.request.get('/favicon.svg');
+  expect(favicon.ok()).toBe(true);
+  expect(favicon.headers()['content-type']).toContain('image/svg+xml');
+});
+
 for (const [status, response, message] of [
   [200, [], 'No volunteer opportunities found matching your filters.'],
   [503, { message: 'Fixture roles unavailable' }, 'Fixture roles unavailable'],

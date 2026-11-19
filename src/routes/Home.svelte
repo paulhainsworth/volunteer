@@ -141,14 +141,36 @@
     </div>
   {/if}
 
-  <div class="about">
-    <h2>Built for Race Organizers</h2>
+  <section class="impact" aria-labelledby="impact-title">
+    <h2 id="impact-title">Your shift supports East Bay youth cycling</h2>
     <p>
-      Our volunteer management system streamlines the entire process of coordinating 
-      volunteers for bicycle racing events. From creating volunteer roles to tracking 
-      signups and sending communications, everything is in one place.
+      The Berkeley Omnium is a two-day race weekend organized by the Berkeley Bicycle Club.
+      Proceeds from the Berkeley Hills Road Race and Berkeley Streets Criterium help local
+      high school mountain bike teams pay for equipment, coaching, and race opportunities.
     </p>
-  </div>
+
+    <dl class="impact-stats">
+      <div>
+        <dt>Raised in 2026</dt>
+        <dd>$28,610</dd>
+      </div>
+      <div>
+        <dt>East Bay high school teams supported</dt>
+        <dd>6</dd>
+      </div>
+    </dl>
+
+    <p>
+      Every shift helps make the races possible. Thank you for giving your time and helping more
+      East Bay students ride and race.
+    </p>
+
+    <ul class="impact-links" role="list">
+      <li><a href="https://berkeleyomnium.com/">Berkeley Omnium</a></li>
+      <li><a href="https://berkeleyomnium.com/impact">Where the proceeds go</a></li>
+      <li><a href="https://berkeleybikeclub.org/">Berkeley Bicycle Club</a></li>
+    </ul>
+  </section>
 </div>
 
 <style>
@@ -308,24 +330,75 @@
     color: var(--text-secondary);
   }
 
-  .about {
-    text-align: center;
-    padding: 3rem 1rem;
+  .impact {
     background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
     border-radius: 12px;
     margin: 2rem 0;
+    padding: clamp(1rem, 4vw, 2rem);
   }
 
-  .about h2 {
-    margin-bottom: 1rem;
+  .impact h2 {
+    margin-bottom: 0.75rem;
   }
 
-  .about p {
-    font-size: 1.1rem;
-    line-height: 1.6;
+  .impact p {
     color: var(--text-muted);
-    max-width: 700px;
-    margin: 0 auto;
+    max-width: 65ch;
+  }
+
+  .impact-stats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+    max-width: 42rem;
+    margin: 1.25rem 0;
+  }
+
+  .impact-stats > div {
+    display: flex;
+    flex-direction: column-reverse;
+    justify-content: flex-end;
+    gap: 0.25rem;
+    padding: clamp(0.75rem, 3vw, 1.25rem);
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+  }
+
+  .impact-stats dt {
+    color: var(--text-muted);
+    font-size: 0.9375rem;
+    line-height: 1.35;
+  }
+
+  .impact-stats dd {
+    color: var(--text-primary);
+    font-size: clamp(1.5rem, 5vw, 2.25rem);
+    font-weight: 700;
+    line-height: 1.15;
+  }
+
+  .impact-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 1rem;
+    list-style: none;
+    margin-top: 0.75rem;
+  }
+
+  .impact-links a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    color: var(--link-hover);
+    text-decoration: underline;
+    text-underline-offset: 0.16em;
+  }
+
+  .impact-links a:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
   }
 
   @media (max-width: 768px) {
