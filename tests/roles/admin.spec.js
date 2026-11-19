@@ -168,6 +168,57 @@ test('admin previews and starts the 2027 roster while keeping staff and returnin
   await expect(priorVolunteer).toBeVisible();
 });
 
+test('admin inline assignment fields match both themes and fit phone width', async ({ page, backend }) => {
+  await page.setViewportSize({ width: 1256, height: 900 });
+  await signInFixture(page, backend, 'admin');
+  await expect(page).toHaveURL(/#\/my-signups$/);
+  mockAdminReads(backend);
+  backend.reply('GET', roles, [role]);
+  backend.reply('GET', '/rest/v1/signups', []);
+  backend.reply('GET', '/rest/v1/team_club_affiliations', [{ id: 'fixture-team', name: 'Fixture Club' }]);
+  await page.getByRole('link', { name: 'Roles', exact: true }).click();
+  await page.getByText(role.name, { exact: true }).click();
+
+  const firstName = page.getByLabel(`First name for ${role.name}`);
+  const lastName = page.getByLabel(`Last name for ${role.name}`);
+  const email = page.getByLabel(`Email for ${role.name}`);
+  const phone = page.getByLabel(`Phone for ${role.name}`);
+  const affiliation = page.getByLabel(`Team/club for ${role.name}`);
+  const add = page.getByRole('button', { name: '+ Add', exact: true });
+  const critical = page.getByTitle('Number of must-fill spots in this role');
+  const inputs = [firstName, lastName, email, phone, affiliation];
+  for (const field of inputs) {
+    await expect(field).toHaveCSS('min-height', '44px');
+    await expect(field).toHaveCSS('background-color', 'rgb(27, 30, 36)');
+  }
+  await expect(critical).toHaveCSS('background-color', 'rgb(27, 30, 36)');
+  await expect(add).toHaveCSS('min-height', '44px');
+  await expect(add).toHaveCSS('background-color', 'rgb(0, 86, 179)');
+  const desktopRow = await add.boundingBox();
+  for (const field of inputs) {
+    expect((await field.boundingBox()).y).toBeCloseTo(desktopRow.y, 0);
+  }
+  await firstName.focus();
+  await expect(firstName).toHaveCSS('outline-width', '2px');
+  await affiliation.selectOption('fixture-team');
+
+  await page.getByRole('button', { name: 'Dark mode' }).click();
+  for (const field of [...inputs, critical]) {
+    await expect(field).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+  }
+  await page.setViewportSize({ width: 390, height: 900 });
+  await add.scrollIntoViewIfNeeded();
+  let bottom = -Infinity;
+  for (const field of [...inputs, add]) {
+    const box = await field.boundingBox();
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(390);
+    expect(box.y).toBeGreaterThan(bottom);
+    bottom = box.y + box.height;
+  }
+  await expect(affiliation).toHaveValue('fixture-team');
+});
+
 test('admin creates, edits, duplicates, and deletes a role', async ({ page, backend }) => {
   const duplicateId = '00000000-0000-4000-8000-000000000014';
   const records = new Map();
