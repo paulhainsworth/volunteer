@@ -58,3 +58,7 @@ Use expected failures for confirmed regressions, with an issue or source referen
 ## Keep documentation current
 
 Review the [roadmap](../PRODUCTION_READINESS_ROADMAP.md), [features](../features.md), and [affected documentation](README.md) with each change. Update the roadmap for changes to priorities, blockers, or verified status and update the feature list when supported behavior or limitations change. Update the [codebase map](../CODEBASE_MAP.md) when routes, architecture, or deployment change. Update the [test plan](../TEST_PLAN.md) when coverage or expected failures change. During audit follow-up, update [AUDIT.md](../AUDIT.md) when verified evidence changes a finding or its status. Use the repository’s `bug` or `security` issue labels as appropriate, along with the affected `feature:` or `area:` label. Keep credentials and private volunteer information out of issues and PRs.
+
+### Role workflow recordings
+
+For changes to a volunteer, leader, or administrator workflow, update the [recorded role review matrix](../TEST_PLAN.md#recorded-role-review) and the corresponding Playwright check in the same PR. Run `npm run test:roles` when recording is useful, then link the GitHub artifact in the PR along with the tested commit. Record synthetic accounts and data only.

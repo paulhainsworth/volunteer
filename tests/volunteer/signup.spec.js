@@ -34,6 +34,7 @@ test('requests identity verification before collecting consent or assigning a se
 
 test('a failed confirmation keeps the role form available and sends no email', async ({ page, backend }) => {
   await signInFixture(page, backend);
+  await expect(page).toHaveURL(/#\/my-signups$/);
   backend.reply('GET', '/rest/v1/volunteer_roles', role);
   backend.reply('POST', '/rest/v1/rpc/get_confirmed_signup_counts', [{ role_id: role.id, cnt: 0 }]);
   backend.reply('POST', confirmation, { message: 'This role is already full' }, 409);
@@ -77,6 +78,7 @@ test('volunteer cancellation removes the assignment from My Signups', async ({ p
 
 test('signed-in volunteers can confirm one assignment and see it in My Signups', async ({ page, backend }) => {
   await signInFixture(page, backend);
+  await expect(page).toHaveURL(/#\/my-signups$/);
   const assignments = [];
   backend.reply('GET', '/rest/v1/volunteer_roles', role);
   backend.reply('POST', '/rest/v1/rpc/get_confirmed_signup_counts', [{ role_id: role.id, cnt: 0 }]);

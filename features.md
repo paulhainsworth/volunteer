@@ -12,7 +12,7 @@ The Berkeley Bicycle Club volunteer hub helps race organizers staff events, trac
 
 Run the suite with `npm test` after following the [test setup](tests/README.md).
 
-See the [test plan](TEST_PLAN.md) for coverage gaps and [audit](AUDIT.md) for prioritized fixes.
+See the [recorded role review](TEST_PLAN.md#recorded-role-review) for Playwright coverage and videos, the [test plan](TEST_PLAN.md) for coverage gaps and [audit](AUDIT.md) for prioritized fixes.
 
 The volunteer contact directory is available to administrators and volunteer leaders.
 

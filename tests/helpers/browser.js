@@ -58,6 +58,10 @@ export const test = base.extend({
       handle(method, path, handler) {
         handlers.set(`${method} ${path}`, handler);
       },
+      handleDefault(method, path, handler) {
+        const key = `${method} ${path}`;
+        if (!handlers.has(key)) handlers.set(key, handler);
+      },
       calls(method, path) {
         return requests.filter((key) => key === `${method} ${path}`).length;
       },
@@ -82,6 +86,16 @@ export function fixtureSession() {
 }
 
 export async function signInFixture(page, backend, role = 'volunteer', { signups = [], profileFields = {}, search = '' } = {}) {
+  // The home route may render before the magic-link callback reaches My Signups.
+  backend.handleDefault('GET', '/rest/v1/volunteer_roles', () => ({ body: [] }));
+  backend.handleDefault('POST', '/rest/v1/rpc/get_confirmed_signup_counts', () => ({ body: [] }));
+  if (role === 'volunteer_leader') {
+    backend.handleDefault('GET', '/rest/v1/team_club_affiliations', () => ({ body: [] }));
+    backend.handleDefault('GET', '/rest/v1/volunteer_leader_domains', (_, url) => {
+      expect(url.searchParams.get('leader_id')).toBe(`eq.${user.id}`);
+      return { body: [] };
+    });
+  }
   backend.reply('GET', '/auth/v1/user', user);
   backend.reply('GET', '/rest/v1/waiver_settings', waiver);
   backend.reply('POST', '/rest/v1/rpc/volunteer_waiver_is_current', true);
