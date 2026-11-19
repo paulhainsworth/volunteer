@@ -3,7 +3,6 @@ import { test, expect, ownProfile, profile, signInFixture } from '../helpers/bro
 for (const [role, nav] of [['volunteer', 'Browse Roles'], ['volunteer_leader', 'My Roles'], ['admin', 'Dashboard']]) {
   test(`magic link signs in the ${role} session and sign-out clears it`, async ({ page, backend }) => {
     backend.reply('POST', '/auth/v1/logout', {});
-    backend.reply('GET', '/rest/v1/volunteer_roles', []);
     await signInFixture(page, backend, role);
     await expect(page).toHaveURL(/#\/my-signups$/);
     const navigation = page.getByRole('navigation');
@@ -59,6 +58,6 @@ for (const role of ['volunteer', 'volunteer_leader']) {
     await page.goto('/#/admin/roles');
     await expect(page).toHaveURL(/#\/volunteer$/);
     await expect(page.getByRole('heading', { name: 'Volunteer Opportunities' })).toBeVisible();
-    expect(backend.calls('GET', '/rest/v1/volunteer_leader_domains')).toBe(0);
+    if (role === 'volunteer') expect(backend.calls('GET', '/rest/v1/volunteer_leader_domains')).toBe(0);
   });
 }

@@ -56,9 +56,6 @@ test('an expired directory link returns to the home page', async ({ page, backen
 for (const staffRole of ['admin', 'volunteer_leader']) {
   test(`${staffRole} can search the event directory during the enabled window`, async ({ page, backend }) => {
     await page.clock.setFixedTime(new Date('2026-04-18T20:00:00Z'));
-    backend.reply('GET', '/rest/v1/volunteer_roles', []);
-    backend.reply('GET', '/rest/v1/volunteer_leader_domains', []);
-    backend.reply('GET', '/rest/v1/team_club_affiliations', []);
     await signInFixture(page, backend, staffRole);
     await expect(page).toHaveURL(/#\/my-signups$/);
     const endpoint = '/rest/v1/rpc/search_volunteer_contacts';

@@ -82,6 +82,15 @@ export function fixtureSession() {
 }
 
 export async function signInFixture(page, backend, role = 'volunteer', { signups = [], profileFields = {}, search = '' } = {}) {
+  // The home route may render before the magic-link callback reaches My Signups.
+  backend.reply('GET', '/rest/v1/volunteer_roles', []);
+  if (role === 'volunteer_leader') {
+    backend.reply('GET', '/rest/v1/team_club_affiliations', []);
+    backend.handle('GET', '/rest/v1/volunteer_leader_domains', (_, url) => {
+      expect(url.searchParams.get('leader_id')).toBe(`eq.${user.id}`);
+      return { body: [] };
+    });
+  }
   backend.reply('GET', '/auth/v1/user', user);
   backend.reply('GET', '/rest/v1/waiver_settings', waiver);
   backend.reply('POST', '/rest/v1/rpc/volunteer_waiver_is_current', true);
