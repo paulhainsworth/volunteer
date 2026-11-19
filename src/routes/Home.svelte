@@ -170,6 +170,18 @@
       <p class="homepage-thanks">{formatWebsiteMessage(websiteMessages.homepage_thanks, websiteMessages.event_year)}</p>
     {/if}
 
+    <div class="impact-teams">
+      <h3 id="impact-teams-title">NICA teams supported in 2026</h3>
+      <ul class="impact-links team-links" aria-labelledby="impact-teams-title" role="list">
+        <li><a href="https://www.instagram.com/ahscougarsmtb/">Albany High School</a></li>
+        <li><a href="https://www.berkeleymtbteam.com/">Berkeley High School</a></li>
+        <li><a href="https://echsmtb.com/">El Cerrito High School</a></li>
+        <li><a href="https://oaklandcompositemtb.com/">Oakland Composite</a></li>
+        <li><a href="https://www.facebook.com/OaklandTechMTB">Oakland Technical High School</a></li>
+        <li><a href="https://skylinehighbiketeam.com/">Skyline High School</a></li>
+      </ul>
+    </div>
+
     <ul class="impact-links" role="list">
       <li><a href="https://berkeleyomnium.com/">Berkeley Omnium</a></li>
       <li><a href="https://berkeleyomnium.com/impact">Where the proceeds go</a></li>
@@ -395,6 +407,20 @@
     gap: 0 1rem;
     list-style: none;
     margin-top: 0.75rem;
+  }
+
+  .impact-teams {
+    margin-top: 1.5rem;
+  }
+
+  .impact-teams h3 {
+    font-size: 1rem;
+  }
+
+  .team-links {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+    margin-top: 0.25rem;
   }
 
   .impact-links a {
