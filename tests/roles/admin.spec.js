@@ -311,6 +311,44 @@ test('admin assigns an existing volunteer to a role and cancels that assignment'
   await expect(page.getByText('No current signups')).toBeVisible();
 });
 
+test('admin adds and renames a NICA beneficiary with an affiliation', async ({ page, backend }) => {
+  await signInFixture(page, backend, 'admin');
+  await expect(page).toHaveURL(/#\/my-signups$/);
+  mockAdminReads(backend);
+  backend.reply('GET', '/rest/v1/profiles', [{ ...profile, team_club_affiliation_id: 'new-team', signups: [{ role, status: 'confirmed' }], waivers: [] }]);
+  backend.reply('GET', '/rest/v1/team_club_affiliations', [
+    { id: 'existing-team', name: 'Existing Bike Club' },
+    { id: 'new-team', name: 'Fixture Cycling' },
+  ]);
+  backend.reply('GET', '/rest/v1/nica_beneficiaries', [{
+    id: 'existing-beneficiary', label: 'Existing Team', nica_beneficiary_affiliations: [{ affiliation_id: 'existing-team' }],
+  }]);
+  backend.handle('POST', '/rest/v1/rpc/save_nica_beneficiary', (request) => {
+    const { p_id, p_label, p_affiliation_ids } = request.postDataJSON();
+    expect(p_affiliation_ids).toEqual(['new-team']);
+    expect(p_label).toBe(p_id ? 'Fixture Renamed' : 'Fixture Team');
+    return { body: 'new-beneficiary' };
+  });
+
+  await page.goto('/#/admin/volunteers');
+  await page.getByRole('button', { name: 'Manage NICA beneficiaries' }).click();
+  const name = page.getByLabel('Beneficiary name');
+  const save = page.getByRole('button', { name: 'Save beneficiary' });
+  await expect(page.getByRole('checkbox', { name: /Existing Bike Club/ })).toBeDisabled();
+  await name.fill(' Fixture Team ');
+  await expect(save).toBeDisabled();
+  await page.getByRole('checkbox', { name: 'Fixture Cycling' }).check();
+  await save.click();
+  await expect(page.getByRole('status')).toHaveText('Saved Fixture Team.');
+  await expect(page.getByLabel('Beneficiary', { exact: true })).toHaveValue('new-beneficiary');
+  await name.fill('Fixture Renamed');
+  await save.click();
+  await expect(page.getByRole('status')).toHaveText('Saved Fixture Renamed.');
+  await expect(page.getByLabel('NICA team for PDF export').getByRole('option', { name: 'Fixture Renamed' })).toHaveCount(1);
+  await page.getByRole('button', { name: 'Show NICA', exact: true }).click();
+  await expect(page.getByRole('row', { name: 'Fixture Renamed 1 9' })).toBeVisible();
+});
+
 test('admin copies the NICA summary and manages team coaches and their digest', async ({ page, backend, context }) => {
   await signInFixture(page, backend, 'admin');
   await expect(page).toHaveURL(/#\/my-signups$/);
@@ -318,6 +356,9 @@ test('admin copies the NICA summary and manages team coaches and their digest', 
   mockAdminReads(backend);
   backend.reply('GET', '/rest/v1/profiles', [{ ...profile, signups: [], waivers: [] }]);
   backend.reply('GET', '/rest/v1/team_club_affiliations', [{ id: 'fixture-team', name: 'Albany' }]);
+  backend.reply('GET', '/rest/v1/nica_beneficiaries', [{
+    id: 'fixture-beneficiary', label: 'Albany', nica_beneficiary_affiliations: [{ affiliation_id: 'fixture-team' }],
+  }]);
   const coaches = '/rest/v1/nica_coaches';
   const settings = '/rest/v1/email_digest_settings';
   let coach;

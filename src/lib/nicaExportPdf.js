@@ -19,16 +19,12 @@ function hoursForSignup(signup) {
 }
 
 /**
- * @param {{ label: string, affiliationNames: string[] }} beneficiary
+ * @param {{ label: string, affiliationIds: string[] }} beneficiary
  * @param {Array<{ id: string, name: string }>} affiliationsList
  * @param {Array<Record<string, unknown>>} volunteersList
  */
 export function buildNicaTeamExport(beneficiary, affiliationsList, volunteersList) {
-  const matchingAffiliationIds = new Set(
-    affiliationsList
-      .filter((entry) => beneficiary.affiliationNames.includes(entry.name))
-      .map((entry) => entry.id)
-  );
+  const matchingAffiliationIds = new Set(beneficiary.affiliationIds);
 
   const rows = [];
   for (const v of volunteersList) {
@@ -73,7 +69,7 @@ export function buildNicaTeamExport(beneficiary, affiliationsList, volunteersLis
 
   /** Sum of `spot_wt` in this PDF — must match admin NICA table (same math as volunteerSpotsForBeneficiary). */
   const volunteerSpotsFromRows = rows.reduce((sum, r) => sum + (Number.isFinite(r.spotWeight) ? r.spotWeight : 0), 0);
-  const volunteerSpotsTable = volunteerSpotsForBeneficiary(beneficiary, affiliationsList, volunteersList);
+  const volunteerSpotsTable = volunteerSpotsForBeneficiary(beneficiary, volunteersList);
   if (rows.length > 0 && Math.abs(volunteerSpotsFromRows - volunteerSpotsTable) > 0.02) {
     console.warn('[NICA PDF] Spot total mismatch', {
       beneficiary: beneficiary.label,
@@ -102,7 +98,7 @@ function sanitizeFilenamePart(label) {
 }
 
 /**
- * @param {{ label: string, affiliationNames: string[] }} beneficiary
+ * @param {{ label: string, affiliationIds: string[] }} beneficiary
  * @param {Array<{ id: string, name: string }>} affiliationsList
  * @param {Array<Record<string, unknown>>} volunteersList
  * @returns {Blob}

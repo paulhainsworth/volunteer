@@ -10,6 +10,8 @@ Apply the [auth mail rate limit migration](../supabase/migrations/20261118000600
 
 To add an affiliation, open **Admin → Users → Add team or club**. Enter the display name and select **Add affiliation**. The new option is available immediately when adding or editing volunteers.
 
+In **Admin → Users → Manage NICA beneficiaries**, choose an existing beneficiary or **Add a beneficiary**, enter its display name, and select the affiliations that count toward that team. An affiliation can belong to one beneficiary. Saving updates the NICA summary, PDF export, and coach digest mapping. Review coach affiliations when you remove an affiliation from a team so each coach remains on a mapped affiliation.
+
 | Role | Rehearsal |
 | --- | --- |
 | Organizer | Import a representative roles CSV, review the public list and fill counts, assign a leader to a domain, and verify the intended notification arrives. See the [CSV format](../CSV_FORMAT.md) and [domain guide](../DOMAINS_USAGE_GUIDE.md). |

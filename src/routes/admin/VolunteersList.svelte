@@ -21,7 +21,7 @@
     const monthStart = `${today.slice(0, 7)}-01`;
     return `event_date.gte.${today},and(event_date.is.null,completion_month.gte.${monthStart}),and(event_date.is.null,completion_month.is.null)`;
   }
-  import { NICA_BENEFICIARIES } from '../../lib/nicaBeneficiaries';
+  import { fetchNicaBeneficiaries } from '../../lib/nicaBeneficiaries';
   import {
     formatNicaNumber,
     nicaRemainingLabel,
@@ -29,6 +29,8 @@
   } from '../../lib/nicaSpotMath';
   import { generateNicaTeamVolunteerPdfBlob, nicaTeamPdfFilename } from '../../lib/nicaExportPdf';
   import NicaCoachesPanel from '../../lib/components/NicaCoachesPanel.svelte';
+
+  import NicaBeneficiariesPanel from '../../lib/components/NicaBeneficiariesPanel.svelte';
 
   let loading = true;
   let error = '';
@@ -77,6 +79,10 @@
   let showNicaSummary = false;
   let showNicaCoaches = false;
   let nicaCopyFeedback = '';
+  let nicaBeneficiaries = [];
+  let loadingNica = true;
+  let nicaLoadError = '';
+  let showNicaManager = false;
   let nicaPdfTeam = '';
   let nicaPdfLoading = false;
 
@@ -87,6 +93,7 @@
       return;
     }
 
+    void loadNicaBeneficiaries();
     try {
       await volunteers.fetchVolunteers({ includeEmergencyContacts: true });
       affiliations.fetchAffiliations().catch(() => {});
@@ -96,6 +103,24 @@
       loading = false;
     }
   });
+
+  async function loadNicaBeneficiaries() {
+    loadingNica = true;
+    nicaLoadError = '';
+    try {
+      const [configured] = await Promise.all([fetchNicaBeneficiaries(), affiliations.fetchAffiliations()]);
+      nicaBeneficiaries = configured;
+    } catch {
+      nicaLoadError = 'Could not load NICA beneficiaries or affiliations.';
+    } finally {
+      loadingNica = false;
+    }
+  }
+
+  function updateNicaBeneficiary(saved) {
+    nicaBeneficiaries = [...nicaBeneficiaries.filter((beneficiary) => beneficiary.id !== saved.id), saved]
+      .sort((first, second) => first.label.localeCompare(second.label));
+  }
 
   async function toggleAffiliationForm() {
     showAffiliationForm = !showAffiliationForm;
@@ -192,8 +217,8 @@
     return sortVolunteers(filtered);
   })();
 
-  $: nicaSummaryRows = NICA_BENEFICIARIES.map((beneficiary) => {
-    const volunteerSpots = volunteerSpotsForBeneficiary(beneficiary, $affiliations, $volunteers);
+  $: nicaSummaryRows = nicaBeneficiaries.map((beneficiary) => {
+    const volunteerSpots = volunteerSpotsForBeneficiary(beneficiary, $volunteers);
 
     return {
       beneficiary: beneficiary.label,
@@ -275,16 +300,17 @@
     };
 
     nicaPdfLoading = true;
+    const teams = nicaBeneficiaries;
     try {
       if (nicaPdfTeam === '__all__') {
-        for (let i = 0; i < NICA_BENEFICIARIES.length; i += 1) {
-          await runOne(NICA_BENEFICIARIES[i]);
-          if (i < NICA_BENEFICIARIES.length - 1) {
+        for (let i = 0; i < teams.length; i += 1) {
+          await runOne(teams[i]);
+          if (i < teams.length - 1) {
             await new Promise((r) => setTimeout(r, 450));
           }
         }
       } else {
-        const beneficiary = NICA_BENEFICIARIES.find((b) => b.label === nicaPdfTeam);
+        const beneficiary = teams.find((b) => b.id === nicaPdfTeam);
         if (!beneficiary) {
           error = 'Unknown NICA team selection.';
           return;
@@ -850,10 +876,10 @@
       </button>
       <div class="nica-pdf-toolbar" title="Volunteer/signup listing per NICA school team (matches spreadsheet export)">
         <label class="sr-only" for="nica-pdf-team">NICA team for PDF export</label>
-        <select id="nica-pdf-team" class="nica-pdf-select" bind:value={nicaPdfTeam} disabled={nicaPdfLoading}>
+        <select id="nica-pdf-team" class="nica-pdf-select" bind:value={nicaPdfTeam} disabled={nicaPdfLoading || loadingNica || nicaBeneficiaries.length === 0}>
           <option value="">NICA PDF: team…</option>
-          {#each NICA_BENEFICIARIES as b (b.label)}
-            <option value={b.label}>{b.label}</option>
+          {#each nicaBeneficiaries as b (b.id)}
+            <option value={b.id}>{b.label}</option>
           {/each}
           <option value="__all__">All teams (one PDF each)</option>
         </select>
@@ -861,7 +887,7 @@
           class="btn btn-secondary"
           class:nica-export-idle={!nicaPdfTeam}
           type="button"
-          disabled={nicaPdfLoading}
+          disabled={nicaPdfLoading || loadingNica || nicaBeneficiaries.length === 0}
           title={!nicaPdfTeam
             ? 'Select a NICA team in the dropdown first'
             : 'Download PDF for the selected team'}
@@ -900,6 +926,23 @@
 
   {#if error}
     <div class="alert alert-error">{error}</div>
+  {/if}
+
+  {#if $auth.isAdmin}
+    <div class="nica-toggle-row">
+      <button type="button" class="btn btn-secondary" disabled={loadingNica || Boolean(nicaLoadError)}
+        aria-expanded={showNicaManager} aria-controls="nica-beneficiary-management"
+        on:click={() => showNicaManager = !showNicaManager}>
+        {showNicaManager ? 'Hide beneficiary management' : 'Manage NICA beneficiaries'}
+      </button>
+      {#if nicaLoadError}
+        <p role="alert">{nicaLoadError}</p>
+        <button type="button" class="btn btn-secondary" on:click={loadNicaBeneficiaries}>Retry</button>
+      {/if}
+    </div>
+    {#if showNicaManager}
+      <NicaBeneficiariesPanel affiliations={$affiliations} beneficiaries={nicaBeneficiaries} onSaved={updateNicaBeneficiary} />
+    {/if}
   {/if}
 
   {#if loading}
@@ -956,6 +999,7 @@
         class="btn btn-secondary"
         on:click={() => showNicaSummary = !showNicaSummary}
         aria-expanded={showNicaSummary}
+        disabled={loadingNica || Boolean(nicaLoadError)}
       >
         {showNicaSummary ? 'Hide NICA' : 'Show NICA'}
       </button>
@@ -963,13 +1007,14 @@
         class="btn btn-secondary"
         on:click={() => showNicaCoaches = !showNicaCoaches}
         aria-expanded={showNicaCoaches}
+        disabled={loadingNica || Boolean(nicaLoadError)}
       >
         {showNicaCoaches ? 'Hide NICA Coaches' : 'NICA Coaches'}
       </button>
     </div>
 
     {#if showNicaCoaches}
-      <NicaCoachesPanel affiliations={$affiliations} />
+      <NicaCoachesPanel affiliations={$affiliations} beneficiaries={nicaBeneficiaries} />
     {/if}
 
     {#if showNicaSummary}
