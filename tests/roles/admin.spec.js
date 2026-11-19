@@ -137,7 +137,7 @@ test('admin can disable daily summaries', async ({ page, backend }) => {
   await expect(summary).not.toBeChecked();
 });
 
-test('known bug: admin email completes after a successful session refresh', async ({ page, backend }) => {
+test('admin email completes after a successful session refresh', async ({ page, backend }) => {
   await signInFixture(page, backend, 'admin');
   await expect(page).toHaveURL(/#\/my-signups$/);
   mockAdminReads(backend);
@@ -156,8 +156,8 @@ test('known bug: admin email completes after a successful session refresh', asyn
   await page.getByLabel('Message', { exact: true }).fill('Hi {volunteer_name}');
   await page.getByRole('button', { name: 'Send Email to 1 Recipient' }).click();
   await expect.poll(() => backend.calls('POST', token)).toBe(1);
-  test.fail(true, 'After the successful token refresh the form stays on Sending and the relay is never called.');
   await expect(page.getByText('Email sent to 1 recipient.')).toBeVisible();
+  expect(backend.calls('POST', '/functions/v1/send-email')).toBe(1);
 });
 
 test('admin previews a CSV before importing a role and can export the roster', async ({ page, backend }) => {
@@ -333,29 +333,30 @@ test('admin copies the NICA summary and manages team coaches and their digest', 
   await expect(page.getByText(/No NICA coaches yet/)).toBeVisible();
 });
 
-test('known bug: admin role and schedule filters include confirmed volunteers', async ({ page, backend }) => {
+test('admin role and schedule filters count each confirmed volunteer once', async ({ page, backend }) => {
   await signInFixture(page, backend, 'admin');
   await expect(page).toHaveURL(/#\/my-signups$/);
   mockAdminReads(backend);
-  backend.reply('GET', '/rest/v1/profiles', [{
-    ...profile, signups: [{ status: 'confirmed', role }], waivers: [],
-  }]);
-  backend.handle('GET', roles, (_, url) => {
-    const select = url.searchParams.get('select');
-    const signup = { status: 'confirmed', volunteer: profile };
-    const signups = select?.includes('signups:signups(count)') ? [{ count: 1 }] : [signup];
-    return { body: [{ ...role, signups }] };
-  });
-  backend.reply('POST', '/rest/v1/rpc/get_confirmed_signup_counts', [{ role_id: role.id, cnt: 1 }]);
+  const secondRole = { ...role, id: 'fixture-second-shift', name: 'Aid station' };
+  const monthlyRole = { ...role, id: 'fixture-monthly-shift', name: 'Planning', event_date: null, completion_month: '2099-05-01' };
+  const nestedMonthlyRole = { ...monthlyRole, completion_month: undefined };
+  backend.reply('GET', '/rest/v1/profiles', [
+    { ...profile, signups: [{ status: 'confirmed', role }, { status: 'confirmed', role: secondRole }], waivers: [] },
+    { ...profile, id: 'fixture-second-recipient', email: 'second@example.invalid',
+      signups: [{ status: 'confirmed', role: secondRole }, { status: 'confirmed', role: nestedMonthlyRole }], waivers: [] },
+    { ...profile, id: 'fixture-cancelled-recipient', email: 'cancelled@example.invalid',
+      signups: [{ status: 'cancelled', role }], waivers: [] },
+  ]);
+  backend.reply('GET', roles, [role, secondRole, monthlyRole].map((shift) => ({ ...shift, signups: [{ count: 1 }] })));
   backend.reply('GET', '/rest/v1/email_digest_settings', [{ admin_daily_volunteer_summary_enabled: true }]);
   await page.goto('/#/admin/communications');
-  await expect(page.getByRole('button', { name: 'Send Email to 1 Recipient' })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Send Email to 3 Recipients' })).toBeEnabled();
   await page.getByRole('radio', { name: 'Volunteers for specific role' }).check();
   await page.locator('select.select-input').selectOption(role.id);
-  const roleRecipients = await page.getByRole('button', { name: 'Send Email to 1 Recipient' }).count();
+  await expect(page.getByRole('button', { name: 'Send Email to 1 Recipient' })).toBeEnabled();
   await page.getByRole('radio', { name: /Volunteers for schedule/ }).check();
-  await page.locator('select.select-input').selectOption({ index: 1 });
-  const scheduleRecipients = await page.getByRole('button', { name: 'Send Email to 1 Recipient' }).count();
-  test.fail(true, 'Recipient filtering needs roster rows, but the role query only returns signup counts.');
-  expect([roleRecipients, scheduleRecipients]).toEqual([1, 1]);
+  await page.locator('select.select-input').selectOption(`d:${role.event_date}`);
+  await expect(page.getByRole('button', { name: 'Send Email to 2 Recipients' })).toBeEnabled();
+  await page.locator('select.select-input').selectOption(`m:${monthlyRole.completion_month}`);
+  await expect(page.getByRole('button', { name: 'Send Email to 1 Recipient' })).toBeEnabled();
 });

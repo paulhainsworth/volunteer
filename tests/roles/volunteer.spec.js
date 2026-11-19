@@ -19,15 +19,22 @@ test('volunteer saves an emergency-contact edit', async ({ page, backend }) => {
   expect(backend.calls('PATCH', '/rest/v1/profiles')).toBe(1);
 });
 
-test('known bug: a signed-in volunteer can reload the profile page', async ({ page, backend }) => {
+test('a signed-in volunteer can reload the profile page', async ({ page, backend }) => {
   await signInFixture(page, backend);
   await expect(page).toHaveURL(/#\/my-signups$/);
   backend.reply('GET', '/rest/v1/team_club_affiliations', []);
   await page.goto('/#/profile');
   await expect(page.getByLabel('Emergency Contact Name')).toHaveValue(profile.emergency_contact_name);
   await page.reload();
-  test.fail(true, 'Profile mounts before the restored auth session is ready and redirects to login.');
   await expect(page.getByLabel('Emergency Contact Name')).toHaveValue(profile.emergency_contact_name);
+  await expect(page).toHaveURL(/#\/profile$/);
+});
+
+test('a signed-out visitor is redirected from the profile page to sign-in', async ({ page, backend }) => {
+  await page.goto('/#/profile');
+  await expect(page).toHaveURL(/#\/auth\/login$/);
+  await expect(page.getByRole('heading', { name: 'Sign In' })).toBeVisible();
+  expect(backend.calls('POST', ownProfile)).toBe(0);
 });
 
 test('public team invite renders open roles and takes the volunteer to signup', async ({ page, backend }) => {

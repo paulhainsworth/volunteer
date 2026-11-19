@@ -35,17 +35,19 @@ function createAuthStore() {
   });
   const getState = () => get({ subscribe });
   let authSubscriptionInitialized = false;
+  let sessionEventVersion = 0;
   /** After first full `loadCurrentSession` bootstrap, further `initialize()` calls only hydrate (no stall recovery). */
   let authFullBootstrapDone = false;
 
   const applySession = async (session) => {
     if (session?.user) {
+      const version = sessionEventVersion;
       const prev = getState();
       let profile = null;
       let retries = 0;
       const maxRetries = 5;
 
-      while (!profile && retries < maxRetries) {
+      while (!profile && retries < maxRetries && version === sessionEventVersion) {
         try {
           const { data, error } = await withSupabaseReadTimeout(
             readOwnProfile,
@@ -74,6 +76,8 @@ function createAuthStore() {
           throw e;
         }
       }
+
+      if (version !== sessionEventVersion) return getState();
 
       // If profile read failed but session is still the same user, keep last known profile so we
       // don't flip isAdmin / nav to volunteer links (Layout uses profile.role + isAdmin).
@@ -204,22 +208,27 @@ function createAuthStore() {
 
     initialize: async () => {
       if (!authSubscriptionInitialized) {
-        supabase.auth.onAuthStateChange(async (event, session) => {
+        supabase.auth.onAuthStateChange((event, session) => {
           // Startup reads the persisted session below, outside the Auth callback.
           if (event === 'INITIAL_SESSION') return;
-          try {
-            await applySession(session);
-          } catch (error) {
-            console.error('Auth state change handling failed:', error);
-            if (session?.user) {
-              console.warn('Session present after auth handler error; not clearing auth state.');
-              void applySession(session).catch((err) =>
-                console.error('Auth state retry after error failed:', err)
-              );
-            } else {
-              setLoggedOutState();
+          const version = ++sessionEventVersion;
+          // Profile reads use the same Supabase client. Wait until Auth can release its lock.
+          setTimeout(async () => {
+            if (version !== sessionEventVersion) return;
+            try {
+              await applySession(session);
+            } catch (error) {
+              if (version !== sessionEventVersion) return;
+              console.error('Auth state change handling failed:', error);
+              if (session?.user) {
+                void applySession(session).catch((err) =>
+                  console.error('Auth state retry after error failed:', err)
+                );
+              } else {
+                setLoggedOutState();
+              }
             }
-          }
+          }, 0);
         });
         authSubscriptionInitialized = true;
       }

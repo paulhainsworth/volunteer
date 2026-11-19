@@ -1,5 +1,5 @@
 <script>
-  import { onMount } from 'svelte';
+  import { onDestroy, onMount } from 'svelte';
   import { auth } from '../lib/stores/auth';
   import { affiliations } from '../lib/stores/affiliations';
   import { supabase } from '../lib/supabaseClient';
@@ -10,6 +10,9 @@
   let saving = false;
   let error = '';
   let success = '';
+  let active = true;
+
+  onDestroy(() => { active = false; });
 
   let formData = {
     first_name: '',
@@ -23,7 +26,9 @@
   };
 
   onMount(async () => {
-    if (!$auth.user) {
+    const { user } = await auth.waitForReady();
+    if (!active) return;
+    if (!user) {
       push('/auth/login');
       return;
     }
