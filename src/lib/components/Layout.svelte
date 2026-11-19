@@ -2,8 +2,7 @@
   import { onMount } from 'svelte';
   import { auth } from '../stores/auth';
   import { theme } from '../stores/theme';
-  import { push } from 'svelte-spa-router';
-  import { location } from 'svelte-spa-router';
+  import { location, push } from 'svelte-spa-router';
 
   $: isKidsLanding = $location === '/kids';
 
@@ -52,17 +51,12 @@
 
 <div class="app-layout" class:kids-landing={isKidsLanding}>
   {#if !isKidsLanding}
-  <nav class="navbar">
+  <nav class="navbar" aria-label="Main">
     <div class="nav-container">
-      <div class="nav-brand">
-        <a href="#/" class="nav-brand-link">
-          <img src="/bbc-logo.png" alt="Berkeley Bicycle Club" class="nav-logo" />
-        </a>
-      </div>
-
-      <div class="nav-center">
+      <a href="#/" class="nav-brand-link">
+        <img src="/bbc-logo.png" alt="Berkeley Bicycle Club" class="nav-logo" />
         <span class="nav-title">Omnium Volunteer Hub</span>
-      </div>
+      </a>
 
       <div class="nav-right">
         <button
@@ -81,18 +75,18 @@
         <div id="main-navigation" class="nav-menu" class:active={showMobileMenu}>
         {#if $auth.user}
           {#if $auth.isAdmin}
-            <a href="#/admin" class="nav-link" on:click={handleNavClick}>Dashboard</a>
-            <a href="#/admin/roles" class="nav-link" on:click={handleNavClick}>Roles</a>
-            <a href="#/admin/domains" class="nav-link" on:click={handleNavClick}>Domains</a>
-            <a href="#/admin/volunteers" class="nav-link" on:click={handleNavClick}>Users</a>
-            <a href="#/admin/communications" class="nav-link" on:click={handleNavClick}>Communications</a>
+            <a href="#/admin" class="nav-link" aria-current={$location === '/admin' ? 'page' : undefined} on:click={handleNavClick}>Dashboard</a>
+            <a href="#/admin/roles" class="nav-link" aria-current={$location === '/admin/roles' ? 'page' : undefined} on:click={handleNavClick}>Roles</a>
+            <a href="#/admin/domains" class="nav-link" aria-current={$location === '/admin/domains' ? 'page' : undefined} on:click={handleNavClick}>Domains</a>
+            <a href="#/admin/volunteers" class="nav-link" aria-current={$location === '/admin/volunteers' ? 'page' : undefined} on:click={handleNavClick}>Users</a>
+            <a href="#/admin/communications" class="nav-link" aria-current={$location === '/admin/communications' ? 'page' : undefined} on:click={handleNavClick}>Communications</a>
           {:else if $auth.profile?.role === 'volunteer_leader'}
-            <a href="#/leader" class="nav-link" on:click={handleNavClick}>My Roles</a>
-            <a href="#/volunteer" class="nav-link" on:click={handleNavClick}>Browse Roles</a>
-            <a href="#/my-signups" class="nav-link" on:click={handleNavClick}>My Signups</a>
+            <a href="#/leader" class="nav-link" aria-current={$location === '/leader' ? 'page' : undefined} on:click={handleNavClick}>My Roles</a>
+            <a href="#/volunteer" class="nav-link" aria-current={$location === '/volunteer' ? 'page' : undefined} on:click={handleNavClick}>Browse Roles</a>
+            <a href="#/my-signups" class="nav-link" aria-current={$location === '/my-signups' ? 'page' : undefined} on:click={handleNavClick}>My Signups</a>
           {:else}
-            <a href="#/volunteer" class="nav-link" on:click={handleNavClick}>Browse Roles</a>
-            <a href="#/my-signups" class="nav-link" on:click={handleNavClick}>My Signups</a>
+            <a href="#/volunteer" class="nav-link" aria-current={$location === '/volunteer' ? 'page' : undefined} on:click={handleNavClick}>Browse Roles</a>
+            <a href="#/my-signups" class="nav-link" aria-current={$location === '/my-signups' ? 'page' : undefined} on:click={handleNavClick}>My Signups</a>
           {/if}
           
           <button class="theme-toggle" on:click={() => theme.toggle()} aria-label="Dark mode" aria-pressed={$theme === 'dark'} title="Toggle {$theme === 'light' ? 'dark' : 'light'} mode">
@@ -112,7 +106,7 @@
             </button>
           </div>
         {:else}
-          <a href="#/auth/login" class="nav-link" on:click={handleNavClick}>Sign In</a>
+          <a href="#/auth/login" class="nav-link" aria-current={$location === '/auth/login' ? 'page' : undefined} on:click={handleNavClick}>Sign In</a>
           
           <button class="theme-toggle" on:click={() => theme.toggle()} aria-label="Dark mode" aria-pressed={$theme === 'dark'} title="Toggle {$theme === 'light' ? 'dark' : 'light'} mode">
             {#if $theme === 'light'}
@@ -149,8 +143,7 @@
   .navbar {
     background: var(--bg-secondary);
     color: var(--text-primary);
-    padding: 1rem 0;
-    box-shadow: var(--shadow-md);
+    padding: 0.625rem 0;
     border-bottom: 1px solid var(--border-color);
   }
 
@@ -158,27 +151,26 @@
     max-width: 1200px;
     margin: 0 auto;
     padding: 0 1rem;
-    display: grid;
-    grid-template-columns: 1fr auto 1fr;
+    display: flex;
     align-items: center;
+    justify-content: space-between;
     position: relative;
     gap: 1rem;
-  }
-
-  .nav-brand {
-    justify-self: start;
   }
 
   .nav-brand-link {
     display: flex;
     align-items: center;
+    gap: 0.875rem;
+    min-width: 0;
     text-decoration: none;
     color: var(--text-primary);
   }
 
   .nav-logo {
-    height: 36px;
-    width: auto;
+    width: 105px;
+    height: auto;
+    flex-shrink: 0;
     display: block;
   }
 
@@ -186,22 +178,17 @@
     filter: brightness(0) invert(1);
   }
 
-  .nav-center {
-    justify-self: center;
-    text-align: center;
-  }
-
   .nav-title {
-    font-size: 2rem;
-    font-weight: 600;
-    color: var(--text-primary);
+    font-size: 1.125rem;
+    font-weight: 650;
+    line-height: 1.2;
     white-space: nowrap;
   }
 
   .nav-right {
     display: flex;
     align-items: center;
-    justify-self: end;
+    flex-shrink: 0;
   }
 
   .mobile-menu-btn {
@@ -218,11 +205,17 @@
     height: 44px;
   }
 
-  .mobile-menu-btn:active {
+  .mobile-menu-btn:hover,
+  .mobile-menu-btn[aria-expanded="true"] {
     background: var(--bg-tertiary);
   }
 
-  .mobile-menu-btn:focus-visible {
+  .nav-brand-link:focus-visible,
+  .mobile-menu-btn:focus-visible,
+  .nav-link:focus-visible,
+  .nav-user a:focus-visible,
+  .nav-user button:focus-visible,
+  .theme-toggle:focus-visible {
     outline: 2px solid var(--primary-color);
     outline-offset: 2px;
   }
@@ -237,39 +230,38 @@
   .nav-menu {
     display: flex;
     align-items: center;
-    gap: 1.5rem;
+    gap: 0.375rem;
   }
 
   .nav-link {
     color: var(--text-primary);
     text-decoration: none;
-    padding: 0.5rem 1rem;
-    border-radius: 4px;
+    padding: 0.625rem;
+    border-radius: 6px;
+    font-size: 0.9375rem;
+    white-space: nowrap;
     transition: background 0.2s;
   }
 
-  .nav-link:hover {
+  .nav-link:hover,
+  .nav-link[aria-current="page"] {
     background: var(--bg-tertiary);
-  }
-
-  .nav-link.btn-primary {
-    background: var(--primary-color);
-    color: white;
-  }
-
-  .nav-link.btn-primary:hover {
-    background: var(--primary-hover);
   }
 
   .nav-user {
     display: flex;
     align-items: center;
-    gap: 1rem;
-    padding-left: 1rem;
+    gap: 0.625rem;
+    margin-left: 0.375rem;
+    padding-left: 0.75rem;
     border-left: 1px solid var(--border-color);
   }
 
   .user-email {
+    max-width: 10rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     font-size: 0.9rem;
     opacity: 0.8;
     color: var(--text-primary);
@@ -288,6 +280,9 @@
     color: var(--text-primary);
     cursor: pointer;
     text-decoration: underline;
+    white-space: nowrap;
+    min-height: 44px;
+    padding: 0 0.25rem;
     font-size: 0.9rem;
   }
 
@@ -348,15 +343,9 @@
     border-top: 1px solid var(--border-color);
   }
 
-  @media (max-width: 768px) {
-    .nav-container {
-      grid-template-columns: auto 1fr auto;
-    }
-
+  @media (max-width: 1100px) {
     .nav-title {
-      font-size: 1.5rem;
       white-space: normal;
-      line-height: 1.2;
     }
 
     .mobile-menu-btn {
@@ -364,19 +353,20 @@
     }
 
     .nav-menu {
+      display: none;
       position: absolute;
       z-index: 10;
-      top: 100%;
-      left: 0;
-      right: 0;
-      background: var(--bg-secondary);
-      border-top: 1px solid var(--border-color);
-      border-bottom: 1px solid var(--border-color);
+      top: calc(100% + 0.875rem);
+      right: 1rem;
+      width: min(23rem, calc(100% - 2rem));
+      max-height: calc(100dvh - 5rem);
+      overflow-y: auto;
       flex-direction: column;
       align-items: stretch;
-      gap: 0;
-      padding: 1rem;
-      display: none;
+      padding: 0.75rem;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
       box-shadow: var(--shadow-lg);
     }
 
@@ -385,18 +375,38 @@
     }
 
     .nav-link {
-      padding: 1rem;
+      padding: 0.75rem;
+    }
+
+    .theme-toggle {
+      flex-shrink: 0;
     }
 
     .nav-user {
-      flex-direction: column;
-      align-items: stretch;
+      justify-content: space-between;
       border-left: none;
       border-top: 1px solid var(--border-color);
-      padding-left: 0;
-      padding-top: 1rem;
-      margin-top: 0.5rem;
+      margin: 0.375rem 0 0;
+      padding: 0.375rem 0.25rem 0;
+    }
+
+    .user-email {
+      min-width: 0;
+      max-width: none;
+    }
+  }
+
+  @media (max-width: 400px) {
+    .nav-brand-link {
+      gap: 0.625rem;
+    }
+
+    .nav-logo {
+      width: 84px;
+    }
+
+    .nav-title {
+      font-size: 1rem;
     }
   }
 </style>
-
