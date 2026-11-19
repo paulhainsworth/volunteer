@@ -21,12 +21,10 @@ async function openSignup(page, backend, authResponse = user) {
   await page.locator('#guest-affiliation').selectOption('fixture-team');
 }
 
-test('requires consent and waits for identity verification before assigning a seat', async ({ page, backend }) => {
+test('requests identity verification before collecting consent or assigning a seat', async ({ page, backend }) => {
   await openSignup(page, backend);
-  const submit = page.getByRole('button', { name: 'Complete Signup' });
-  await expect(submit).toBeDisabled();
-  expect(backend.calls('POST', '/auth/v1/signup')).toBe(0);
-  await page.getByRole('checkbox', { name: /I have read and agree/ }).check();
+  const submit = page.getByRole('button', { name: 'Continue to Waiver' });
+  await expect(page.getByRole('heading', { name: 'Liability Waiver' })).toHaveCount(0);
   await submit.click();
   await expect(page.getByRole('heading', { name: 'Check your email to finish signing up' })).toBeVisible();
   await expect(page.getByText('A spot has not been reserved.', { exact: false })).toBeVisible();
@@ -108,22 +106,28 @@ test('a verification callback returns the volunteer to the selected role', async
   expect(backend.calls('POST', confirmation)).toBe(0);
 });
 
-test('a guest signup with an immediate session submits consent and confirms the seat', async ({ page, backend }) => {
-  backend.reply('POST', ownProfile, profile);
-  backend.reply('POST', '/rest/v1/rpc/volunteer_waiver_is_current', true);
+test('a guest with an immediate session signs the waiver before confirming the seat', async ({ page, backend }) => {
+  backend.reply('POST', ownProfile, { ...profile, phone: '5550102' });
+  backend.reply('POST', '/functions/v1/send-welcome-with-magic-link', { success: true });
+  backend.reply('POST', '/rest/v1/rpc/volunteer_waiver_is_current', false);
   backend.reply('GET', '/rest/v1/signups', []);
   backend.reply('POST', '/functions/v1/send-email', { success: true });
-  backend.reply('POST', '/functions/v1/send-welcome-with-magic-link', { success: true });
   backend.handle('POST', confirmation, (request) => {
     expect(request.postDataJSON()).toMatchObject({
       p_role_id: role.id,
+      p_phone: '5550102',
       p_consent: { version: 1, signature_name: 'Test Volunteer' },
     });
     return { body: { signup: { id: 'fixture-assignment' }, created: true } };
   });
   await openSignup(page, backend, fixtureSession());
+  await page.getByRole('button', { name: 'Continue to Waiver' }).click();
+  const confirm = page.getByRole('button', { name: 'Confirm Signup' });
+  await expect(confirm).toBeDisabled();
+  expect(backend.calls('POST', confirmation)).toBe(0);
+  await expect(page.getByLabel('Digital Signature (Full Name)')).toHaveValue('Test Volunteer');
   await page.getByRole('checkbox', { name: /I have read and agree/ }).check();
-  await page.getByRole('button', { name: 'Complete Signup' }).click();
+  await confirm.click();
   await expect(page.getByText("You're all set!")).toBeVisible();
   expect(backend.calls('POST', confirmation)).toBe(1);
 });

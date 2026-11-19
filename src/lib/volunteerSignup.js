@@ -1,11 +1,14 @@
 /**
- * Simplified volunteer signup flow: create user, sign up for role, send emails.
+ * Start a guest account and return the volunteer to the selected role after verification.
  * No password - user signs in via magic link on return visits.
  */
 import { supabase } from './supabaseClient';
 import { auth } from './stores/auth';
-import { signups } from './stores/signups';
-export async function createVolunteerAndSignup(pii, roleId, waiverVersion) {
+
+// Keep the immediate-session welcome email tied to a successful first signup.
+let pendingWelcome = null;
+
+export async function createVolunteerAccount(pii, roleId) {
   const {
     first_name,
     last_name,
@@ -13,14 +16,8 @@ export async function createVolunteerAndSignup(pii, roleId, waiverVersion) {
     phone,
     emergency_contact_name,
     emergency_contact_phone,
-    team_club_affiliation_id,
-    is_minor,
-    parent_guardian_name,
-    parent_guardian_email,
-    parent_guardian_phone,
-    parent_signature_name
+    team_club_affiliation_id
   } = pii;
-  const volunteerName = `${first_name} ${last_name}`.trim();
   const redirect = new URL('/', window.location.origin);
   redirect.searchParams.set('signup_role', roleId);
 
@@ -50,18 +47,15 @@ export async function createVolunteerAndSignup(pii, roleId, waiverVersion) {
     return { pendingVerification: true };
   }
 
-  const { created } = await signups.confirmSignup(roleId, phone, {
-    version: waiverVersion,
-    signature_name: is_minor ? null : volunteerName,
-    is_minor,
-    parent_guardian_name,
-    parent_guardian_email,
-    parent_guardian_phone,
-    parent_signature_name
-  });
-  await auth.refreshSession();
+  pendingWelcome = { userId: authData.user.id, roleId };
+  await auth.hydrateFromSession(authData.session);
+  return { pendingVerification: false };
+}
 
-  return { created, userId: authData.user.id, email, first_name, last_name };
+export async function sendGuestWelcomeEmail(userId, roleId, email, firstName) {
+  if (pendingWelcome?.userId !== userId || pendingWelcome.roleId !== roleId) return;
+  pendingWelcome = null;
+  await sendWelcomeEmail({ to: email, first_name: firstName });
 }
 
 export async function sendVolunteerNotification(kind, reference) {
