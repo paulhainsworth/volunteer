@@ -21,6 +21,7 @@
   import RolesList from './routes/admin/RolesList.svelte';
   import VolunteersList from './routes/admin/VolunteersList.svelte';
   import Communications from './routes/admin/Communications.svelte';
+  import WebsiteMessages from './routes/admin/WebsiteMessages.svelte';
   import Domains from './routes/admin/Domains.svelte';
   
   // Volunteer Leader routes
@@ -54,6 +55,7 @@
     '/admin/volunteers': VolunteersList,
     '/admin/domains': Domains,
     '/admin/communications': Communications,
+    '/admin/communications/website-messages': WebsiteMessages,
     '/board': Board,
     '/kids': KidsClinic,
     '/contacts': Contacts

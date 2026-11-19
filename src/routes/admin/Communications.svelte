@@ -428,7 +428,7 @@ Berkeley Omnium Volunteer Team`;
 <div class="communications-page">
   <div class="header">
     <h1>Communications</h1>
-    <p>Send emails to volunteers</p>
+    <p>Send emails to volunteers or <a href="#/admin/communications/website-messages">edit website messages</a>.</p>
   </div>
 
   {#if error}

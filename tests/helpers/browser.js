@@ -33,7 +33,9 @@ export const waiver = { id: 'fixture-waiver', version: 1, waiver_text: 'Syntheti
 
 export const test = base.extend({
   backend: async ({ context, baseURL }, use) => {
-    const handlers = new Map();
+    const handlers = new Map([
+      ['GET /rest/v1/website_messages', () => ({ body: null })],
+    ]);
     const requests = [];
     const unexpected = [];
     const browserOrigin = new URL(baseURL).origin;
