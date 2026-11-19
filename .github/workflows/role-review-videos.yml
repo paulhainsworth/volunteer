@@ -20,7 +20,8 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
-      - run: npx --no-install playwright install --with-deps chromium
+      # The Ubuntu runner provides Chromium's system libraries.
+      - run: npx --no-install playwright install chromium
       - run: npm run test:roles
       - name: Upload Playwright videos and report
         if: always()
