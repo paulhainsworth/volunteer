@@ -88,6 +88,7 @@ export function fixtureSession() {
 export async function signInFixture(page, backend, role = 'volunteer', { signups = [], profileFields = {}, search = '' } = {}) {
   // The home route may render before the magic-link callback reaches My Signups.
   backend.handleDefault('GET', '/rest/v1/volunteer_roles', () => ({ body: [] }));
+  backend.handleDefault('POST', '/rest/v1/rpc/get_confirmed_signup_counts', () => ({ body: [] }));
   if (role === 'volunteer_leader') {
     backend.handleDefault('GET', '/rest/v1/team_club_affiliations', () => ({ body: [] }));
     backend.handleDefault('GET', '/rest/v1/volunteer_leader_domains', (_, url) => {
