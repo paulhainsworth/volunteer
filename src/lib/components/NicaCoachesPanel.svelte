@@ -2,18 +2,17 @@
   import { onMount } from 'svelte';
   import { supabase } from '../supabaseClient';
   import { auth } from '../stores/auth';
+  import { NICA_BENEFICIARIES } from '../nicaBeneficiaries';
   import { format } from 'date-fns';
   import { friendlyEmailDigestSettingsError } from '../utils/emailDigestSettingsError';
 
   export let affiliations = [];
 
-  export let beneficiaries = [];
-
-  $: nicaAffiliationIds = new Set(beneficiaries.flatMap((beneficiary) => beneficiary.affiliationIds));
+  const ALL_NICA_NAMES = new Set(NICA_BENEFICIARIES.flatMap((b) => b.affiliationNames));
 
   $: affNameById = new Map((affiliations || []).map((a) => [a.id, a.name]));
 
-  $: nicaAffiliations = (affiliations || []).filter((a) => nicaAffiliationIds.has(a.id)).sort((a, b) =>
+  $: nicaAffiliations = (affiliations || []).filter((a) => ALL_NICA_NAMES.has(a.name)).sort((a, b) =>
     a.name.localeCompare(b.name)
   );
 

@@ -1,8 +1,6 @@
 {
   "imports": {
     "https://deno.land/std@0.168.0/http/server.ts": "./stubs.ts",
-    "https://esm.sh/@supabase/supabase-js@2": "./stubs.ts",
-    "https://esm.sh/jspdf@3.0.4": "./nica-pdf.stub.ts",
-    "https://esm.sh/jspdf-autotable@5.0.7?deps=jspdf@3.0.4": "./nica-pdf.stub.ts"
+    "https://esm.sh/@supabase/supabase-js@2": "./stubs.ts"
   }
 }

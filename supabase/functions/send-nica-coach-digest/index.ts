@@ -13,7 +13,16 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-type Beneficiary = { label: string; affiliationIds: string[] }
+type Beneficiary = { label: string; affiliationNames: string[] }
+
+const NICA_BENEFICIARIES: Beneficiary[] = [
+  { label: 'Albany', affiliationNames: ['Albany', 'Albany High School Mountain Bike Team'] },
+  { label: 'Berkeley', affiliationNames: ['Berkeley', 'Berkeley Mountain Bike Association'] },
+  { label: 'El Cerrito', affiliationNames: ['El Cerrito', 'El Cerrito High School'] },
+  { label: 'Oakland Composite', affiliationNames: ['Oakland Composite'] },
+  { label: 'Oakland Technical', affiliationNames: ['Oakland Technical', 'Oakland Technical High School MTB'] },
+  { label: 'Skyline', affiliationNames: ['Skyline', 'Skyline High School Mountain Bike Team'] },
+]
 
 function decodeJwtPayload(token: string) {
   try {
@@ -95,6 +104,13 @@ function escapeHtml(value: string) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;')
+}
+
+function beneficiaryForAffiliationName(
+  affName: string,
+  beneficiaries: Beneficiary[],
+): Beneficiary | null {
+  return beneficiaries.find((b) => b.affiliationNames.includes(affName)) ?? null
 }
 
 function arrayBufferToBase64(buffer: ArrayBuffer) {
@@ -280,9 +296,12 @@ function formatNicaNumberDigest(num: number): string {
 
 function volunteerSpotsForBeneficiaryDigest(
   beneficiary: Beneficiary,
+  affiliations: { id: string; name: string }[],
   profiles: ProfileRow[],
 ): number {
-  const matchingIds = new Set(beneficiary.affiliationIds)
+  const matchingIds = new Set(
+    affiliations.filter((a) => beneficiary.affiliationNames.includes(a.name)).map((a) => a.id),
+  )
   let sum = 0
   for (const v of profiles) {
     if (!matchingIds.has(v.team_club_affiliation_id || '')) continue
@@ -368,20 +387,7 @@ serve(async (req) => {
 
     if (affErr) throw affErr
 
-    const { data: configuredBeneficiaries, error: beneficiariesErr } = await supabaseAdmin
-      .from('nica_beneficiaries')
-      .select('label, nica_beneficiary_affiliations(affiliation_id)')
-
-    if (beneficiariesErr) throw beneficiariesErr
-
-    const beneficiaries: Beneficiary[] = (configuredBeneficiaries || []).map((beneficiary) => ({
-      label: beneficiary.label,
-      affiliationIds: beneficiary.nica_beneficiary_affiliations
-        .map((mapping: { affiliation_id: string }) => mapping.affiliation_id),
-    }))
-    const beneficiaryByAffiliation = new Map(beneficiaries.flatMap((beneficiary) =>
-      beneficiary.affiliationIds.map((id) => [id, beneficiary] as const),
-    ))
+    const affById = new Map((affiliations || []).map((a) => [a.id, a.name]))
 
     const { data: coaches, error: coachesErr } = await supabaseAdmin
       .from('nica_coaches')
@@ -413,13 +419,21 @@ serve(async (req) => {
           continue
         }
 
-        const beneficiary = beneficiaryByAffiliation.get(coach.team_club_affiliation_id)
+        const affName = affById.get(coach.team_club_affiliation_id) || ''
+        const beneficiary = beneficiaryForAffiliationName(affName, NICA_BENEFICIARIES)
         if (!beneficiary) {
           errors.push(`Coach ${coach.email}: affiliation not in NICA list`)
           continue
         }
 
-        const matchingIds = beneficiary.affiliationIds
+        const matchingIds = (affiliations || [])
+          .filter((a) => beneficiary.affiliationNames.includes(a.name))
+          .map((a) => a.id)
+
+        if (matchingIds.length === 0) {
+          errors.push(`Coach ${coach.email}: no matching affiliation ids`)
+          continue
+        }
 
         const { data: profiles, error: profErr } = await supabaseAdmin
           .from('profiles')
@@ -435,7 +449,7 @@ serve(async (req) => {
         if (profErr) throw profErr
 
         const profileRows = (profiles || []) as ProfileRow[]
-        const volunteerSpots = volunteerSpotsForBeneficiaryDigest(beneficiary, profileRows)
+        const volunteerSpots = volunteerSpotsForBeneficiaryDigest(beneficiary, affiliations || [], profileRows)
 
         const exportRows: Array<{
           email: string

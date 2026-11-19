@@ -1,5 +1,5 @@
 <script>
-  import { onMount, tick } from 'svelte';
+  import { onMount } from 'svelte';
   import { volunteers } from '../../lib/stores/volunteers';
   import { auth } from '../../lib/stores/auth';
   import { affiliations } from '../../lib/stores/affiliations';
@@ -21,7 +21,7 @@
     const monthStart = `${today.slice(0, 7)}-01`;
     return `event_date.gte.${today},and(event_date.is.null,completion_month.gte.${monthStart}),and(event_date.is.null,completion_month.is.null)`;
   }
-  import { fetchNicaBeneficiaries } from '../../lib/nicaBeneficiaries';
+  import { NICA_BENEFICIARIES } from '../../lib/nicaBeneficiaries';
   import {
     formatNicaNumber,
     nicaRemainingLabel,
@@ -29,8 +29,6 @@
   } from '../../lib/nicaSpotMath';
   import { generateNicaTeamVolunteerPdfBlob, nicaTeamPdfFilename } from '../../lib/nicaExportPdf';
   import NicaCoachesPanel from '../../lib/components/NicaCoachesPanel.svelte';
-
-  import NicaBeneficiariesPanel from '../../lib/components/NicaBeneficiariesPanel.svelte';
 
   let loading = true;
   let error = '';
@@ -69,20 +67,9 @@
   let addVolunteerSuggestionLoading = false;
   let addVolunteerSuggestionTimer = null;
   let selectedAffiliationId = '';
-  let showAffiliationForm = false;
-  let affiliationName = '';
-  let affiliationError = '';
-  let affiliationNotice = '';
-  let savingAffiliation = false;
-  let affiliationToggle;
-  let affiliationInput;
   let showNicaSummary = false;
   let showNicaCoaches = false;
   let nicaCopyFeedback = '';
-  let nicaBeneficiaries = [];
-  let loadingNica = true;
-  let nicaLoadError = '';
-  let showNicaManager = false;
   let nicaPdfTeam = '';
   let nicaPdfLoading = false;
 
@@ -93,7 +80,6 @@
       return;
     }
 
-    void loadNicaBeneficiaries();
     try {
       await volunteers.fetchVolunteers({ includeEmergencyContacts: true });
       affiliations.fetchAffiliations().catch(() => {});
@@ -103,54 +89,6 @@
       loading = false;
     }
   });
-
-  async function loadNicaBeneficiaries() {
-    loadingNica = true;
-    nicaLoadError = '';
-    try {
-      const [configured] = await Promise.all([fetchNicaBeneficiaries(), affiliations.fetchAffiliations()]);
-      nicaBeneficiaries = configured;
-    } catch {
-      nicaLoadError = 'Could not load NICA beneficiaries or affiliations.';
-    } finally {
-      loadingNica = false;
-    }
-  }
-
-  function updateNicaBeneficiary(saved) {
-    nicaBeneficiaries = [...nicaBeneficiaries.filter((beneficiary) => beneficiary.id !== saved.id), saved]
-      .sort((first, second) => first.label.localeCompare(second.label));
-  }
-
-  async function toggleAffiliationForm() {
-    showAffiliationForm = !showAffiliationForm;
-    affiliationError = '';
-    affiliationNotice = '';
-    await tick();
-    if (showAffiliationForm) affiliationInput?.focus();
-    else affiliationToggle?.focus();
-  }
-
-  async function addAffiliation() {
-    const name = affiliationName.trim();
-    if (savingAffiliation || !name) return;
-    affiliationError = '';
-    savingAffiliation = true;
-    try {
-      const affiliation = await affiliations.createAffiliation(name);
-      affiliationNotice = `Added ${affiliation.name}. It is now available in affiliation pickers.`;
-      affiliationName = '';
-      showAffiliationForm = false;
-    } catch (err) {
-      if (err.code === '23505') affiliationError = 'This team or club affiliation already exists.';
-      else if (err.code === '22023') affiliationError = 'Enter a name from 1 to 100 characters.';
-      else affiliationError = 'Could not add the affiliation. Please try again.';
-    } finally {
-      savingAffiliation = false;
-      await tick();
-      if (!showAffiliationForm) affiliationToggle?.focus();
-    }
-  }
 
   function sortVolunteers(volunteers) {
     return [...volunteers].sort((a, b) => {
@@ -217,8 +155,8 @@
     return sortVolunteers(filtered);
   })();
 
-  $: nicaSummaryRows = nicaBeneficiaries.map((beneficiary) => {
-    const volunteerSpots = volunteerSpotsForBeneficiary(beneficiary, $volunteers);
+  $: nicaSummaryRows = NICA_BENEFICIARIES.map((beneficiary) => {
+    const volunteerSpots = volunteerSpotsForBeneficiary(beneficiary, $affiliations, $volunteers);
 
     return {
       beneficiary: beneficiary.label,
@@ -300,17 +238,16 @@
     };
 
     nicaPdfLoading = true;
-    const teams = nicaBeneficiaries;
     try {
       if (nicaPdfTeam === '__all__') {
-        for (let i = 0; i < teams.length; i += 1) {
-          await runOne(teams[i]);
-          if (i < teams.length - 1) {
+        for (let i = 0; i < NICA_BENEFICIARIES.length; i += 1) {
+          await runOne(NICA_BENEFICIARIES[i]);
+          if (i < NICA_BENEFICIARIES.length - 1) {
             await new Promise((r) => setTimeout(r, 450));
           }
         }
       } else {
-        const beneficiary = teams.find((b) => b.id === nicaPdfTeam);
+        const beneficiary = NICA_BENEFICIARIES.find((b) => b.label === nicaPdfTeam);
         if (!beneficiary) {
           error = 'Unknown NICA team selection.';
           return;
@@ -876,10 +813,10 @@
       </button>
       <div class="nica-pdf-toolbar" title="Volunteer/signup listing per NICA school team (matches spreadsheet export)">
         <label class="sr-only" for="nica-pdf-team">NICA team for PDF export</label>
-        <select id="nica-pdf-team" class="nica-pdf-select" bind:value={nicaPdfTeam} disabled={nicaPdfLoading || loadingNica || nicaBeneficiaries.length === 0}>
+        <select id="nica-pdf-team" class="nica-pdf-select" bind:value={nicaPdfTeam} disabled={nicaPdfLoading}>
           <option value="">NICA PDF: team…</option>
-          {#each nicaBeneficiaries as b (b.id)}
-            <option value={b.id}>{b.label}</option>
+          {#each NICA_BENEFICIARIES as b (b.label)}
+            <option value={b.label}>{b.label}</option>
           {/each}
           <option value="__all__">All teams (one PDF each)</option>
         </select>
@@ -887,7 +824,7 @@
           class="btn btn-secondary"
           class:nica-export-idle={!nicaPdfTeam}
           type="button"
-          disabled={nicaPdfLoading || loadingNica || nicaBeneficiaries.length === 0}
+          disabled={nicaPdfLoading}
           title={!nicaPdfTeam
             ? 'Select a NICA team in the dropdown first'
             : 'Download PDF for the selected team'}
@@ -899,50 +836,11 @@
       <button class="btn btn-primary" on:click={openAddVolunteerModal}>
         + Add Volunteer
       </button>
-      {#if $auth.isAdmin}
-        <button type="button" class="btn btn-secondary" bind:this={affiliationToggle}
-          aria-expanded={showAffiliationForm} aria-controls="add-affiliation-form"
-          on:click={toggleAffiliationForm} disabled={savingAffiliation}>
-          Add team or club
-        </button>
-      {/if}
     </div>
   </div>
 
-  {#if showAffiliationForm && $auth.isAdmin}
-    <form id="add-affiliation-form" class="affiliation-form" on:submit|preventDefault={addAffiliation}>
-      <div class="affiliation-field">
-        <label for="new-affiliation-name">Team or club name</label>
-        <input id="new-affiliation-name" bind:this={affiliationInput} bind:value={affiliationName}
-          type="text" maxlength="100" required disabled={savingAffiliation} />
-      </div>
-      <button type="submit" class="btn btn-primary" disabled={savingAffiliation || !affiliationName.trim()}>
-        {savingAffiliation ? 'Adding…' : 'Add affiliation'}
-      </button>
-      {#if affiliationError}<p class="affiliation-error" role="alert">{affiliationError}</p>{/if}
-    </form>
-  {/if}
-  {#if affiliationNotice}<p class="affiliation-notice" role="status">{affiliationNotice}</p>{/if}
-
   {#if error}
     <div class="alert alert-error">{error}</div>
-  {/if}
-
-  {#if $auth.isAdmin}
-    <div class="nica-toggle-row">
-      <button type="button" class="btn btn-secondary" disabled={loadingNica || Boolean(nicaLoadError)}
-        aria-expanded={showNicaManager} aria-controls="nica-beneficiary-management"
-        on:click={() => showNicaManager = !showNicaManager}>
-        {showNicaManager ? 'Hide beneficiary management' : 'Manage NICA beneficiaries'}
-      </button>
-      {#if nicaLoadError}
-        <p role="alert">{nicaLoadError}</p>
-        <button type="button" class="btn btn-secondary" on:click={loadNicaBeneficiaries}>Retry</button>
-      {/if}
-    </div>
-    {#if showNicaManager}
-      <NicaBeneficiariesPanel affiliations={$affiliations} beneficiaries={nicaBeneficiaries} onSaved={updateNicaBeneficiary} />
-    {/if}
   {/if}
 
   {#if loading}
@@ -999,7 +897,6 @@
         class="btn btn-secondary"
         on:click={() => showNicaSummary = !showNicaSummary}
         aria-expanded={showNicaSummary}
-        disabled={loadingNica || Boolean(nicaLoadError)}
       >
         {showNicaSummary ? 'Hide NICA' : 'Show NICA'}
       </button>
@@ -1007,14 +904,13 @@
         class="btn btn-secondary"
         on:click={() => showNicaCoaches = !showNicaCoaches}
         aria-expanded={showNicaCoaches}
-        disabled={loadingNica || Boolean(nicaLoadError)}
       >
         {showNicaCoaches ? 'Hide NICA Coaches' : 'NICA Coaches'}
       </button>
     </div>
 
     {#if showNicaCoaches}
-      <NicaCoachesPanel affiliations={$affiliations} beneficiaries={nicaBeneficiaries} />
+      <NicaCoachesPanel affiliations={$affiliations} />
     {/if}
 
     {#if showNicaSummary}
@@ -1713,45 +1609,6 @@
     align-items: center;
     gap: 1rem;
     flex-wrap: wrap;
-  }
-
-  .affiliation-form {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: end;
-    gap: 0.75rem;
-    padding: 1rem;
-    margin-bottom: 1.25rem;
-    background: var(--bg-primary);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-md);
-  }
-
-  .affiliation-field {
-    display: grid;
-    gap: 0.25rem;
-    flex: 1 1 15rem;
-    min-width: 0;
-  }
-
-  .affiliation-field input {
-    min-height: 44px;
-    padding: 0.5rem 0.75rem;
-    background: var(--bg-primary);
-    color: var(--text-primary);
-    border: 1px solid var(--input-border);
-    border-radius: var(--radius-md);
-    font-size: 1rem;
-  }
-
-  .affiliation-error {
-    flex-basis: 100%;
-    color: var(--danger-text);
-  }
-
-  .affiliation-notice {
-    margin-bottom: 1rem;
-    color: var(--success-text);
   }
 
   .sr-only {
