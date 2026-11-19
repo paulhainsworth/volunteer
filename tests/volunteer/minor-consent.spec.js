@@ -27,6 +27,7 @@ async function openForm(page, backend, path) {
   if (path === 'signed-in' || path === 'waiver') {
     await signInFixture(page, backend);
     await expect(page).toHaveURL(/my-signups$/);
+    await expect(page.getByRole('heading', { name: 'No signups yet' })).toBeVisible();
     backend.reply('POST', waiverStatus, false);
     await page.goto(path === 'waiver' ? waiverPath : signupPath);
     return page.getByRole('button', { name: path === 'waiver' ? 'Sign waiver' : 'Confirm Signup', exact: true });
