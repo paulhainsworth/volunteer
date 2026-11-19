@@ -25,6 +25,8 @@
   let filterStatus = 'all';
   let raceDayFilter = 'all'; // 'all', 'bhrr', 'bsc', 'pre-race', 'post-race'
   let filterDuration = 'all'; // 'all', '1-or-less', '2-3', '4-5', '6-8', 'full-day'
+  let showExtraFilters = false;
+  $: activeExtraFilters = Number(raceDayFilter !== 'all') + Number(filterDuration !== 'all');
   let selectedRole = null; // For modal
   let expandedDomains = new Set(); // Track which domains are expanded
   let domainsInitialized = false; // Track if we've initialized domains
@@ -585,41 +587,64 @@
   </div>
 
   <div class="filters">
-    <input
-      type="text"
-      placeholder="Search roles..."
-      bind:value={searchQuery}
-      class="search-input"
-    />
+    <label class="filter-field filter-search">
+      <span>Search roles</span>
+      <input type="search" placeholder="Search roles..." bind:value={searchQuery} />
+    </label>
 
-    <select bind:value={sortBy} class="filter-select">
-      <option value="date">Sort by Date</option>
-      <option value="name">Sort by Name</option>
-      <option value="duration">Sort by Duration</option>
-    </select>
+    <label class="filter-field">
+      <span>Availability</span>
+      <select bind:value={filterStatus}>
+        <option value="all">Any availability</option>
+        <option value="available">Available only</option>
+        <option value="urgent">Urgent need</option>
+      </select>
+    </label>
 
-    <select bind:value={raceDayFilter} class="filter-select">
-      <option value="all">All Roles</option>
-      <option value="bhrr">Race day: BHRR</option>
-      <option value="bsc">Race day: BSC</option>
-      <option value="pre-race">Pre-race</option>
-      <option value="post-race">Post-race</option>
-    </select>
+    <button
+      type="button"
+      class="filters-toggle"
+      aria-expanded={showExtraFilters}
+      aria-controls="extra-role-filters"
+      on:click={() => { showExtraFilters = !showExtraFilters; }}
+    >
+      Filters{activeExtraFilters ? ` (${activeExtraFilters})` : ''}
+      <span class="filter-chevron" aria-hidden="true"></span>
+    </button>
 
-    <select bind:value={filterStatus} class="filter-select">
-      <option value="all">All Status</option>
-      <option value="available">Available Only</option>
-      <option value="urgent">Urgent Need</option>
-    </select>
+    <div class="filter-extra" class:expanded={showExtraFilters} id="extra-role-filters">
+      <label class="filter-field">
+        <span>Sort by</span>
+        <select bind:value={sortBy}>
+          <option value="date">Date</option>
+          <option value="name">Name</option>
+          <option value="duration">Duration</option>
+        </select>
+      </label>
 
-    <select bind:value={filterDuration} class="filter-select">
-      <option value="all">Any duration</option>
-      <option value="1-or-less">1 hr or less</option>
-      <option value="2-3">2–3 hrs</option>
-      <option value="4-5">4–5 hrs</option>
-      <option value="6-8">6–8 hrs</option>
-      <option value="full-day">Full day</option>
-    </select>
+      <label class="filter-field">
+        <span>Event day</span>
+        <select bind:value={raceDayFilter}>
+          <option value="all">Any day</option>
+          <option value="bhrr">Race day: BHRR</option>
+          <option value="bsc">Race day: BSC</option>
+          <option value="pre-race">Pre-race</option>
+          <option value="post-race">Post-race</option>
+        </select>
+      </label>
+
+      <label class="filter-field">
+        <span>Duration</span>
+        <select bind:value={filterDuration}>
+          <option value="all">Any duration</option>
+          <option value="1-or-less">1 hr or less</option>
+          <option value="2-3">2–3 hrs</option>
+          <option value="4-5">4–5 hrs</option>
+          <option value="6-8">6–8 hrs</option>
+          <option value="full-day">Full day</option>
+        </select>
+      </label>
+    </div>
   </div>
 
   {#if loading}
@@ -1025,34 +1050,63 @@
 
   .header h1 {
     margin: 0 0 0.5rem 0;
-    color: #1a1a1a;
   }
 
   .header p {
-    color: #6c757d;
+    color: var(--text-muted);
     font-size: 1.1rem;
   }
 
   .filters {
     display: grid;
-    grid-template-columns: 2fr 1fr 1fr 1fr 1fr;
-    gap: 1rem;
-    margin-bottom: 2rem;
+    grid-template-columns: minmax(0, 2fr) repeat(4, minmax(0, 1fr));
+    align-items: end;
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
   }
 
-  .search-input,
-  .filter-select {
-    padding: 0.75rem;
-    border: 1px solid #ced4da;
+  .filter-field {
+    display: grid;
+    gap: 0.25rem;
+    min-width: 0;
+    color: var(--text-muted);
+    font-size: 0.875rem;
+    font-weight: 600;
+  }
+
+  .filter-field input,
+  .filter-field select,
+  .filters-toggle {
+    width: 100%;
+    min-height: 44px;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border-color);
     border-radius: 6px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: inherit;
     font-size: 1rem;
+    line-height: 1.4;
+    font-weight: 400;
   }
 
-  .search-input:focus,
-  .filter-select:focus {
-    outline: none;
-    border-color: #007bff;
-    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+  .filter-field input::placeholder {
+    color: var(--text-muted);
+  }
+
+  .filter-field input:focus-visible,
+  .filter-field select:focus-visible,
+  .filters-toggle:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+  }
+
+  .filter-extra {
+    display: contents;
+  }
+
+  .filters-toggle {
+    display: none;
   }
 
   .loading,
@@ -1070,7 +1124,7 @@
   .opportunities-summary {
     text-align: right;
     margin-bottom: 1rem;
-    color: #6c757d;
+    color: var(--text-muted);
     font-weight: 500;
   }
 
@@ -1612,7 +1666,51 @@
 
   @media (max-width: 768px) {
     .filters {
-      grid-template-columns: 1fr;
+      grid-template-columns: minmax(0, 1fr) auto;
+    }
+
+    .header {
+      margin-bottom: 1.25rem;
+    }
+
+    .filter-search,
+    .filter-extra {
+      grid-column: 1 / -1;
+    }
+
+    .filter-extra {
+      display: none;
+    }
+
+    .filter-extra.expanded {
+      display: grid;
+      gap: 0.75rem;
+    }
+
+    .filters-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.65rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .filters-toggle:active {
+      background: var(--bg-tertiary);
+    }
+
+    .filter-chevron {
+      display: block;
+      width: 0.45rem;
+      height: 0.45rem;
+      border-right: 2px solid currentColor;
+      border-bottom: 2px solid currentColor;
+      transform: translateY(-0.125rem) rotate(45deg);
+    }
+
+    .filters-toggle[aria-expanded='true'] .filter-chevron {
+      transform: translateY(0.125rem) rotate(225deg);
     }
 
     .domain-section {

@@ -1,5 +1,31 @@
 import { test, expect, ownProfile, profile, role, signInFixture } from '../helpers/browser.js';
 
+test('mobile navigation exposes its state and restores focus on Escape', async ({ page, backend }) => {
+  backend.reply('GET', '/rest/v1/volunteer_roles', []);
+  await page.setViewportSize({ width: 320, height: 720 });
+  await page.goto('/#/auth/login');
+  const menu = page.getByRole('button', { name: 'Toggle menu' });
+  const signIn = page.getByRole('link', { name: 'Sign In' });
+  await expect(menu).toHaveAttribute('aria-controls', 'main-navigation');
+  await expect(menu).toHaveAttribute('aria-expanded', 'false');
+  expect(await menu.boundingBox()).toMatchObject({ width: 44, height: 44 });
+  await expect(signIn).toBeHidden();
+
+  await menu.press('Enter');
+  await expect(menu).toHaveAttribute('aria-expanded', 'true');
+  await page.keyboard.press('Tab');
+  await expect(signIn).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(menu).toHaveAttribute('aria-expanded', 'false');
+  await expect(menu).toBeFocused();
+  await expect(signIn).toBeHidden();
+
+  await menu.press('Enter');
+  await page.evaluate(() => { window.location.hash = '/volunteer'; });
+  await expect(menu).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.getByRole('heading', { name: 'Volunteer Opportunities' })).toBeVisible();
+});
+
 test('volunteer saves an emergency-contact edit', async ({ page, backend }) => {
   await signInFixture(page, backend);
   await expect(page).toHaveURL(/#\/my-signups$/);
