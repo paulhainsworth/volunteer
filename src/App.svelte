@@ -20,6 +20,7 @@
   import AdminDashboard from './routes/admin/Dashboard.svelte';
   import RolesList from './routes/admin/RolesList.svelte';
   import VolunteersList from './routes/admin/VolunteersList.svelte';
+  import SeasonRollover from './routes/admin/SeasonRollover.svelte';
   import Communications from './routes/admin/Communications.svelte';
   import WebsiteMessages from './routes/admin/WebsiteMessages.svelte';
   import Domains from './routes/admin/Domains.svelte';
@@ -53,6 +54,7 @@
     '/admin/roles': RolesList,
     '/admin/roles/:id': RolesList,
     '/admin/volunteers': VolunteersList,
+    '/admin/volunteers/season': SeasonRollover,
     '/admin/domains': Domains,
     '/admin/communications': Communications,
     '/admin/communications/website-messages': WebsiteMessages,

@@ -1,4 +1,5 @@
 <script>
+  import { activeShiftQuery, readVolunteerSeason } from '../../lib/volunteerSeason';
   import { onMount, onDestroy } from 'svelte';
   import { auth } from '../../lib/stores/auth';
   import { assignVolunteerAsLeader } from '../../lib/organizerVolunteerSignup';
@@ -17,6 +18,7 @@
   let error = '';
   let myRoles = [];
   let sortedRoles = [];
+  let roleSeasonYear = null;
 let volunteerForms = {};
 let addStates = {};
 let volunteerSuggestions = {};
@@ -157,6 +159,9 @@ const shareTimers = {};
         )
       `;
 
+    const activeYear = (await readVolunteerSeason())?.active_year ?? null;
+    const roleQuery = () => activeShiftQuery(supabase.from('volunteer_roles').select(selectFields), activeYear);
+
     const { data: leaderDomains, error: domainsError } = await supabase
       .from('volunteer_leader_domains')
       .select('id, name, description, leader_id')
@@ -166,9 +171,7 @@ const shareTimers = {};
 
     const domainIds = (leaderDomains || []).map(domain => domain.id);
 
-    const { data: directRoles, error: directError } = await supabase
-      .from('volunteer_roles')
-      .select(selectFields)
+    const { data: directRoles, error: directError } = await roleQuery()
       .eq('leader_id', $auth.user.id)
       .order('event_date', { ascending: true })
       .order('start_time', { ascending: true });
@@ -178,9 +181,7 @@ const shareTimers = {};
     let domainRoles = [];
 
     if (domainIds.length > 0) {
-      const { data: domainRoleData, error: domainRolesError } = await supabase
-        .from('volunteer_roles')
-        .select(selectFields)
+      const { data: domainRoleData, error: domainRolesError } = await roleQuery()
         .in('domain_id', domainIds)
         .order('event_date', { ascending: true })
         .order('start_time', { ascending: true });
@@ -196,6 +197,7 @@ const shareTimers = {};
       }
     });
 
+    roleSeasonYear = activeYear;
     myRoles = combinedRoles.map(role => {
       const confirmedSignups = role.signups?.filter(s => s.status === 'confirmed') || [];
       return {
@@ -766,6 +768,11 @@ const shareTimers = {};
     emailSuccess = '';
 
     try {
+      const activeYear = (await readVolunteerSeason())?.active_year ?? null;
+      if (activeYear !== roleSeasonYear) {
+        error = 'The roster year changed. Reload My Roles to review the current recipients.';
+        return;
+      }
       // Get all unique volunteers across all roles
       const uniqueVolunteers = new Map();
       myRoles.forEach(role => {
@@ -1064,8 +1071,13 @@ Examples:
     <div class="error">{error}</div>
   {:else if myRoles.length === 0}
     <div class="empty">
-      <h2>No Roles Assigned Yet</h2>
-      <p>You haven't been assigned to lead any volunteer roles yet.</p>
+      {#if roleSeasonYear}
+        <h2>No active roles yet</h2>
+        <p>Roles scheduled from {roleSeasonYear} onward will appear here when assigned to you or your team.</p>
+      {:else}
+        <h2>No Roles Assigned Yet</h2>
+        <p>You haven't been assigned to lead any volunteer roles yet.</p>
+      {/if}
       <p>Contact an administrator to get assigned roles.</p>
     </div>
   {:else}

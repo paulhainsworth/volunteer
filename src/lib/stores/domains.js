@@ -2,6 +2,7 @@ import { writable } from 'svelte/store';
 import { supabase } from '../supabaseClient';
 import { getUserPostgrestClient } from '../supabaseUserRest';
 import { withSupabaseReadTimeout } from '../utils/withTimeout';
+import { isArchivedShift, readVolunteerSeason } from '../volunteerSeason';
 
 /** Avoid main supabase client when GoTrue refresh blocks the queue (same pattern as public reads). */
 const clientForReads = () => getUserPostgrestClient() ?? supabase;
@@ -80,7 +81,8 @@ function createDomainsStore() {
 
       if (error) throw error;
 
-      const roles = data.roles || [];
+      const activeYear = (await readVolunteerSeason())?.active_year;
+      const roles = (data.roles || []).filter((role) => !isArchivedShift(role, activeYear));
       let confirmedCountByRole = {};
       if (roles.length > 0) {
         const roleIds = roles.map((r) => r.id);

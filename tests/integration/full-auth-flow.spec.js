@@ -68,6 +68,9 @@ for (const role of ['volunteer', 'volunteer_leader']) {
     await page.goto('/#/admin/communications/website-messages');
     await expect(page).toHaveURL(/#\/volunteer$/);
     await expect(page.getByRole('heading', { name: 'Website Messages' })).toHaveCount(0);
+    await page.goto('/#/admin/volunteers/season');
+    await expect(page).toHaveURL(/#\/volunteer$/);
+    await expect(page.getByRole('heading', { name: 'Season rollover' })).toHaveCount(0);
     if (role === 'volunteer') expect(backend.calls('GET', '/rest/v1/volunteer_leader_domains')).toBe(0);
   });
 }

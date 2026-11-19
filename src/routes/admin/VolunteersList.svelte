@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import { volunteers } from '../../lib/stores/volunteers';
+  import { activeRosterYear, archivedVolunteers, volunteers } from '../../lib/stores/volunteers';
   import { auth } from '../../lib/stores/auth';
   import { affiliations } from '../../lib/stores/affiliations';
   import { supabase } from '../../lib/supabaseClient';
@@ -17,9 +17,11 @@
 
   function upcomingVolunteerRolesOrFilter() {
     const today = getTodayDateInPacific();
-    if (!today) return '';
-    const monthStart = `${today.slice(0, 7)}-01`;
-    return `event_date.gte.${today},and(event_date.is.null,completion_month.gte.${monthStart}),and(event_date.is.null,completion_month.is.null)`;
+    const seasonStart = $activeRosterYear ? `${$activeRosterYear}-01-01` : '';
+    const cutoff = seasonStart > today ? seasonStart : today;
+    if (!cutoff) return '';
+    const monthStart = `${cutoff.slice(0, 7)}-01`;
+    return `event_date.gte.${cutoff},and(event_date.is.null,completion_month.gte.${monthStart}),and(event_date.is.null,completion_month.is.null)`;
   }
   import { NICA_BENEFICIARIES } from '../../lib/nicaBeneficiaries';
   import {
@@ -33,6 +35,8 @@
   let loading = true;
   let error = '';
   let searchQuery = '';
+  let showArchived = false;
+  $: shownVolunteers = showArchived ? $archivedVolunteers : $volunteers;
   let viewMode = 'table'; // 'cards' or 'table'
   let sortColumn = 'last_name';
   let sortDirection = 'asc';
@@ -140,7 +144,7 @@
 
   // Make sorting reactive to sort column, direction, and affiliation filter
   $: filteredVolunteers = (() => {
-    let filtered = $volunteers;
+    let filtered = shownVolunteers;
     if (selectedAffiliationId) {
       filtered = filtered.filter(v => (v.team_club_affiliation_id || '') === selectedAffiliationId);
     }
@@ -293,7 +297,7 @@
 
   function exportToCSV() {
     const headers = ['First Name', 'Last Name', 'Email', 'Phone', 'Total Signups', 'Total Hours', 'Waiver Signed'];
-    const rows = $volunteers.map(v => [
+    const rows = shownVolunteers.map(v => [
       v.first_name || '',
       v.last_name || '',
       v.email,
@@ -763,7 +767,7 @@
     const headers = ['Volunteer Name', 'Email', 'Phone', 'Role', 'Event Date', 'Start Time', 'End Time'];
     const rows = [];
 
-    $volunteers.forEach(volunteer => {
+    shownVolunteers.forEach(volunteer => {
       volunteer.signups.forEach(signup => {
         const r = signup.role;
         const start = isFlexibleTime(r) ? 'Flexible' : (r.start_time || '');
@@ -801,7 +805,7 @@
   <div class="header">
     <div>
       <h1>Users</h1>
-      <p>Manage all registered users, their roles, and signups</p>
+      <p>Manage users and signups. <a href="#/admin/volunteers/season">Season rollover</a></p>
     </div>
     
     <div class="header-actions">
@@ -843,12 +847,19 @@
     <div class="alert alert-error">{error}</div>
   {/if}
 
+  {#if $activeRosterYear && !loading}
+    <p class="roster-season">
+      <label><input type="checkbox" bind:checked={showArchived} /> View archived volunteers</label>
+      <span>Active roster starts in {$activeRosterYear}.</span>
+    </p>
+  {/if}
+
   {#if loading}
     <div class="loading">Loading volunteers...</div>
-  {:else if $volunteers.length === 0}
+  {:else if shownVolunteers.length === 0}
     <div class="empty">
-      <h2>No volunteers yet</h2>
-      <p>Volunteers will appear here once they sign up</p>
+      <h2>{showArchived ? 'No archived volunteers' : 'No volunteers yet'}</h2>
+      {#if !showArchived}<p>Volunteers will appear here once they sign up</p>{/if}
     </div>
   {:else}
     <div class="controls">
@@ -1580,6 +1591,19 @@
 {/if}
 
 <style>
+  .roster-season {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1rem;
+    margin-bottom: 1rem;
+    color: var(--text-muted);
+  }
+
+  .header a {
+    color: var(--link-hover);
+    text-decoration: underline;
+  }
+
   .volunteers-page {
     max-width: 1400px;
     margin: 0 auto;

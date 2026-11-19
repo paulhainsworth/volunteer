@@ -35,6 +35,7 @@ export const test = base.extend({
   backend: async ({ context, baseURL }, use) => {
     const handlers = new Map([
       ['GET /rest/v1/website_messages', () => ({ body: null })],
+      ['GET /rest/v1/volunteer_season', () => ({ body: [{ active_year: null }] })],
     ]);
     const requests = [];
     const unexpected = [];

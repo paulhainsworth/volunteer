@@ -98,6 +98,76 @@ test('admin updates the event year and publishes website messages', async ({ pag
   await expect(spotlight.getByRole('heading', { name: role.name })).toBeVisible();
 });
 
+test('admin previews and starts the 2027 roster while keeping staff and returning volunteers', async ({ page, backend }) => {
+  const seasonEndpoint = '/rest/v1/volunteer_season';
+  const previewEndpoint = '/rest/v1/rpc/preview_volunteer_season';
+  const oldShift = { ...role, event_date: '2026-04-19' };
+  const newShift = { ...role, event_date: '2027-04-17' };
+  const oldSignup = { id: 'past-assignment', status: 'confirmed', role: oldShift };
+  const currentSignup = { id: 'new-assignment', status: 'confirmed', role: newShift };
+  let activeYear = null;
+  let archivedSignupList = [oldSignup];
+  backend.handle('GET', seasonEndpoint, () => ({ body: [{ active_year: activeYear }] }));
+  backend.handle('POST', previewEndpoint, (request) => {
+    expect(request.postDataJSON()).toEqual({ p_active_year: 2027 });
+    return { body: { archived_shifts: 1, inactive_volunteers: 1, retained_staff: 2 } };
+  });
+  backend.handle('PATCH', seasonEndpoint, (request, url) => {
+    expect(url.searchParams.get('active_year')).toBe('is.null');
+    expect(request.postDataJSON()).toEqual({ active_year: 2027 });
+    activeYear = 2027;
+    return { body: { active_year: activeYear } };
+  });
+  await signInFixture(page, backend, 'admin');
+  await expect(page).toHaveURL(/#\/my-signups$/);
+  mockAdminReads(backend);
+  backend.handle('GET', '/rest/v1/profiles', () => ({ body: [
+    { ...profile, role: 'admin' },
+    { ...profile, id: 'archived', first_name: 'Prior', last_name: 'Volunteer', email: 'prior@example.invalid', signups: archivedSignupList },
+    { ...profile, id: 'returning', first_name: 'Returning', last_name: 'Volunteer', email: 'returning@example.invalid', signups: [oldSignup, currentSignup] },
+    { ...profile, id: 'leader', role: 'volunteer_leader', first_name: 'Kept', last_name: 'Leader', email: 'leader@example.invalid', signups: [oldSignup] },
+  ] }));
+  backend.reply('GET', '/rest/v1/email_digest_settings', [{ admin_daily_volunteer_summary_enabled: true }]);
+
+  await page.getByRole('link', { name: 'Users', exact: true }).click();
+  const priorVolunteer = page.getByRole('link', { name: 'prior@example.invalid' });
+  await expect(priorVolunteer).toBeVisible();
+  await page.getByRole('link', { name: 'Season rollover' }).click();
+  await page.getByLabel('New roster year').fill('2027');
+  await page.getByRole('button', { name: 'Preview rollover' }).click();
+  await expect(page.getByRole('region', { name: 'Preview for 2027' })).toContainText('1 regular volunteer moves');
+  const start = page.getByRole('button', { name: 'Start 2027 roster' });
+  await expect(start).toBeDisabled();
+  expect(backend.calls('PATCH', seasonEndpoint)).toBe(0);
+  await page.getByLabel('Confirm the roster rollover to 2027').check();
+  await start.click();
+  await expect(page.getByRole('status')).toContainText('starts in 2027');
+  expect(backend.calls('PATCH', seasonEndpoint)).toBe(1);
+
+  await page.getByRole('link', { name: 'Back to Users' }).click();
+  await expect(page.getByText('Active roster starts in 2027.')).toBeVisible();
+  await expect(priorVolunteer).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'returning@example.invalid' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'leader@example.invalid' })).toBeVisible();
+  await page.getByLabel('View archived volunteers').check();
+  await expect(priorVolunteer).toBeVisible();
+
+  await page.getByRole('link', { name: 'Communications', exact: true }).click();
+  await expect(page.getByText('All Volunteers (3)', { exact: true })).toBeVisible();
+  activeYear = 2028;
+  await page.getByLabel('Subject').fill('Fixture notice');
+  await page.getByLabel('Message', { exact: true }).fill('Fixture body');
+  await page.getByRole('button', { name: 'Send Email to 3 Recipients' }).click();
+  await expect(page.getByText('The roster year changed. Reload Communications to review the current recipients.')).toBeVisible();
+  expect(backend.calls('POST', '/functions/v1/send-email')).toBe(0);
+  activeYear = 2027;
+
+
+  archivedSignupList = [oldSignup, currentSignup];
+  await page.getByRole('link', { name: 'Users', exact: true }).click();
+  await expect(priorVolunteer).toBeVisible();
+});
+
 test('admin creates, edits, duplicates, and deletes a role', async ({ page, backend }) => {
   const duplicateId = '00000000-0000-4000-8000-000000000014';
   const records = new Map();

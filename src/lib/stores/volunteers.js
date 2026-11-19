@@ -1,16 +1,21 @@
-import { writable } from 'svelte/store';
+import { derived, writable } from 'svelte/store';
 import { supabase } from '../supabaseClient';
 import { fetchEmergencyContacts } from '../profileAccess';
 import { withSupabaseReadTimeout } from '../utils/withTimeout';
+import { isArchivedShift, readVolunteerSeason } from '../volunteerSeason';
+
+const roster = writable({ activeYear: null, active: [], archived: [] });
+export const archivedVolunteers = derived(roster, ($roster) => $roster.archived);
+export const activeRosterYear = derived(roster, ($roster) => $roster.activeYear);
 
 function createVolunteersStore() {
-  const { subscribe, set, update } = writable([]);
+  const { subscribe } = derived(roster, ($roster) => $roster.active);
 
   return {
     subscribe,
     
     fetchVolunteers: async ({ includeEmergencyContacts = false } = {}) => {
-      const { data, error } = await withSupabaseReadTimeout(
+      const [season, { data, error }] = await Promise.all([readVolunteerSeason(), withSupabaseReadTimeout(
         () => supabase
           .from('profiles')
           .select(`
@@ -21,6 +26,7 @@ function createVolunteersStore() {
                 id,
                 name,
                 event_date,
+                completion_month,
                 start_time,
                 end_time
               ),
@@ -35,7 +41,7 @@ function createVolunteersStore() {
           `)
           .order('last_name', { ascending: true }),
         'volunteers.fetchVolunteers'
-      );
+      )]);
 
       if (error) throw error;
 
@@ -44,9 +50,14 @@ function createVolunteersStore() {
         : [];
       const contactsByProfile = new Map(emergencyContacts.map(({ profile_id, ...contact }) => [profile_id, contact]));
 
-      // Calculate total hours for each volunteer
-      const volunteersWithStats = data.map(volunteer => {
-        const confirmedSignups = volunteer.signups?.filter(s => s.status === 'confirmed') || [];
+      const activeYear = season?.active_year ?? null;
+      const active = [];
+      const archived = [];
+      for (const volunteer of data) {
+        const confirmed = volunteer.signups?.filter((signup) => signup.status === 'confirmed') ?? [];
+        const current = confirmed.filter((signup) => !isArchivedShift(signup.role, activeYear));
+        const isArchived = volunteer.role === 'volunteer' && confirmed.length > 0 && current.length === 0;
+        const confirmedSignups = isArchived ? confirmed : current;
         
         const totalHours = confirmedSignups.reduce((sum, signup) => {
           if (!signup.role) return sum;
@@ -58,18 +69,19 @@ function createVolunteersStore() {
           return sum + hours;
         }, 0);
 
-        return {
+        const list = isArchived ? archived : active;
+        list.push({
           ...volunteer,
           ...contactsByProfile.get(volunteer.id),
           signups: confirmedSignups,
           totalSignups: confirmedSignups.length,
           totalHours: Math.round(totalHours * 10) / 10,
           hasSignedWaiver: volunteer.waivers && volunteer.waivers.length > 0
-        };
-      });
+        });
+      }
 
-      set(volunteersWithStats);
-      return volunteersWithStats;
+      roster.set({ activeYear, active, archived });
+      return active;
     }
   };
 }
