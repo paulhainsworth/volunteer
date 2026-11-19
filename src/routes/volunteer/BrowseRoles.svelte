@@ -1633,12 +1633,29 @@
     font-size: 0.9rem;
   }
 
-  .pii-modal .form-group input {
+  .pii-modal .form-group input,
+  .pii-modal .form-group select {
     width: 100%;
+    min-width: 0;
+    min-height: 44px;
     padding: 0.6rem 0.75rem;
     border: 1px solid var(--input-border);
     border-radius: 6px;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
     font-size: 1rem;
+  }
+
+  .pii-modal .form-group input:focus-visible,
+  .pii-modal .form-group select:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+  }
+
+  .pii-modal .form-group input:disabled,
+  .pii-modal .form-group select:disabled {
+    background-color: var(--bg-tertiary);
+    cursor: not-allowed;
   }
 
   .pii-modal .alert {

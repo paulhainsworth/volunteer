@@ -51,6 +51,31 @@ test('phone filters keep search and availability visible and retain selections',
   await expect(page.getByRole('button', { name: /General Opportunities/ })).toBeVisible();
 });
 
+test('the signup dialog affiliation select matches the full-width form fields in both themes', async ({ page, backend }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  backend.reply('GET', '/rest/v1/volunteer_roles', [role]);
+  backend.reply('POST', '/rest/v1/rpc/get_confirmed_signup_counts', []);
+  backend.reply('GET', '/rest/v1/team_club_affiliations', [{ id: 'fixture-team', name: 'Fixture Cycling' }]);
+  await page.goto('/#/volunteer');
+  await page.getByRole('button', { name: /General Opportunities/ }).click();
+  await page.getByRole('button', { name: 'Sign Up', exact: true }).click();
+  const affiliation = page.getByRole('combobox', { name: /Team \/ Club Affiliation/ });
+  const email = page.getByLabel(/Email Address/);
+  await expect(affiliation).toBeVisible();
+  expect(await affiliation.boundingBox()).toMatchObject({ width: (await email.boundingBox()).width });
+  await expect(affiliation).toHaveCSS('min-height', '44px');
+  await expect(affiliation).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+  await affiliation.selectOption('fixture-team');
+  await expect(affiliation).toHaveValue('fixture-team');
+
+  await page.evaluate(() => {
+    localStorage.setItem('theme', 'dark');
+    document.documentElement.dataset.theme = 'dark';
+  });
+  await expect(affiliation).toHaveCSS('background-color', 'rgb(27, 30, 36)');
+  await expect(affiliation).toHaveCSS('color', 'rgb(226, 232, 240)');
+});
+
 test('homepage leads to volunteer shifts and shows open spots', async ({ page, backend }) => {
   backend.reply('GET', '/rest/v1/volunteer_roles', [role]);
   backend.reply('POST', '/rest/v1/rpc/get_confirmed_signup_counts', [{ role_id: role.id, cnt: 2 }]);
