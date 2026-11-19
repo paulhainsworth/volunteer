@@ -29,8 +29,7 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Light Mode (default) */
-:root,
+/* Light Mode */
 :root[data-theme="light"] {
   color-scheme: light;
   /* Color Palette */
@@ -124,13 +123,13 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  min-height: 100dvh;
   background-color: var(--bg-page);
   color: var(--text-primary);
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 #app {
-  min-height: 100vh;
   background-color: var(--bg-page);
 }
 

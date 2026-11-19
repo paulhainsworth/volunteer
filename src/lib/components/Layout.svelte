@@ -1,18 +1,15 @@
 <script>
-  import { onMount } from 'svelte';
   import { auth } from '../stores/auth';
   import { theme } from '../stores/theme';
   import { location, push } from 'svelte-spa-router';
+
+  const currentYear = new Date().getFullYear();
 
   $: isKidsLanding = $location === '/kids';
 
   let showMobileMenu = false;
   let mobileMenuButton;
   let signingOut = false;
-
-  onMount(() => {
-    theme.initialize();
-  });
 
   async function handleSignOut(event) {
     event?.preventDefault();
@@ -128,7 +125,7 @@
 
   {#if !isKidsLanding}
   <footer class="footer">
-    <p>&copy; 2025 Berkeley Bicycle Club. All rights reserved.</p>
+    <p>&copy; {currentYear} Berkeley Bicycle Club. All rights reserved.</p>
   </footer>
   {/if}
 </div>
@@ -136,6 +133,7 @@
 <style>
   .app-layout {
     min-height: 100vh;
+    min-height: 100dvh;
     display: flex;
     flex-direction: column;
   }
@@ -318,7 +316,7 @@
   }
 
   .main-content {
-    flex: 1;
+    flex: 1 0 auto;
     padding: 2rem 1rem;
     max-width: 1200px;
     width: 100%;
