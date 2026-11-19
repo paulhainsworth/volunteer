@@ -73,7 +73,7 @@
   }
 
   .auth-card {
-    background: white;
+    background: var(--bg-primary);
     padding: 3rem;
     border-radius: 12px;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
@@ -84,11 +84,11 @@
   h1 {
     margin: 0 0 0.5rem 0;
     font-size: 2rem;
-    color: #1a1a1a;
+    color: var(--text-primary);
   }
 
   .subtitle {
-    color: #6c757d;
+    color: var(--text-secondary);
     margin-bottom: 2rem;
     line-height: 1.5;
   }
@@ -100,9 +100,9 @@
   }
 
   .alert-error {
-    background: #f8d7da;
-    color: #721c24;
-    border: 1px solid #f5c6cb;
+    background: var(--danger-surface);
+    color: var(--danger-text);
+    border: 1px solid var(--danger-border);
   }
 
   .form-group {
@@ -113,24 +113,24 @@
     display: block;
     margin-bottom: 0.5rem;
     font-weight: 600;
-    color: #1a1a1a;
+    color: var(--text-primary);
   }
 
   input {
     width: 100%;
     padding: 0.75rem;
-    border: 1px solid #ced4da;
+    border: 1px solid var(--input-border);
     border-radius: 6px;
     font-size: 1rem;
   }
 
   input:focus {
     outline: none;
-    border-color: #007bff;
+    border-color: var(--primary-color);
   }
 
   input:disabled {
-    background: #f8f9fa;
+    background: var(--bg-secondary);
     cursor: not-allowed;
   }
 
@@ -167,18 +167,18 @@
 
   .success-message p {
     margin: 0 0 0.75rem;
-    color: #1a1a1a;
+    color: var(--text-primary);
   }
 
   .success-message .hint {
-    color: #6c757d;
+    color: var(--text-secondary);
     font-size: 0.9rem;
   }
 
   .btn-link {
     background: none;
     border: none;
-    color: #007bff;
+    color: var(--primary-color);
     cursor: pointer;
     text-decoration: underline;
     padding: 0;

@@ -387,7 +387,7 @@
     flex-direction: column;
     gap: 0.85rem;
     padding-top: 1rem;
-    border-top: 1px solid #e9ecef;
+    border-top: 1px solid var(--border-color);
   }
 
   .admin-role-inline-add__header {
@@ -404,7 +404,7 @@
 
   .admin-role-inline-add__header p {
     margin: 0;
-    color: #6c757d;
+    color: var(--text-secondary);
     font-size: 0.9rem;
   }
 
@@ -413,9 +413,9 @@
     align-items: center;
     padding: 0.25rem 0.6rem;
     border-radius: 999px;
-    background: #fff3cd;
-    border: 1px solid #ffe69c;
-    color: #8a6d1d;
+    background: var(--warning-surface);
+    border: 1px solid var(--warning-border);
+    color: var(--warning-text);
     font-size: 0.8rem;
     font-weight: 600;
     white-space: nowrap;
@@ -434,7 +434,7 @@
   }
 
   .admin-role-inline-add__loading {
-    color: #6c757d;
+    color: var(--text-secondary);
     font-size: 0.9rem;
     font-style: italic;
   }
@@ -446,7 +446,7 @@
   }
 
   .admin-role-inline-add__suggestions-intro {
-    color: #6c757d;
+    color: var(--text-secondary);
     font-size: 0.85rem;
   }
 
@@ -463,31 +463,31 @@
     gap: 0.15rem;
     min-width: 180px;
     padding: 0.55rem 0.75rem;
-    border: 1px solid #d0d7de;
+    border: 1px solid var(--input-border);
     border-radius: 8px;
-    background: white;
+    background: var(--bg-primary);
     cursor: pointer;
     transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
   }
 
   .admin-role-inline-add__suggestion-chip:hover:enabled {
-    border-color: #0d6efd;
+    border-color: var(--primary-color);
     box-shadow: 0 4px 12px rgba(13, 110, 253, 0.12);
     transform: translateY(-1px);
   }
 
   .admin-role-inline-add__suggestion-chip .name {
     font-weight: 600;
-    color: #1a1a1a;
+    color: var(--text-primary);
   }
 
   .admin-role-inline-add__suggestion-chip .email {
-    color: #0d6efd;
+    color: var(--primary-color);
   }
 
   .admin-role-inline-add__suggestion-chip .phone,
   .admin-role-inline-add__suggestion-chip .badge {
-    color: #6c757d;
+    color: var(--text-secondary);
     font-size: 0.8rem;
   }
 
@@ -499,15 +499,15 @@
   }
 
   .inline-alert.error {
-    background: #fdecea;
-    color: #b02a37;
-    border: 1px solid #f5c2c7;
+    background: var(--danger-surface);
+    color: var(--danger-text);
+    border: 1px solid var(--danger-border);
   }
 
   .inline-alert.success {
-    background: #e6f4ea;
-    color: #1d7530;
-    border: 1px solid #b6e3c1;
+    background: var(--success-surface);
+    color: var(--success-text);
+    border: 1px solid var(--success-border);
   }
 
   @media (max-width: 1200px) {

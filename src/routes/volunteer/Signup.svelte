@@ -589,7 +589,7 @@
   .loading {
     text-align: center;
     padding: 3rem;
-    color: #6c757d;
+    color: var(--text-secondary);
   }
 
   .loading.secondary {
@@ -598,7 +598,7 @@
 
   .error-card,
   .success-card {
-    background: white;
+    background: var(--bg-primary);
     padding: 3rem;
     border-radius: 12px;
     text-align: center;
@@ -619,7 +619,7 @@
   }
 
   .signup-container {
-    background: white;
+    background: var(--bg-primary);
     padding: 2rem;
     border-radius: 12px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
@@ -627,7 +627,7 @@
 
   h1 {
     margin: 0 0 1.5rem 0;
-    color: #1a1a1a;
+    color: var(--text-primary);
   }
 
   .alert {
@@ -637,19 +637,19 @@
   }
 
   .alert-error {
-    background: #f8d7da;
-    color: #721c24;
-    border: 1px solid #f5c6cb;
+    background: var(--danger-surface);
+    color: var(--danger-text);
+    border: 1px solid var(--danger-border);
   }
 
   .alert-warning {
-    background: #fff3cd;
-    color: #856404;
-    border: 1px solid #ffeeba;
+    background: var(--warning-surface);
+    color: var(--warning-text);
+    border: 1px solid var(--warning-border);
   }
 
   .role-summary {
-    background: #f8f9fa;
+    background: var(--bg-secondary);
     padding: 1.5rem;
     border-radius: 8px;
     margin-bottom: 2rem;
@@ -657,7 +657,7 @@
 
   .role-summary h2 {
     margin: 0 0 1rem 0;
-    color: #1a1a1a;
+    color: var(--text-primary);
   }
 
   .summary-details {
@@ -677,7 +677,7 @@
   .description {
     margin-top: 1rem;
     padding-top: 1rem;
-    border-top: 1px solid #dee2e6;
+    border-top: 1px solid var(--border-color);
   }
 
   .description p {
@@ -691,19 +691,19 @@
 
   .form-section h3 {
     margin: 0 0 1rem 0;
-    color: #1a1a1a;
+    color: var(--text-primary);
   }
 
   .waiver-section {
-    border: 2px solid #007bff;
+    border: 2px solid var(--primary-color);
     padding: 1.5rem;
     border-radius: 8px;
   }
 
   .waiver-text {
-    background: white;
+    background: var(--bg-primary);
     padding: 1rem;
-    border: 1px solid #ced4da;
+    border: 1px solid var(--input-border);
     border-radius: 6px;
     margin-bottom: 1.5rem;
     max-height: 200px;
@@ -720,7 +720,7 @@
     display: block;
     margin-bottom: 0.5rem;
     font-weight: 600;
-    color: #1a1a1a;
+    color: var(--text-primary);
   }
 
   input[type="email"],
@@ -729,21 +729,21 @@
   select {
     width: 100%;
     padding: 0.75rem;
-    border: 1px solid #ced4da;
+    border: 1px solid var(--input-border);
     border-radius: 6px;
     font-size: 1rem;
-    background: white;
+    background: var(--bg-primary);
   }
 
   input:disabled {
-    background: #e9ecef;
+    background: var(--bg-tertiary);
     cursor: not-allowed;
   }
 
   small {
     display: block;
     margin-top: 0.25rem;
-    color: #6c757d;
+    color: var(--text-secondary);
     font-size: 0.875rem;
   }
 
@@ -770,28 +770,28 @@
   .parent-consent-section {
     margin-top: 1.5rem;
     padding: 1.25rem;
-    background: #f8f9fa;
-    border: 1px solid #dee2e6;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
     border-radius: 8px;
   }
 
   .parent-consent-section h4 {
     margin: 0 0 0.75rem 0;
     font-size: 1.1rem;
-    color: #495057;
+    color: var(--text-muted);
   }
 
   .parent-consent-intro {
     margin: 0 0 1rem 0;
     font-size: 0.95rem;
-    color: #6c757d;
+    color: var(--text-secondary);
     line-height: 1.5;
   }
 
   .parent-attestation {
     margin: 1rem 0 0.75rem 0;
     font-size: 0.95rem;
-    color: #212529;
+    color: var(--text-primary);
   }
 
   .form-actions {
@@ -799,7 +799,7 @@
     gap: 1rem;
     justify-content: flex-end;
     padding-top: 1rem;
-    border-top: 1px solid #dee2e6;
+    border-top: 1px solid var(--border-color);
   }
 
   .btn {
@@ -826,30 +826,30 @@
   }
 
   .btn-secondary {
-    background: white;
-    color: #6c757d;
+    background: var(--bg-primary);
+    color: var(--text-secondary);
     border: 1px solid #6c757d;
   }
 
   .btn-secondary:hover:not(:disabled) {
-    background: #f8f9fa;
+    background: var(--bg-secondary);
   }
 
   .guest-signup {
     margin-top: 0.5rem;
     padding-top: 1.5rem;
-    border-top: 1px solid #dee2e6;
+    border-top: 1px solid var(--border-color);
   }
 
   .guest-signup-title {
     margin: 0 0 0.35rem 0;
-    color: #1a1a1a;
+    color: var(--text-primary);
     font-size: 1.25rem;
   }
 
   .guest-signup-subtitle {
     margin: 0 0 1.25rem 0;
-    color: #6c757d;
+    color: var(--text-secondary);
     font-size: 0.95rem;
   }
 
@@ -868,7 +868,7 @@
   .guest-form-actions {
     margin-top: 1.5rem;
     padding-top: 1rem;
-    border-top: 1px solid #dee2e6;
+    border-top: 1px solid var(--border-color);
     display: flex;
     flex-direction: column;
     align-items: stretch;
@@ -884,7 +884,7 @@
   .guest-login-hint {
     margin: 0;
     text-align: center;
-    color: #6c757d;
+    color: var(--text-secondary);
     font-size: 0.9rem;
   }
 
@@ -892,7 +892,7 @@
     background: none;
     border: none;
     padding: 0;
-    color: #007bff;
+    color: var(--primary-color);
     font-weight: 600;
     cursor: pointer;
     text-decoration: underline;
@@ -900,7 +900,7 @@
   }
 
   .link-button:hover {
-    color: #0056b3;
+    color: var(--link-hover);
   }
 </style>
 

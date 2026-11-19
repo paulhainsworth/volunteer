@@ -373,18 +373,18 @@
 
   .header h1 {
     margin: 0;
-    color: #1a1a1a;
+    color: var(--text-primary);
   }
 
   .loading,
   .error {
     text-align: center;
     padding: 3rem;
-    color: #6c757d;
+    color: var(--text-secondary);
   }
 
   .error {
-    color: #dc3545;
+    color: var(--danger-color);
   }
 
   .stats-grid {
@@ -395,7 +395,7 @@
   }
 
   .stat-card {
-    background: white;
+    background: var(--bg-primary);
     padding: 1.5rem;
     border-radius: 12px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
@@ -405,12 +405,12 @@
 
   .stat-card.critical {
     border: 2px solid #dc3545;
-    background: #fff5f5;
+    background: var(--danger-surface);
   }
 
   .stat-card.critical-flagged {
     border: 2px solid #dc3545;
-    background: #fff5f5;
+    background: var(--danger-surface);
   }
 
   .critical-overview {
@@ -421,13 +421,13 @@
 
   .critical-summary {
     padding: 0.75rem 1rem;
-    background: #f8f9fa;
+    background: var(--bg-secondary);
     border-radius: 8px;
-    color: #495057;
+    color: var(--text-muted);
   }
 
   .critical-summary .fill-pct {
-    color: #6c757d;
+    color: var(--text-secondary);
     font-weight: normal;
   }
 
@@ -442,19 +442,19 @@
   .stat-value {
     font-size: 2rem;
     font-weight: bold;
-    color: #1a1a1a;
+    color: var(--text-primary);
     line-height: 1;
   }
 
   .stat-label {
     font-size: 0.9rem;
-    color: #6c757d;
+    color: var(--text-secondary);
     margin-top: 0.25rem;
   }
 
   .progress-bar {
     height: 8px;
-    background: #e9ecef;
+    background: var(--bg-tertiary);
     border-radius: 4px;
     overflow: hidden;
     margin-top: 0.5rem;
@@ -467,7 +467,7 @@
   }
 
   .dashboard-section {
-    background: white;
+    background: var(--bg-primary);
     padding: 2rem;
     border-radius: 12px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
@@ -476,11 +476,11 @@
 
   .dashboard-section h2 {
     margin: 0 0 0.5rem 0;
-    color: #1a1a1a;
+    color: var(--text-primary);
   }
 
   .section-description {
-    color: #6c757d;
+    color: var(--text-secondary);
     margin-bottom: 1.5rem;
   }
 
@@ -496,15 +496,15 @@
   th {
     text-align: left;
     padding: 0.75rem;
-    background: #f8f9fa;
+    background: var(--bg-secondary);
     font-weight: 600;
-    color: #495057;
-    border-bottom: 2px solid #dee2e6;
+    color: var(--text-muted);
+    border-bottom: 2px solid var(--border-color);
   }
 
   td {
     padding: 1rem 0.75rem;
-    border-bottom: 1px solid #dee2e6;
+    border-bottom: 1px solid var(--border-color);
   }
 
   .urgent-tag {
@@ -519,7 +519,7 @@
 
   small {
     display: block;
-    color: #6c757d;
+    color: var(--text-secondary);
     font-size: 0.85rem;
   }
 
@@ -531,29 +531,29 @@
   }
 
   .fill-status.full {
-    background: #d4edda;
-    color: #155724;
+    background: var(--success-surface);
+    color: var(--success-text);
   }
 
   .fill-status.almost-full {
-    background: #fff3cd;
-    color: #856404;
+    background: var(--warning-surface);
+    color: var(--warning-text);
   }
 
   .fill-status.half-full {
-    background: #f8d7da;
-    color: #721c24;
+    background: var(--danger-surface);
+    color: var(--danger-text);
   }
 
   .fill-status.low {
-    background: #f8d7da;
-    color: #721c24;
+    background: var(--danger-surface);
+    color: var(--danger-text);
   }
 
   .role-subtext {
     margin-top: 0.25rem;
     font-size: 0.85rem;
-    color: #6c757d;
+    color: var(--text-secondary);
   }
 
   .fill-percent {
@@ -567,7 +567,7 @@
   }
 
   .event-card {
-    border: 1px solid #dee2e6;
+    border: 1px solid var(--border-color);
     border-radius: 8px;
     padding: 1.5rem;
   }
@@ -584,11 +584,11 @@
   .event-header h3 {
     margin: 0;
     font-size: 1.2rem;
-    color: #1a1a1a;
+    color: var(--text-primary);
   }
 
   .event-stats {
-    color: #6c757d;
+    color: var(--text-secondary);
     font-size: 0.9rem;
   }
 
@@ -610,23 +610,23 @@
   }
 
   .mini-role-card.full {
-    background: #d4edda;
-    border-color: #c3e6cb;
+    background: var(--success-surface);
+    border-color: var(--success-border);
   }
 
   .mini-role-card.almost-full {
-    background: #fff3cd;
-    border-color: #ffeeba;
+    background: var(--warning-surface);
+    border-color: var(--warning-border);
   }
 
   .mini-role-card.half-full {
-    background: #f8d7da;
-    border-color: #f5c6cb;
+    background: var(--danger-surface);
+    border-color: var(--danger-border);
   }
 
   .mini-role-card.low {
-    background: #f8d7da;
-    border-color: #f5c6cb;
+    background: var(--danger-surface);
+    border-color: var(--danger-border);
   }
 
   .role-name {
@@ -645,7 +645,7 @@
 
   .action-card {
     padding: 2rem;
-    border: 2px solid #dee2e6;
+    border: 2px solid var(--border-color);
     border-radius: 12px;
     text-decoration: none;
     color: inherit;
@@ -653,7 +653,7 @@
   }
 
   .action-card:hover {
-    border-color: #007bff;
+    border-color: var(--primary-color);
     transform: translateY(-2px);
     box-shadow: 0 4px 12px rgba(0, 123, 255, 0.15);
   }
@@ -666,12 +666,12 @@
   .action-title {
     font-size: 1.2rem;
     font-weight: 600;
-    color: #1a1a1a;
+    color: var(--text-primary);
     margin-bottom: 0.5rem;
   }
 
   .action-description {
-    color: #6c757d;
+    color: var(--text-secondary);
     font-size: 0.9rem;
   }
 
@@ -696,13 +696,13 @@
   }
 
   .btn-secondary {
-    background: white;
-    color: #007bff;
-    border: 1px solid #007bff;
+    background: var(--bg-primary);
+    color: var(--primary-color);
+    border: 1px solid var(--primary-color);
   }
 
   .btn-secondary:hover {
-    background: #f8f9fa;
+    background: var(--bg-secondary);
   }
 
   .btn-sm {

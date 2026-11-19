@@ -487,7 +487,7 @@
 
 <style>
   .nica-coaches-card {
-    background: white;
+    background: var(--bg-primary);
     border-radius: 12px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     padding: 1.25rem;
@@ -500,8 +500,8 @@
     gap: 0.75rem;
     padding: 0.85rem 1rem;
     margin: 0 0 1rem;
-    background: #f8fafc;
-    border: 1px solid #e5e7eb;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
     border-radius: 10px;
   }
 
@@ -539,26 +539,26 @@
 
   .digest-toggle-title {
     font-weight: 600;
-    color: #111827;
+    color: var(--text-primary);
     font-size: 0.95rem;
   }
 
   .digest-toggle-help {
     font-size: 0.85rem;
-    color: #4b5563;
+    color: var(--text-muted);
     line-height: 1.45;
   }
 
   .digest-toggle-saving {
     font-size: 0.85rem;
-    color: #6b7280;
+    color: var(--text-secondary);
     flex-shrink: 0;
   }
 
   .nica-coaches-lead {
     margin: 0 0 1rem;
     font-size: 0.95rem;
-    color: #374151;
+    color: var(--text-muted);
     line-height: 1.5;
   }
 
@@ -578,7 +578,7 @@
   .nica-coaches-form-row input,
   .nica-coaches-form-row select {
     padding: 0.45rem 0.55rem;
-    border: 1px solid #ced4da;
+    border: 1px solid var(--input-border);
     border-radius: 8px;
     font-size: 0.9rem;
     min-width: 0;
@@ -610,13 +610,13 @@
   }
 
   .form-error {
-    color: #b02a37;
+    color: var(--danger-text);
     font-size: 0.9rem;
     margin: 0.75rem 0 0;
   }
 
   .muted {
-    color: #6c757d;
+    color: var(--text-secondary);
     margin: 1rem 0 0;
     font-size: 0.95rem;
   }
@@ -636,13 +636,13 @@
   .coaches-table td {
     text-align: left;
     padding: 0.6rem 0.75rem;
-    border-bottom: 1px solid #e9ecef;
+    border-bottom: 1px solid var(--border-color);
   }
 
   .coaches-table th {
-    background: #f6f8fa;
+    background: var(--bg-secondary);
     font-weight: 600;
-    color: #1a1a1a;
+    color: var(--text-primary);
   }
 
   tr.clickable {
@@ -650,7 +650,7 @@
   }
 
   tr.clickable:hover {
-    background: #f8fafc;
+    background: var(--bg-secondary);
   }
 
   .cell-email {
@@ -681,7 +681,7 @@
   }
 
   .coach-modal {
-    background: white;
+    background: var(--bg-primary);
     border-radius: 12px;
     max-width: 480px;
     width: 100%;
@@ -700,7 +700,7 @@
     font-size: 1.5rem;
     line-height: 1;
     cursor: pointer;
-    color: #6c757d;
+    color: var(--text-secondary);
   }
 
   .coach-modal h2 {
@@ -720,13 +720,13 @@
     gap: 0.35rem;
     font-size: 0.88rem;
     font-weight: 500;
-    color: #374151;
+    color: var(--text-muted);
   }
 
   .modal-fields input,
   .modal-fields select {
     padding: 0.5rem 0.6rem;
-    border: 1px solid #ced4da;
+    border: 1px solid var(--input-border);
     border-radius: 8px;
     font-size: 0.95rem;
   }
@@ -747,8 +747,8 @@
   }
 
   .btn-danger-outline {
-    background: white;
-    color: #c82333;
+    background: var(--bg-primary);
+    color: var(--danger-text);
     border: 1px solid #dc3545;
     padding: 0.45rem 0.85rem;
     border-radius: 8px;
@@ -757,7 +757,7 @@
   }
 
   .btn-danger-outline:hover:not(:disabled) {
-    background: #fff5f5;
+    background: var(--danger-surface);
   }
 
   .btn-danger-outline:disabled {

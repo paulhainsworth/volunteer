@@ -668,11 +668,11 @@ Berkeley Omnium Volunteer Team`;
 
   .header h1 {
     margin: 0 0 0.5rem 0;
-    color: #1a1a1a;
+    color: var(--text-primary);
   }
 
   .header p {
-    color: #6c757d;
+    color: var(--text-secondary);
     margin: 0;
   }
 
@@ -683,20 +683,20 @@ Berkeley Omnium Volunteer Team`;
   }
 
   .alert-error {
-    background: #f8d7da;
-    color: #721c24;
-    border: 1px solid #f5c6cb;
+    background: var(--danger-surface);
+    color: var(--danger-text);
+    border: 1px solid var(--danger-border);
   }
 
   .alert-success {
-    background: #d4edda;
-    color: #155724;
-    border: 1px solid #c3e6cb;
+    background: var(--success-surface);
+    color: var(--success-text);
+    border: 1px solid var(--success-border);
   }
 
   .send-diagnostics {
-    background: #fff8e6;
-    border: 1px solid #e6cf8f;
+    background: var(--warning-surface);
+    border: 1px solid var(--warning-border);
     border-radius: 8px;
     padding: 1rem 1.25rem;
     margin-bottom: 1.5rem;
@@ -706,12 +706,12 @@ Berkeley Omnium Volunteer Team`;
   .diagnostics-title {
     margin: 0 0 0.5rem 0;
     font-size: 1rem;
-    color: #5c4a00;
+    color: var(--warning-text);
   }
 
   .diagnostics-intro {
     margin: 0 0 0.75rem 0;
-    color: #4a4a4a;
+    color: var(--text-muted);
     line-height: 1.45;
   }
 
@@ -730,14 +730,14 @@ Berkeley Omnium Volunteer Team`;
     font-size: 0.75rem;
     text-transform: uppercase;
     letter-spacing: 0.03em;
-    color: #6c757d;
+    color: var(--text-secondary);
     margin-bottom: 0.25rem;
   }
 
   .diag-detail {
     display: inline-block;
     margin-top: 0.35rem;
-    color: #333;
+    color: var(--text-primary);
     white-space: pre-wrap;
     word-break: break-word;
   }
@@ -754,7 +754,7 @@ Berkeley Omnium Volunteer Team`;
   .loading {
     text-align: center;
     padding: 3rem;
-    color: #6c757d;
+    color: var(--text-secondary);
   }
 
   .automated-email-card {
@@ -763,8 +763,8 @@ Berkeley Omnium Volunteer Team`;
     gap: 0.75rem;
     padding: 1rem 1.15rem;
     margin-bottom: 1.5rem;
-    background: #f8fafc;
-    border: 1px solid #e5e7eb;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
     border-radius: 10px;
   }
 
@@ -802,24 +802,24 @@ Berkeley Omnium Volunteer Team`;
 
   .automated-email-title {
     font-weight: 600;
-    color: #111827;
+    color: var(--text-primary);
     font-size: 0.98rem;
   }
 
   .automated-email-help {
     font-size: 0.88rem;
-    color: #4b5563;
+    color: var(--text-muted);
     line-height: 1.45;
   }
 
   .automated-email-saving {
     font-size: 0.85rem;
-    color: #6b7280;
+    color: var(--text-secondary);
     flex-shrink: 0;
   }
 
   .email-composer {
-    background: white;
+    background: var(--bg-primary);
     border-radius: 12px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     padding: 2rem;
@@ -829,7 +829,7 @@ Berkeley Omnium Volunteer Team`;
   .form-section {
     margin-bottom: 2rem;
     padding-bottom: 2rem;
-    border-bottom: 1px solid #dee2e6;
+    border-bottom: 1px solid var(--border-color);
   }
 
   .form-section:last-child {
@@ -840,7 +840,7 @@ Berkeley Omnium Volunteer Team`;
 
   .form-section h3 {
     margin: 0 0 1rem 0;
-    color: #1a1a1a;
+    color: var(--text-primary);
   }
 
   .form-group {
@@ -860,7 +860,7 @@ Berkeley Omnium Volunteer Team`;
   .select-input {
     width: 100%;
     padding: 0.75rem;
-    border: 1px solid #ced4da;
+    border: 1px solid var(--input-border);
     border-radius: 6px;
     font-size: 1rem;
     margin-top: 0.5rem;
@@ -869,9 +869,9 @@ Berkeley Omnium Volunteer Team`;
   .recipient-count {
     margin-top: 1rem;
     padding: 1rem;
-    background: #e7f3ff;
+    background: var(--info-surface);
     border-radius: 6px;
-    color: #004085;
+    color: var(--info-text);
   }
 
   .merge-fields {
@@ -881,19 +881,19 @@ Berkeley Omnium Volunteer Team`;
     flex-wrap: wrap;
     margin-bottom: 1rem;
     padding: 1rem;
-    background: #f8f9fa;
+    background: var(--bg-secondary);
     border-radius: 6px;
   }
 
   .merge-label {
     font-weight: 600;
-    color: #495057;
+    color: var(--text-muted);
   }
 
   .btn-merge {
     padding: 0.25rem 0.75rem;
-    background: white;
-    border: 1px solid #ced4da;
+    background: var(--bg-primary);
+    border: 1px solid var(--input-border);
     border-radius: 4px;
     font-size: 0.875rem;
     cursor: pointer;
@@ -903,14 +903,14 @@ Berkeley Omnium Volunteer Team`;
   .btn-merge:hover {
     background: #007bff;
     color: white;
-    border-color: #007bff;
+    border-color: var(--primary-color);
   }
 
   input[type="text"],
   textarea {
     width: 100%;
     padding: 0.75rem;
-    border: 1px solid #ced4da;
+    border: 1px solid var(--input-border);
     border-radius: 6px;
     font-size: 1rem;
     font-family: inherit;
@@ -919,7 +919,7 @@ Berkeley Omnium Volunteer Team`;
   input:focus,
   textarea:focus {
     outline: none;
-    border-color: #007bff;
+    border-color: var(--primary-color);
     box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
   }
 
@@ -965,8 +965,8 @@ Berkeley Omnium Volunteer Team`;
   }
 
   .help-section {
-    background: #fff3cd;
-    border: 1px solid #ffeeba;
+    background: var(--warning-surface);
+    border: 1px solid var(--warning-border);
     border-radius: 8px;
     padding: 1.5rem;
     margin-bottom: 2rem;
@@ -974,13 +974,13 @@ Berkeley Omnium Volunteer Team`;
 
   .help-section h3 {
     margin: 0 0 1rem 0;
-    color: #856404;
+    color: var(--warning-text);
   }
 
   .help-section ul {
     margin: 0;
     padding-left: 1.5rem;
-    color: #856404;
+    color: var(--warning-text);
   }
 
   .help-section li {
@@ -988,7 +988,7 @@ Berkeley Omnium Volunteer Team`;
   }
 
   .help-section code {
-    background: white;
+    background: var(--bg-primary);
     padding: 0.125rem 0.375rem;
     border-radius: 3px;
     font-size: 0.9em;

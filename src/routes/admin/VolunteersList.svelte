@@ -1596,11 +1596,11 @@
 
   .header h1 {
     margin: 0 0 0.5rem 0;
-    color: #1a1a1a;
+    color: var(--text-primary);
   }
 
   .header p {
-    color: #6c757d;
+    color: var(--text-secondary);
     margin: 0;
   }
 
@@ -1634,9 +1634,9 @@
     min-width: 11rem;
     padding: 0.45rem 0.65rem;
     border-radius: 8px;
-    border: 1px solid #ced4da;
+    border: 1px solid var(--input-border);
     font-size: 0.9rem;
-    background: #fff;
+    background: var(--bg-primary);
   }
 
   .nica-pdf-select:disabled {
@@ -1652,20 +1652,20 @@
     padding: 1rem;
     border-radius: 8px;
     margin-bottom: 1.5rem;
-    background: #f8d7da;
-    color: #721c24;
-    border: 1px solid #f5c6cb;
+    background: var(--danger-surface);
+    color: var(--danger-text);
+    border: 1px solid var(--danger-border);
   }
 
   .loading,
   .empty {
     text-align: center;
     padding: 3rem;
-    color: #6c757d;
+    color: var(--text-secondary);
   }
 
   .empty h2 {
-    color: #1a1a1a;
+    color: var(--text-primary);
     margin-bottom: 0.5rem;
   }
 
@@ -1687,7 +1687,7 @@
   }
 
   .nica-summary-card {
-    background: white;
+    background: var(--bg-primary);
     border-radius: 12px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     padding: 1.25rem;
@@ -1696,7 +1696,7 @@
 
   .nica-summary-card h2 {
     margin: 0 0 1rem 0;
-    color: #1a1a1a;
+    color: var(--text-primary);
     font-size: 1.1rem;
   }
 
@@ -1716,7 +1716,7 @@
 
   .nica-copy-feedback {
     font-size: 0.9rem;
-    color: #198754;
+    color: var(--success-color);
     font-weight: 600;
   }
 
@@ -1729,13 +1729,13 @@
   .nica-summary-table td {
     padding: 0.75rem;
     text-align: left;
-    border-bottom: 1px solid #dee2e6;
+    border-bottom: 1px solid var(--border-color);
   }
 
   .nica-summary-table th {
-    background: #f8f9fa;
+    background: var(--bg-secondary);
     font-weight: 600;
-    color: #495057;
+    color: var(--text-muted);
   }
 
   .search-box {
@@ -1746,14 +1746,14 @@
   .search-box input {
     width: 100%;
     padding: 0.75rem;
-    border: 1px solid #ced4da;
+    border: 1px solid var(--input-border);
     border-radius: 6px;
     font-size: 1rem;
   }
 
   .search-box input:focus {
     outline: none;
-    border-color: #007bff;
+    border-color: var(--primary-color);
     box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
   }
 
@@ -1767,31 +1767,31 @@
   .filter-affiliation .filter-label {
     font-size: 0.875rem;
     font-weight: 600;
-    color: #495057;
+    color: var(--text-muted);
     white-space: nowrap;
   }
 
   .filter-affiliation select {
     min-width: 200px;
     padding: 0.75rem;
-    border: 1px solid #ced4da;
+    border: 1px solid var(--input-border);
     border-radius: 6px;
     font-size: 1rem;
-    background: white;
+    background: var(--bg-primary);
     height: 2.75rem;
     box-sizing: border-box;
   }
 
   .filter-affiliation select:focus {
     outline: none;
-    border-color: #007bff;
+    border-color: var(--primary-color);
     box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
   }
 
   .view-toggle {
     display: flex;
     gap: 0.5rem;
-    background: white;
+    background: var(--bg-primary);
     border-radius: 6px;
     padding: 0.25rem;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
@@ -1807,13 +1807,13 @@
     border-radius: 4px;
     cursor: pointer;
     font-weight: 500;
-    color: #6c757d;
+    color: var(--text-secondary);
     transition: all 0.2s;
   }
 
   .view-btn:hover {
-    background: #f8f9fa;
-    color: #1a1a1a;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
   }
 
   .view-btn.active {
@@ -1826,7 +1826,7 @@
   }
 
   .table-view {
-    background: white;
+    background: var(--bg-primary);
     border-radius: 12px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     overflow: hidden;
@@ -1838,12 +1838,12 @@
   }
 
   .table-view th {
-    background: #f8f9fa;
+    background: var(--bg-secondary);
     padding: 1rem 0.75rem;
     text-align: left;
     font-weight: 600;
-    color: #495057;
-    border-bottom: 2px solid #dee2e6;
+    color: var(--text-muted);
+    border-bottom: 2px solid var(--border-color);
     white-space: nowrap;
   }
 
@@ -1854,17 +1854,17 @@
   }
 
   .table-view th.sortable:hover {
-    background: #e9ecef;
+    background: var(--bg-tertiary);
   }
 
   .sort-arrow {
     margin-left: 0.5rem;
-    color: #007bff;
+    color: var(--primary-color);
   }
 
   .table-view td {
     padding: 1rem 0.75rem;
-    border-bottom: 1px solid #dee2e6;
+    border-bottom: 1px solid var(--border-color);
   }
 
   .table-view tr.clickable-row {
@@ -1873,7 +1873,7 @@
   }
 
   .table-view tr.clickable-row:hover {
-    background: #e9ecef;
+    background: var(--bg-tertiary);
   }
 
   .text-center {
@@ -1902,13 +1902,13 @@
   }
 
   .waiver-badge.signed {
-    background: #d4edda;
-    color: #155724;
+    background: var(--success-surface);
+    color: var(--success-text);
   }
 
   .waiver-badge.unsigned {
-    background: #f8d7da;
-    color: #721c24;
+    background: var(--danger-surface);
+    color: var(--danger-text);
   }
 
   .volunteers-grid {
@@ -1918,8 +1918,8 @@
   }
 
   .volunteer-card {
-    background: white;
-    border: 1px solid #dee2e6;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
     border-radius: 12px;
     padding: 1.5rem;
     transition: box-shadow 0.2s;
@@ -1939,13 +1939,13 @@
 
   .volunteer-info h3 {
     margin: 0 0 0.5rem 0;
-    color: #1a1a1a;
+    color: var(--text-primary);
   }
 
   .email-link,
   .phone-link {
     display: block;
-    color: #007bff;
+    color: var(--primary-color);
     text-decoration: none;
     font-size: 0.9rem;
     margin-top: 0.25rem;
@@ -1965,15 +1965,15 @@
   .emergency-contact {
     margin-top: 0.5rem;
     padding: 0.5rem;
-    background: #fff3cd;
+    background: var(--warning-surface);
     border-left: 3px solid #ffc107;
     border-radius: 4px;
     font-size: 0.85rem;
-    color: #856404;
+    color: var(--warning-text);
   }
 
   .emergency-contact a {
-    color: #007bff;
+    color: var(--primary-color);
     text-decoration: none;
   }
 
@@ -1983,7 +1983,7 @@
 
   .phone-display {
     font-size: 0.85rem;
-    color: #6c757d;
+    color: var(--text-secondary);
     margin-top: 0.25rem;
   }
 
@@ -1995,7 +1995,7 @@
   .stat-badge {
     text-align: center;
     padding: 0.5rem;
-    background: #f8f9fa;
+    background: var(--bg-secondary);
     border-radius: 6px;
   }
 
@@ -2003,13 +2003,13 @@
     display: block;
     font-size: 1.25rem;
     font-weight: bold;
-    color: #007bff;
+    color: var(--primary-color);
   }
 
   .stat-label {
     display: block;
     font-size: 0.75rem;
-    color: #6c757d;
+    color: var(--text-secondary);
   }
 
   .volunteer-details {
@@ -2017,8 +2017,8 @@
     flex-direction: column;
     gap: 0.5rem;
     padding: 1rem 0;
-    border-top: 1px solid #dee2e6;
-    border-bottom: 1px solid #dee2e6;
+    border-top: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-color);
     margin-bottom: 1rem;
   }
 
@@ -2030,15 +2030,15 @@
 
   .label {
     font-weight: 600;
-    color: #495057;
+    color: var(--text-muted);
   }
 
   .value {
-    color: #6c757d;
+    color: var(--text-secondary);
   }
 
   .value.success {
-    color: #28a745;
+    color: var(--success-color);
   }
 
   .value.warning {
@@ -2054,24 +2054,24 @@
   }
 
   .role-badge.admin {
-    background: #e7f3ff;
-    color: #004085;
+    background: var(--info-surface);
+    color: var(--info-text);
   }
 
   .role-badge.volunteer_leader {
-    background: #fff3cd;
-    color: #856404;
+    background: var(--warning-surface);
+    color: var(--warning-text);
   }
 
   .role-badge.volunteer {
-    background: #f8f9fa;
-    color: #495057;
+    background: var(--bg-secondary);
+    color: var(--text-muted);
   }
 
   .signups-section h4 {
     margin: 0 0 0.75rem 0;
     font-size: 1rem;
-    color: #495057;
+    color: var(--text-muted);
   }
 
   .signups-list {
@@ -2084,7 +2084,7 @@
     display: flex;
     justify-content: space-between;
     padding: 0.5rem;
-    background: #f8f9fa;
+    background: var(--bg-secondary);
     border-radius: 6px;
     font-size: 0.9rem;
   }
@@ -2094,13 +2094,13 @@
   }
 
   .signup-date {
-    color: #6c757d;
+    color: var(--text-secondary);
   }
 
   .volunteer-actions {
     margin-top: 1rem;
     padding-top: 1rem;
-    border-top: 1px solid #dee2e6;
+    border-top: 1px solid var(--border-color);
     display: flex;
     gap: 0.5rem;
   }
@@ -2115,17 +2115,17 @@
   }
 
   .btn-secondary {
-    background: white;
-    color: #007bff;
-    border: 1px solid #007bff;
+    background: var(--bg-primary);
+    color: var(--primary-color);
+    border: 1px solid var(--primary-color);
   }
 
   .btn-secondary:hover {
-    background: #f8f9fa;
+    background: var(--bg-secondary);
   }
 
   .btn-warning {
-    background: white;
+    background: var(--bg-primary);
     color: #ffc107;
     border: 1px solid #ffc107;
   }
@@ -2136,7 +2136,7 @@
   }
 
   .btn-info {
-    background: white;
+    background: var(--bg-primary);
     color: #17a2b8;
     border: 1px solid #17a2b8;
   }
@@ -2162,7 +2162,7 @@
   }
 
   .modal-content {
-    background: white;
+    background: var(--bg-primary);
     border-radius: 16px;
     max-width: 600px;
     width: 100%;
@@ -2176,7 +2176,7 @@
     position: absolute;
     top: 1rem;
     right: 1rem;
-    background: #f8f9fa;
+    background: var(--bg-secondary);
     border: none;
     width: 36px;
     height: 36px;
@@ -2186,31 +2186,31 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #6c757d;
+    color: var(--text-secondary);
     transition: background 0.2s, color 0.2s;
     z-index: 1;
   }
 
   .modal-close:hover {
-    background: #e2e3e5;
-    color: #1a1a1a;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
   }
 
   .modal-header {
     padding: 2rem 2rem 1rem 2rem;
-    border-bottom: 1px solid #dee2e6;
+    border-bottom: 1px solid var(--border-color);
     padding-right: 4rem;
   }
 
   .modal-header h2 {
     margin: 0 0 0.5rem 0;
-    color: #1a1a1a;
+    color: var(--text-primary);
     font-size: 1.5rem;
   }
 
   .modal-subtitle {
     margin: 0;
-    color: #6c757d;
+    color: var(--text-secondary);
     font-size: 0.9rem;
   }
 
@@ -2221,13 +2221,13 @@
   .section-header {
     margin: 1.5rem 0 1rem 0;
     padding-top: 1.5rem;
-    border-top: 1px solid #dee2e6;
+    border-top: 1px solid var(--border-color);
   }
 
   .section-header h3 {
     margin: 0;
     font-size: 1.1rem;
-    color: #495057;
+    color: var(--text-muted);
   }
 
   .form-row {
@@ -2244,14 +2244,14 @@
     display: block;
     margin-bottom: 0.5rem;
     font-weight: 600;
-    color: #1a1a1a;
+    color: var(--text-primary);
   }
 
   .form-group input,
   .form-group select {
     width: 100%;
     padding: 0.75rem;
-    border: 1px solid #ced4da;
+    border: 1px solid var(--input-border);
     border-radius: 6px;
     font-size: 1rem;
     font-family: inherit;
@@ -2260,20 +2260,20 @@
   .form-group input:focus,
   .form-group select:focus {
     outline: none;
-    border-color: #007bff;
+    border-color: var(--primary-color);
     box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
   }
 
   .form-group input:disabled,
   .form-group select:disabled {
-    background: #f8f9fa;
+    background: var(--bg-secondary);
     cursor: not-allowed;
   }
 
   .form-group small {
     display: block;
     margin-top: 0.25rem;
-    color: #6c757d;
+    color: var(--text-secondary);
     font-size: 0.875rem;
   }
 
@@ -2281,13 +2281,13 @@
     margin-bottom: 1rem;
   }
   .add-volunteer-suggestions--loading {
-    color: #6c757d;
+    color: var(--text-secondary);
     font-size: 0.9rem;
   }
   .add-volunteer-suggestions-intro {
     display: block;
     font-size: 0.85rem;
-    color: #6c757d;
+    color: var(--text-secondary);
     margin-bottom: 0.5rem;
   }
   .add-volunteer-suggestions-list {
@@ -2300,33 +2300,33 @@
     flex-direction: column;
     align-items: flex-start;
     padding: 0.5rem 0.75rem;
-    border: 1px solid #dee2e6;
+    border: 1px solid var(--border-color);
     border-radius: 8px;
-    background: #f8f9fa;
+    background: var(--bg-secondary);
     cursor: pointer;
     font-size: 0.9rem;
     text-align: left;
   }
   .add-volunteer-suggestion-chip:hover {
-    border-color: #0d6efd;
-    background: #e7f1ff;
+    border-color: var(--primary-color);
+    background: var(--info-surface);
   }
   .add-volunteer-suggestion-chip .name {
     font-weight: 600;
   }
   .add-volunteer-suggestion-chip .email {
-    color: #0d6efd;
+    color: var(--primary-color);
     font-size: 0.85rem;
   }
   .add-volunteer-suggestion-chip .badge {
     font-size: 0.7rem;
-    color: #6c757d;
+    color: var(--text-secondary);
     margin-top: 2px;
   }
 
   .modal-actions {
     padding: 1.5rem 2rem 2rem 2rem;
-    border-top: 1px solid #dee2e6;
+    border-top: 1px solid var(--border-color);
     display: flex;
     gap: 1rem;
     justify-content: flex-end;
@@ -2406,7 +2406,7 @@
   .no-roles {
     padding: 1rem;
     text-align: center;
-    color: #6c757d;
+    color: var(--text-secondary);
     font-size: 0.9rem;
   }
 
@@ -2414,7 +2414,7 @@
   .assign-section h4 {
     margin: 0 0 1rem 0;
     font-size: 0.95rem;
-    color: #495057;
+    color: var(--text-muted);
     font-weight: 600;
   }
 
@@ -2430,7 +2430,7 @@
     justify-content: space-between;
     align-items: center;
     padding: 0.75rem;
-    background: #f8f9fa;
+    background: var(--bg-secondary);
     border-radius: 8px;
     gap: 1rem;
   }
@@ -2442,13 +2442,13 @@
   }
 
   .signup-info strong {
-    color: #1a1a1a;
+    color: var(--text-primary);
     font-size: 0.95rem;
   }
 
   .signup-meta {
     font-size: 0.85rem;
-    color: #6c757d;
+    color: var(--text-secondary);
   }
 
   .assign-section {
@@ -2476,7 +2476,7 @@
   }
 
   .role-selector select option:disabled {
-    color: #dc3545;
+    color: var(--danger-color);
     font-style: italic;
   }
 

@@ -1358,30 +1358,30 @@ Examples:
 
   .header h1 {
     margin: 0 0 0.5rem 0;
-    color: #1a1a1a;
+    color: var(--text-primary);
   }
 
   .header p {
-    color: #6c757d;
+    color: var(--text-secondary);
     margin: 0;
   }
 
   .email-form-card {
-    background: white;
+    background: var(--bg-primary);
     padding: 2rem;
     border-radius: 12px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
     margin-bottom: 2rem;
-    border: 1px solid #007bff;
+    border: 1px solid var(--primary-color);
   }
 
   .email-form-card h3 {
     margin: 0 0 0.5rem 0;
-    color: #1a1a1a;
+    color: var(--text-primary);
   }
 
   .email-info {
-    color: #6c757d;
+    color: var(--text-secondary);
     margin-bottom: 1.25rem;
     font-size: 0.95rem;
   }
@@ -1400,7 +1400,7 @@ Examples:
   .form-group textarea {
     width: 100%;
     padding: 0.75rem;
-    border: 1px solid #ced4da;
+    border: 1px solid var(--input-border);
     border-radius: 8px;
     font-size: 1rem;
     transition: border 0.2s, box-shadow 0.2s;
@@ -1409,7 +1409,7 @@ Examples:
   .form-group input:focus,
   .form-group textarea:focus {
     outline: none;
-    border-color: #007bff;
+    border-color: var(--primary-color);
     box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.15);
   }
 
@@ -1426,9 +1426,9 @@ Examples:
   }
 
   .role-card {
-    background: #fff;
+    background: var(--bg-primary);
     border-radius: 16px;
-    border: 1px solid #e2e8f0;
+    border: 1px solid var(--border-color);
     box-shadow: 0 22px 40px -25px rgba(15, 23, 42, 0.35);
     overflow: hidden;
   }
@@ -1458,7 +1458,7 @@ Examples:
   .role-card__title-row h2 {
     margin: 0;
     font-size: 1.3rem;
-    color: #16213e;
+    color: var(--text-primary);
   }
 
   .filled-pill {
@@ -1468,14 +1468,14 @@ Examples:
     padding: 0.35rem 0.9rem;
     border-radius: 999px;
     background: rgba(13, 110, 253, 0.12);
-    color: #0b4ba5;
+    color: var(--info-text);
     font-weight: 600;
     font-size: 0.85rem;
   }
 
   .role-subtitle {
     margin: 0.45rem 0 0;
-    color: #4b5b76;
+    color: var(--text-secondary);
     display: flex;
     gap: 0.4rem;
     flex-wrap: wrap;
@@ -1500,9 +1500,9 @@ Examples:
     gap: 0.4rem;
     padding: 0.6rem 1.25rem;
     border-radius: 12px;
-    background: #fff;
-    border: 1px solid #0d6efd;
-    color: #0d6efd;
+    background: var(--bg-primary);
+    border: 1px solid var(--primary-color);
+    color: var(--primary-color);
     font-weight: 600;
     font-size: 0.92rem;
     cursor: pointer;
@@ -1510,7 +1510,7 @@ Examples:
   }
 
   .share-link-btn:hover:not(:disabled) {
-    background: #edf4ff;
+    background: var(--info-surface);
     box-shadow: 0 10px 20px -12px rgba(13, 110, 253, 0.45);
     transform: translateY(-1px);
   }
@@ -1522,7 +1522,7 @@ Examples:
 
   .share-message {
     font-size: 0.85rem;
-    color: #0d6efd;
+    color: var(--primary-color);
     font-weight: 600;
   }
 
@@ -1538,16 +1538,16 @@ Examples:
 
   .volunteer-table.compact th,
   .volunteer-table.compact td {
-    border-bottom: 1px solid #e2e8f0;
+    border-bottom: 1px solid var(--border-color);
     padding: 0.85rem 1rem;
   }
 
   .volunteer-table.compact thead th {
-    background: #f8fafc;
+    background: var(--bg-secondary);
     text-transform: uppercase;
     font-size: 0.75rem;
     letter-spacing: 0.08em;
-    color: #64748b;
+    color: var(--text-secondary);
     text-align: left;
   }
 
@@ -1561,16 +1561,16 @@ Examples:
   }
 
   .volunteer-row:nth-child(even) td {
-    background: #fbfdff;
+    background: var(--bg-primary);
   }
 
   .volunteer-row.editing td {
-    background: #f2f7ff;
+    background: var(--info-surface);
   }
 
   .volunteer-name__text {
     font-weight: 600;
-    color: #1b1f3b;
+    color: var(--text-primary);
   }
 
   .actions-cell {
@@ -1594,7 +1594,7 @@ Examples:
     width: 100%;
     min-width: 130px;
     padding: 0.55rem 0.65rem;
-    border: 1px solid #cbd5e1;
+    border: 1px solid var(--input-border);
     border-radius: 8px;
     font-size: 0.95rem;
     transition: border 0.2s, box-shadow 0.2s;
@@ -1602,7 +1602,7 @@ Examples:
 
   .input:focus {
     outline: none;
-    border-color: #0d6efd;
+    border-color: var(--primary-color);
     box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.18);
   }
 
@@ -1614,8 +1614,8 @@ Examples:
     height: 36px;
     border-radius: 50%;
     border: none;
-    background: #eef2ff;
-    color: #334155;
+    background: var(--info-surface);
+    color: var(--text-muted);
     font-size: 1.2rem;
     cursor: pointer;
     transition: background 0.2s, transform 0.2s;
@@ -1623,7 +1623,7 @@ Examples:
 
   .icon-button:hover,
   .icon-button[aria-expanded="true"] {
-    background: #dbe4ff;
+    background: var(--info-surface);
     transform: translateY(-1px);
   }
 
@@ -1635,10 +1635,10 @@ Examples:
     position: absolute;
     top: 110%;
     right: 0;
-    background: #fff;
+    background: var(--bg-primary);
     border-radius: 12px;
     box-shadow: 0 18px 40px -20px rgba(15, 23, 42, 0.4);
-    border: 1px solid #e2e8f0;
+    border: 1px solid var(--border-color);
     padding: 0.5rem 0;
     min-width: 180px;
     z-index: 10;
@@ -1653,32 +1653,32 @@ Examples:
     padding: 0.6rem 1rem;
     text-align: left;
     font-size: 0.92rem;
-    color: #1f2937;
+    color: var(--text-primary);
     cursor: pointer;
     transition: background 0.2s, color 0.2s;
   }
 
   .actions-menu button:hover {
-    background: #f1f5f9;
-    color: #0f172a;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
   }
 
   .actions-menu button.danger {
-    color: #dc3545;
+    color: var(--danger-color);
   }
 
   .empty-row td {
     text-align: center;
-    color: #64748b;
+    color: var(--text-secondary);
     font-style: italic;
     padding: 1.75rem 1rem;
-    background: #f8fbff;
+    background: var(--info-surface);
   }
 
   .role-footer {
     padding: 1.5rem;
-    border-top: 1px solid #edf2f7;
-    background: #fefeff;
+    border-top: 1px solid var(--border-color);
+    background: var(--bg-primary);
   }
 
   .add-volunteer {
@@ -1709,15 +1709,15 @@ Examples:
   }
 
   .inline-alert.error {
-    background: #fdecea;
-    color: #b02a37;
-    border: 1px solid #f5c2c7;
+    background: var(--danger-surface);
+    color: var(--danger-text);
+    border: 1px solid var(--danger-border);
   }
 
   .inline-alert.success {
-    background: #e6f4ea;
-    color: #1d7530;
-    border: 1px solid #b6e3c1;
+    background: var(--success-surface);
+    color: var(--success-text);
+    border: 1px solid var(--success-border);
   }
 
   .suggestions {
@@ -1727,13 +1727,13 @@ Examples:
   }
 
   .suggestions--loading {
-    color: #6c757d;
+    color: var(--text-secondary);
     font-style: italic;
   }
 
   .suggestions-intro {
     font-size: 0.85rem;
-    color: #6c757d;
+    color: var(--text-secondary);
   }
 
   .suggestions-list {
@@ -1749,8 +1749,8 @@ Examples:
     gap: 0.2rem;
     padding: 0.55rem 0.75rem;
     border-radius: 8px;
-    border: 1px solid #ced4da;
-    background: #fff;
+    border: 1px solid var(--input-border);
+    background: var(--bg-primary);
     cursor: pointer;
     font-size: 0.85rem;
     min-width: 190px;
@@ -1758,28 +1758,28 @@ Examples:
   }
 
   .suggestion-chip:hover {
-    border-color: #0d6efd;
+    border-color: var(--primary-color);
     box-shadow: 0 4px 12px rgba(13, 110, 253, 0.12);
     transform: translateY(-1px);
   }
 
   .suggestion-chip .name {
     font-weight: 600;
-    color: #1a1a1a;
+    color: var(--text-primary);
   }
 
   .suggestion-chip .email {
-    color: #0d6efd;
+    color: var(--primary-color);
   }
 
   .suggestion-chip .phone {
-    color: #6c757d;
+    color: var(--text-secondary);
     font-size: 0.8rem;
   }
 
   .suggestion-chip .suggestion-badge {
     font-size: 0.7rem;
-    color: #6c757d;
+    color: var(--text-secondary);
     margin-top: 2px;
   }
 
@@ -1791,14 +1791,14 @@ Examples:
   .loading {
     text-align: center;
     padding: 3rem 0;
-    color: #6c757d;
+    color: var(--text-secondary);
     font-size: 1.05rem;
   }
 
   .error {
-    background: #fdecea;
-    border: 1px solid #f5c2c7;
-    color: #b02a37;
+    background: var(--danger-surface);
+    border: 1px solid var(--danger-border);
+    color: var(--danger-text);
     padding: 1rem;
     border-radius: 10px;
     text-align: center;
@@ -1806,17 +1806,17 @@ Examples:
   }
 
   .empty {
-    background: white;
+    background: var(--bg-primary);
     padding: 3rem;
     border-radius: 14px;
     text-align: center;
     box-shadow: 0 2px 12px rgba(15, 23, 42, 0.05);
-    color: #6c757d;
+    color: var(--text-secondary);
   }
 
   .empty h2 {
     margin: 0 0 1rem 0;
-    color: #1a1a1a;
+    color: var(--text-primary);
   }
 
   .btn {
@@ -1850,13 +1850,13 @@ Examples:
   }
 
   .btn-secondary {
-    background: white;
-    color: #007bff;
-    border: 1px solid #007bff;
+    background: var(--bg-primary);
+    color: var(--primary-color);
+    border: 1px solid var(--primary-color);
   }
 
   .btn-secondary:hover:not(:disabled) {
-    background: #f0f4ff;
+    background: var(--info-surface);
   }
 
   .volunteer-row td {
@@ -1867,7 +1867,7 @@ Examples:
     width: 100%;
     min-width: 140px;
     padding: 0.35rem 0.55rem;
-    border: 1px solid #ced4da;
+    border: 1px solid var(--input-border);
     border-radius: 6px;
     font-size: 0.88rem;
   }
@@ -1880,13 +1880,13 @@ Examples:
   }
 
   .btn-secondary.btn-sm {
-    background: white;
-    color: #007bff;
-    border: 1px solid #007bff;
+    background: var(--bg-primary);
+    color: var(--primary-color);
+    border: 1px solid var(--primary-color);
   }
 
   .btn-secondary.btn-sm:hover {
-    background: #f0f4ff;
+    background: var(--info-surface);
   }
 
   .btn-danger {
@@ -1905,7 +1905,7 @@ Examples:
     margin: 0 1.5rem 0.5rem 1.5rem;
     border-radius: 10px;
     background: rgba(0, 123, 255, 0.08);
-    color: #0056b3;
+    color: var(--link-hover);
     font-weight: 600;
     text-align: center;
   }

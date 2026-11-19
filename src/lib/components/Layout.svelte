@@ -95,7 +95,7 @@
             <a href="#/my-signups" class="nav-link" on:click={handleNavClick}>My Signups</a>
           {/if}
           
-          <button class="theme-toggle" on:click={() => theme.toggle()} title="Toggle {$theme === 'light' ? 'dark' : 'light'} mode">
+          <button class="theme-toggle" on:click={() => theme.toggle()} aria-label="Dark mode" aria-pressed={$theme === 'dark'} title="Toggle {$theme === 'light' ? 'dark' : 'light'} mode">
             {#if $theme === 'light'}
               🌙
             {:else}
@@ -114,7 +114,7 @@
         {:else}
           <a href="#/auth/login" class="nav-link" on:click={handleNavClick}>Sign In</a>
           
-          <button class="theme-toggle" on:click={() => theme.toggle()} title="Toggle {$theme === 'light' ? 'dark' : 'light'} mode">
+          <button class="theme-toggle" on:click={() => theme.toggle()} aria-label="Dark mode" aria-pressed={$theme === 'dark'} title="Toggle {$theme === 'light' ? 'dark' : 'light'} mode">
             {#if $theme === 'light'}
               🌙
             {:else}
@@ -180,6 +180,10 @@
     height: 36px;
     width: auto;
     display: block;
+  }
+
+  :global([data-theme='dark']) .nav-logo {
+    filter: brightness(0) invert(1);
   }
 
   .nav-center {

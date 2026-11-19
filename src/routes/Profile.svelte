@@ -292,7 +292,7 @@
   }
 
   .profile-container {
-    background: white;
+    background: var(--bg-primary);
     padding: 2rem;
     border-radius: 12px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
@@ -301,17 +301,17 @@
   .header {
     margin-bottom: 2rem;
     padding-bottom: 1rem;
-    border-bottom: 2px solid #dee2e6;
+    border-bottom: 2px solid var(--border-color);
   }
 
   .header h1 {
     margin: 0 0 0.5rem 0;
-    color: #1a1a1a;
+    color: var(--text-primary);
   }
 
   .header p {
     margin: 0;
-    color: #6c757d;
+    color: var(--text-secondary);
   }
 
   .alert {
@@ -321,27 +321,27 @@
   }
 
   .alert-error {
-    background: #f8d7da;
-    color: #721c24;
-    border: 1px solid #f5c6cb;
+    background: var(--danger-surface);
+    color: var(--danger-text);
+    border: 1px solid var(--danger-border);
   }
 
   .alert-success {
-    background: #d4edda;
-    color: #155724;
-    border: 1px solid #c3e6cb;
+    background: var(--success-surface);
+    color: var(--success-text);
+    border: 1px solid var(--success-border);
   }
 
   .loading {
     text-align: center;
     padding: 3rem;
-    color: #6c757d;
+    color: var(--text-secondary);
   }
 
   .form-section {
     margin-bottom: 2rem;
     padding-bottom: 2rem;
-    border-bottom: 1px solid #dee2e6;
+    border-bottom: 1px solid var(--border-color);
   }
 
   .form-section:last-of-type {
@@ -350,12 +350,12 @@
 
   .form-section h3 {
     margin: 0 0 0.5rem 0;
-    color: #1a1a1a;
+    color: var(--text-primary);
   }
 
   .section-description {
     margin: 0 0 1.5rem 0;
-    color: #6c757d;
+    color: var(--text-secondary);
     font-size: 0.9rem;
   }
 
@@ -373,14 +373,14 @@
     display: block;
     margin-bottom: 0.5rem;
     font-weight: 600;
-    color: #1a1a1a;
+    color: var(--text-primary);
   }
 
   input,
   select {
     width: 100%;
     padding: 0.75rem;
-    border: 1px solid #ced4da;
+    border: 1px solid var(--input-border);
     border-radius: 6px;
     font-size: 1rem;
     font-family: inherit;
@@ -389,20 +389,20 @@
   input:focus,
   select:focus {
     outline: none;
-    border-color: #007bff;
+    border-color: var(--primary-color);
     box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
   }
 
   input:disabled,
   select:disabled {
-    background: #f8f9fa;
+    background: var(--bg-secondary);
     cursor: not-allowed;
   }
 
   small {
     display: block;
     margin-top: 0.25rem;
-    color: #6c757d;
+    color: var(--text-secondary);
     font-size: 0.875rem;
   }
 
@@ -411,14 +411,14 @@
     align-items: center;
     gap: 1rem;
     padding: 1rem;
-    background: #f8f9fa;
+    background: var(--bg-secondary);
     border-radius: 8px;
     margin-top: 1rem;
   }
 
   .role-display .label {
     font-weight: 600;
-    color: #495057;
+    color: var(--text-muted);
   }
 
   .role-badge {
@@ -429,18 +429,18 @@
   }
 
   .role-badge.admin {
-    background: #e7f3ff;
-    color: #004085;
+    background: var(--info-surface);
+    color: var(--info-text);
   }
 
   .role-badge.volunteer_leader {
-    background: #fff3cd;
-    color: #856404;
+    background: var(--warning-surface);
+    color: var(--warning-text);
   }
 
   .role-badge.volunteer {
-    background: #e2e3e5;
-    color: #495057;
+    background: var(--bg-tertiary);
+    color: var(--text-muted);
   }
 
   .form-actions {
@@ -474,13 +474,13 @@
   }
 
   .btn-secondary {
-    background: white;
-    color: #6c757d;
+    background: var(--bg-primary);
+    color: var(--text-secondary);
     border: 1px solid #6c757d;
   }
 
   .btn-secondary:hover:not(:disabled) {
-    background: #f8f9fa;
+    background: var(--bg-secondary);
   }
 
   @media (max-width: 768px) {

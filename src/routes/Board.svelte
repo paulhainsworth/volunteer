@@ -262,7 +262,7 @@
 
   .header h1 {
     font-size: 2.5rem;
-    color: #1a1a1a;
+    color: var(--text-primary);
     margin-bottom: 1rem;
   }
 
@@ -277,7 +277,7 @@
     grid-template-columns: 1fr 2fr;
     gap: 2rem;
     padding: 2rem;
-    background: white;
+    background: var(--bg-primary);
     border-radius: 12px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   }
@@ -302,25 +302,25 @@
 
   .member-header h2 {
     font-size: 1.75rem;
-    color: #1a1a1a;
+    color: var(--text-primary);
     margin-bottom: 0.5rem;
   }
 
   .member-title {
     font-size: 1.25rem;
     font-weight: 600;
-    color: #007bff;
+    color: var(--primary-color);
     margin-bottom: 0.25rem;
   }
 
   .member-since {
     font-size: 0.95rem;
-    color: #6c757d;
+    color: var(--text-secondary);
   }
 
   .member-bio {
     line-height: 1.6;
-    color: #495057;
+    color: var(--text-muted);
   }
 
   .bio-content {
@@ -346,12 +346,12 @@
   }
 
   .member-bio a {
-    color: #007bff;
+    color: var(--primary-color);
     text-decoration: underline;
   }
 
   .member-bio a:hover {
-    color: #0056b3;
+    color: var(--link-hover);
   }
 
   .expand-btn {
@@ -392,12 +392,12 @@
   }
 
   .member-links a {
-    color: #007bff;
+    color: var(--primary-color);
     text-decoration: underline;
   }
 
   .member-links a:hover {
-    color: #0056b3;
+    color: var(--link-hover);
   }
 
   @media (max-width: 768px) {

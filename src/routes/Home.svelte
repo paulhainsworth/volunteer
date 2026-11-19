@@ -199,9 +199,9 @@
   }
 
   .btn-secondary {
-    background: white;
-    color: #007bff;
-    border: 2px solid #007bff;
+    background: var(--bg-primary);
+    color: var(--primary-color);
+    border: 2px solid var(--primary-color);
   }
 
   .roles-section {
@@ -238,7 +238,7 @@
     text-decoration: none;
     color: inherit;
     transition: transform 0.2s, box-shadow 0.2s;
-    border: 1px solid var(--border-color, #e9ecef);
+    border: 1px solid var(--border-color, var(--border-color));
   }
 
   @media (hover: hover) and (pointer: fine) {
@@ -281,7 +281,7 @@
   }
 
   .feature-card {
-    background: white;
+    background: var(--bg-primary);
     padding: 2rem;
     border-radius: 12px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
@@ -301,11 +301,11 @@
 
   .feature-card h3 {
     margin-bottom: 0.5rem;
-    color: #1a1a1a;
+    color: var(--text-primary);
   }
 
   .feature-card p {
-    color: #6c757d;
+    color: var(--text-secondary);
   }
 
   .about {

@@ -237,7 +237,7 @@
 
 <style>
   .bulk-upload {
-    background: white;
+    background: var(--bg-primary);
     border-radius: 12px;
     padding: 2rem;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
@@ -246,17 +246,17 @@
   .upload-header {
     margin-bottom: 2rem;
     padding-bottom: 1rem;
-    border-bottom: 2px solid #dee2e6;
+    border-bottom: 2px solid var(--border-color);
   }
 
   .upload-header h2 {
     margin: 0 0 0.5rem 0;
-    color: #1a1a1a;
+    color: var(--text-primary);
   }
 
   .upload-header p {
     margin: 0;
-    color: #6c757d;
+    color: var(--text-secondary);
   }
 
   .template-section,
@@ -267,17 +267,17 @@
   .template-section h3,
   .upload-section h3 {
     margin: 0 0 1rem 0;
-    color: #1a1a1a;
+    color: var(--text-primary);
     font-size: 1.2rem;
   }
 
   .template-section p {
     margin-bottom: 1rem;
-    color: #495057;
+    color: var(--text-muted);
   }
 
   .format-info {
-    background: #f8f9fa;
+    background: var(--bg-secondary);
     padding: 1.5rem;
     border-radius: 8px;
     margin-top: 1rem;
@@ -285,14 +285,14 @@
 
   .format-info h4 {
     margin: 0 0 0.75rem 0;
-    color: #495057;
+    color: var(--text-muted);
     font-size: 1rem;
   }
 
   .format-info ul {
     margin: 0 0 1rem 0;
     padding-left: 1.5rem;
-    color: #495057;
+    color: var(--text-muted);
   }
 
   .format-info ul:last-child {
@@ -304,20 +304,20 @@
   }
 
   .format-info code {
-    background: white;
+    background: var(--bg-primary);
     padding: 0.125rem 0.375rem;
     border-radius: 3px;
     font-family: monospace;
-    color: #007bff;
+    color: var(--primary-color);
   }
 
   .info-note {
     margin-top: 1rem;
     padding: 1rem;
-    background: #e7f3ff;
-    border-left: 4px solid #007bff;
+    background: var(--info-surface);
+    border-left: 4px solid var(--primary-color);
     border-radius: 4px;
-    color: #004085;
+    color: var(--info-text);
     font-size: 0.9rem;
   }
 
@@ -338,17 +338,17 @@
   .file-label {
     flex: 1;
     padding: 0.75rem 1rem;
-    border: 2px dashed #ced4da;
+    border: 2px dashed var(--input-border);
     border-radius: 8px;
     text-align: center;
     cursor: pointer;
     transition: all 0.2s;
-    color: #495057;
+    color: var(--text-muted);
   }
 
   .file-label:hover {
-    border-color: #007bff;
-    background: #f8f9fa;
+    border-color: var(--primary-color);
+    background: var(--bg-secondary);
   }
 
   .btn-clear {
@@ -368,14 +368,14 @@
   .parsing {
     text-align: center;
     padding: 2rem;
-    color: #007bff;
+    color: var(--primary-color);
     font-weight: 600;
   }
 
   .results-section {
     margin-top: 2rem;
     padding-top: 2rem;
-    border-top: 2px solid #dee2e6;
+    border-top: 2px solid var(--border-color);
   }
 
   .result-summary {
@@ -385,18 +385,18 @@
   }
 
   .result-summary.success {
-    background: #d4edda;
-    border: 1px solid #c3e6cb;
+    background: var(--success-surface);
+    border: 1px solid var(--success-border);
   }
 
   .result-summary.has-errors {
-    background: #fff3cd;
-    border: 1px solid #ffeeba;
+    background: var(--warning-surface);
+    border: 1px solid var(--warning-border);
   }
 
   .result-summary h3 {
     margin: 0 0 1rem 0;
-    color: #1a1a1a;
+    color: var(--text-primary);
   }
 
   .stats {
@@ -412,26 +412,26 @@
     display: block;
     font-size: 2rem;
     font-weight: bold;
-    color: #1a1a1a;
+    color: var(--text-primary);
   }
 
   .stat.success .stat-value {
-    color: #28a745;
+    color: var(--success-color);
   }
 
   .stat.error .stat-value {
-    color: #dc3545;
+    color: var(--danger-color);
   }
 
   .stat-label {
     display: block;
     font-size: 0.9rem;
-    color: #6c757d;
+    color: var(--text-secondary);
   }
 
   .errors-section {
-    background: #f8d7da;
-    border: 1px solid #f5c6cb;
+    background: var(--danger-surface);
+    border: 1px solid var(--danger-border);
     padding: 1.5rem;
     border-radius: 8px;
     margin-bottom: 2rem;
@@ -439,13 +439,13 @@
 
   .errors-section h4 {
     margin: 0 0 1rem 0;
-    color: #721c24;
+    color: var(--danger-text);
   }
 
   .error-list {
     margin: 0 0 1rem 0;
     padding-left: 1.5rem;
-    color: #721c24;
+    color: var(--danger-text);
   }
 
   .error-list li {
@@ -454,7 +454,7 @@
 
   .error-note {
     margin: 0;
-    color: #856404;
+    color: var(--warning-text);
     font-size: 0.9rem;
     font-style: italic;
   }
@@ -465,12 +465,12 @@
 
   .preview-section h4 {
     margin: 0 0 1rem 0;
-    color: #1a1a1a;
+    color: var(--text-primary);
   }
 
   .preview-table {
     overflow-x: auto;
-    border: 1px solid #dee2e6;
+    border: 1px solid var(--border-color);
     border-radius: 8px;
   }
 
@@ -480,33 +480,33 @@
   }
 
   th {
-    background: #f8f9fa;
+    background: var(--bg-secondary);
     padding: 0.75rem;
     text-align: left;
     font-weight: 600;
-    color: #495057;
-    border-bottom: 2px solid #dee2e6;
+    color: var(--text-muted);
+    border-bottom: 2px solid var(--border-color);
   }
 
   td {
     padding: 0.75rem;
-    border-bottom: 1px solid #dee2e6;
+    border-bottom: 1px solid var(--border-color);
   }
 
   tr:hover {
-    background: #f8f9fa;
+    background: var(--bg-secondary);
   }
 
   .preview-desc {
     font-size: 0.85rem;
-    color: #6c757d;
+    color: var(--text-secondary);
     margin-top: 0.25rem;
   }
 
   .preview-note {
     margin-top: 1rem;
     text-align: center;
-    color: #6c757d;
+    color: var(--text-secondary);
     font-style: italic;
   }
 
@@ -515,7 +515,7 @@
     gap: 1rem;
     justify-content: flex-end;
     padding-top: 1.5rem;
-    border-top: 1px solid #dee2e6;
+    border-top: 1px solid var(--border-color);
   }
 
   .btn {
@@ -542,13 +542,13 @@
   }
 
   .btn-secondary {
-    background: white;
-    color: #6c757d;
+    background: var(--bg-primary);
+    color: var(--text-secondary);
     border: 1px solid #6c757d;
   }
 
   .btn-secondary:hover {
-    background: #f8f9fa;
+    background: var(--bg-secondary);
   }
 </style>
 

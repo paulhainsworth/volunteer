@@ -277,7 +277,7 @@
     padding: 0.6rem 1.25rem;
     border-radius: 999px;
     border: 1px solid var(--primary-color);
-    background: #fff;
+    background: var(--bg-primary);
     color: var(--primary-color);
     font-weight: 600;
     cursor: pointer;
@@ -439,7 +439,7 @@
   }
 
   .status.full {
-    color: #dc3545;
+    color: var(--danger-color);
     font-weight: 600;
   }
 

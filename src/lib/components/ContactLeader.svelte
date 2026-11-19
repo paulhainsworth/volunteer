@@ -103,8 +103,8 @@
   }
 
   .leader-card {
-    background: #fff3cd;
-    border: 1px solid #ffeeba;
+    background: var(--warning-surface);
+    border: 1px solid var(--warning-border);
     border-radius: 8px;
     padding: 1.25rem;
   }
@@ -119,7 +119,7 @@
 
   .leader-header h4 {
     margin: 0;
-    color: #856404;
+    color: var(--warning-text);
     font-size: 1rem;
   }
 
@@ -130,7 +130,7 @@
   .leader-name {
     font-weight: 600;
     font-size: 1.1rem;
-    color: #856404;
+    color: var(--warning-text);
     margin-bottom: 0.5rem;
   }
 
@@ -141,7 +141,7 @@
   }
 
   .contact-link {
-    color: #007bff;
+    color: var(--primary-color);
     text-decoration: none;
     font-size: 0.9rem;
   }
@@ -153,13 +153,13 @@
   .contact-form {
     margin-top: 1rem;
     padding-top: 1rem;
-    border-top: 1px solid #ffeeba;
+    border-top: 1px solid var(--warning-border);
   }
 
   textarea {
     width: 100%;
     padding: 0.75rem;
-    border: 1px solid #ced4da;
+    border: 1px solid var(--input-border);
     border-radius: 6px;
     font-family: inherit;
     font-size: 1rem;
@@ -168,7 +168,7 @@
 
   textarea:focus {
     outline: none;
-    border-color: #007bff;
+    border-color: var(--primary-color);
     box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
   }
 
@@ -181,7 +181,7 @@
   .form-note {
     margin: 0.5rem 0 0 0;
     font-size: 0.85rem;
-    color: #856404;
+    color: var(--warning-text);
     font-style: italic;
   }
 
@@ -214,13 +214,13 @@
   }
 
   .btn-secondary {
-    background: white;
-    color: #6c757d;
+    background: var(--bg-primary);
+    color: var(--text-secondary);
     border: 1px solid #6c757d;
   }
 
   .btn-secondary:hover:not(:disabled) {
-    background: #f8f9fa;
+    background: var(--bg-secondary);
   }
 </style>
 

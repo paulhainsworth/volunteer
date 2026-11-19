@@ -25,7 +25,7 @@
   .redirect-message {
     text-align: center;
     padding: 3rem;
-    color: #6c757d;
+    color: var(--text-secondary);
   }
 </style>
 

@@ -948,27 +948,27 @@ onMount(() => {
 
   .header h1 {
     margin: 0 0 0.5rem 0;
-    color: #1a1a1a;
+    color: var(--text-primary);
   }
 
   .header p {
     margin: 0;
-    color: #6c757d;
+    color: var(--text-secondary);
   }
 
   .alert {
     padding: 1rem;
     border-radius: 8px;
     margin-bottom: 1.5rem;
-    background: #f8d7da;
-    color: #721c24;
-    border: 1px solid #f5c6cb;
+    background: var(--danger-surface);
+    color: var(--danger-text);
+    border: 1px solid var(--danger-border);
   }
 
   .alert-success {
-    background: #d4edda;
-    color: #155724;
-    border-color: #c3e6cb;
+    background: var(--success-surface);
+    color: var(--success-text);
+    border-color: var(--success-border);
   }
 
   .leader-assign-success {
@@ -984,13 +984,13 @@ onMount(() => {
     border: none;
     font-size: 1.25rem;
     cursor: pointer;
-    color: #155724;
+    color: var(--success-text);
     padding: 0 0.25rem;
     line-height: 1;
   }
 
   .leader-assign-success .btn-dismiss:hover {
-    color: #0d3d1a;
+    color: var(--success-text);
   }
 
   .leader-assign-success .email-failed {
@@ -1001,7 +1001,7 @@ onMount(() => {
   }
 
   .form-card {
-    background: white;
+    background: var(--bg-primary);
     padding: 2rem;
     border-radius: 12px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
@@ -1010,7 +1010,7 @@ onMount(() => {
 
   .form-card h3 {
     margin: 0 0 1.5rem 0;
-    color: #1a1a1a;
+    color: var(--text-primary);
   }
 
   .form-group {
@@ -1021,7 +1021,7 @@ onMount(() => {
     display: block;
     margin-bottom: 0.5rem;
     font-weight: 600;
-    color: #1a1a1a;
+    color: var(--text-primary);
   }
 
   input,
@@ -1029,7 +1029,7 @@ onMount(() => {
   select {
     width: 100%;
     padding: 0.75rem;
-    border: 1px solid #ced4da;
+    border: 1px solid var(--input-border);
     border-radius: 6px;
     font-size: 1rem;
     font-family: inherit;
@@ -1039,7 +1039,7 @@ onMount(() => {
   textarea:focus,
   select:focus {
     outline: none;
-    border-color: #007bff;
+    border-color: var(--primary-color);
     box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
   }
 
@@ -1053,17 +1053,17 @@ onMount(() => {
   .empty {
     text-align: center;
     padding: 3rem;
-    color: #6c757d;
+    color: var(--text-secondary);
   }
 
   .empty h2 {
-    color: #1a1a1a;
+    color: var(--text-primary);
     margin-bottom: 0.5rem;
   }
 
   .domains-table-container {
-    background: white;
-    border: 1px solid #dee2e6;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
     border-radius: 12px;
     overflow-x: auto;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
@@ -1098,18 +1098,18 @@ onMount(() => {
   }
 
   .btn-secondary {
-    background: white;
-    color: #007bff;
-    border: 1px solid #007bff;
+    background: var(--bg-primary);
+    color: var(--primary-color);
+    border: 1px solid var(--primary-color);
   }
 
   .btn-secondary:hover {
-    background: #f8f9fa;
+    background: var(--bg-secondary);
   }
 
   .btn-danger {
-    background: white;
-    color: #dc3545;
+    background: var(--bg-primary);
+    color: var(--danger-color);
     border: 1px solid #dc3545;
   }
 
@@ -1119,7 +1119,7 @@ onMount(() => {
   }
 
   .btn-info {
-    background: white;
+    background: var(--bg-primary);
     color: #17a2b8;
     border: 1px solid #17a2b8;
   }
@@ -1130,7 +1130,7 @@ onMount(() => {
   }
 
   .assign-roles-card {
-    background: white;
+    background: var(--bg-primary);
     padding: 2rem;
     border-radius: 12px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
@@ -1143,7 +1143,7 @@ onMount(() => {
     align-items: center;
     margin-bottom: 2rem;
     padding-bottom: 1rem;
-    border-bottom: 2px solid #dee2e6;
+    border-bottom: 2px solid var(--border-color);
     gap: 1rem;
   }
 
@@ -1156,7 +1156,7 @@ onMount(() => {
 
   .assign-header h3 {
     margin: 0;
-    color: #1a1a1a;
+    color: var(--text-primary);
   }
 
   .roles-assignment {
@@ -1167,30 +1167,30 @@ onMount(() => {
 
   .assigned-section,
   .unassigned-section {
-    border: 1px solid #dee2e6;
+    border: 1px solid var(--border-color);
     border-radius: 8px;
     padding: 1.5rem;
   }
 
   .assigned-section {
-    background: #f8fff9;
-    border-color: #c3e6cb;
+    background: var(--success-surface);
+    border-color: var(--success-border);
   }
 
   .unassigned-section {
-    background: #fff8f8;
-    border-color: #f5c6cb;
+    background: var(--danger-surface);
+    border-color: var(--danger-border);
   }
 
   .assigned-section h4,
   .unassigned-section h4 {
     margin: 0 0 1rem 0;
-    color: #1a1a1a;
+    color: var(--text-primary);
     font-size: 1.1rem;
   }
 
   .empty-text {
-    color: #6c757d;
+    color: var(--text-secondary);
     font-style: italic;
     text-align: center;
     padding: 2rem 1rem;
@@ -1212,13 +1212,13 @@ onMount(() => {
   }
 
   .role-item.assigned {
-    background: white;
-    border: 1px solid #c3e6cb;
+    background: var(--bg-primary);
+    border: 1px solid var(--success-border);
   }
 
   .role-item.unassigned {
-    background: white;
-    border: 1px solid #f5c6cb;
+    background: var(--bg-primary);
+    border: 1px solid var(--danger-border);
   }
 
   .role-info {
@@ -1229,13 +1229,13 @@ onMount(() => {
   }
 
   .role-info strong {
-    color: #1a1a1a;
+    color: var(--text-primary);
     font-size: 0.95rem;
   }
 
   .role-date {
     font-size: 0.85rem;
-    color: #6c757d;
+    color: var(--text-secondary);
   }
 
   .btn-add,
@@ -1274,14 +1274,14 @@ onMount(() => {
   }
 
   .domains-table thead {
-    background: #f8f9fa;
+    background: var(--bg-secondary);
   }
 
   .domains-table th,
   .domains-table td {
     padding: 1rem;
     text-align: left;
-    border-bottom: 1px solid #e9ecef;
+    border-bottom: 1px solid var(--border-color);
     vertical-align: top;
   }
 
@@ -1289,7 +1289,7 @@ onMount(() => {
     font-size: 0.85rem;
     letter-spacing: 0.03em;
     text-transform: uppercase;
-    color: #6c757d;
+    color: var(--text-secondary);
   }
 
   .domain-name {
@@ -1299,7 +1299,7 @@ onMount(() => {
   }
 
   .domain-desc {
-    color: #495057;
+    color: var(--text-muted);
   }
 
   .leader-name {
@@ -1314,7 +1314,7 @@ onMount(() => {
   }
 
   .leader-contact a {
-    color: #007bff;
+    color: var(--primary-color);
     text-decoration: none;
   }
 
@@ -1323,17 +1323,17 @@ onMount(() => {
   }
 
   .leader-phone {
-    color: #495057;
+    color: var(--text-muted);
   }
 
   .no-leader {
-    color: #6c757d;
+    color: var(--text-secondary);
     font-style: italic;
   }
 
   .roles-count {
     font-weight: 700;
-    color: #007bff;
+    color: var(--primary-color);
     min-width: 3rem;
   }
 
@@ -1366,7 +1366,7 @@ onMount(() => {
   }
 
   .modal-content {
-    background: white;
+    background: var(--bg-primary);
     border-radius: 16px;
     max-width: 520px;
     width: 100%;
@@ -1380,7 +1380,7 @@ onMount(() => {
     position: absolute;
     top: 1rem;
     right: 1rem;
-    background: #f8f9fa;
+    background: var(--bg-secondary);
     border: none;
     width: 36px;
     height: 36px;
@@ -1390,19 +1390,19 @@ onMount(() => {
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #6c757d;
+    color: var(--text-secondary);
     z-index: 1;
   }
 
   .modal-close:hover {
-    background: #e2e3e5;
-    color: #1a1a1a;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
   }
 
   .add-leader-modal .modal-header {
     padding: 2rem 2rem 1rem 2rem;
     padding-right: 4rem;
-    border-bottom: 1px solid #dee2e6;
+    border-bottom: 1px solid var(--border-color);
   }
 
   .add-leader-modal .modal-header h2 {
@@ -1412,7 +1412,7 @@ onMount(() => {
 
   .add-leader-modal .modal-subtitle {
     margin: 0;
-    color: #6c757d;
+    color: var(--text-secondary);
     font-size: 0.9rem;
   }
 
@@ -1433,7 +1433,7 @@ onMount(() => {
   .add-leader-modal .form-group small {
     display: block;
     margin-top: 0.35rem;
-    color: #6c757d;
+    color: var(--text-secondary);
     font-size: 0.85rem;
   }
 
@@ -1441,13 +1441,13 @@ onMount(() => {
     margin-bottom: 1rem;
   }
   .add-leader-suggestions--loading {
-    color: #6c757d;
+    color: var(--text-secondary);
     font-size: 0.9rem;
   }
   .add-leader-suggestions-intro {
     display: block;
     font-size: 0.85rem;
-    color: #6c757d;
+    color: var(--text-secondary);
     margin-bottom: 0.5rem;
   }
   .add-leader-suggestions-list {
@@ -1460,27 +1460,27 @@ onMount(() => {
     flex-direction: column;
     align-items: flex-start;
     padding: 0.5rem 0.75rem;
-    border: 1px solid #dee2e6;
+    border: 1px solid var(--border-color);
     border-radius: 8px;
-    background: #f8f9fa;
+    background: var(--bg-secondary);
     cursor: pointer;
     font-size: 0.9rem;
     text-align: left;
   }
   .add-leader-suggestion-chip:hover {
-    border-color: #0d6efd;
-    background: #e7f1ff;
+    border-color: var(--primary-color);
+    background: var(--info-surface);
   }
   .add-leader-suggestion-chip .name {
     font-weight: 600;
   }
   .add-leader-suggestion-chip .email {
-    color: #0d6efd;
+    color: var(--primary-color);
     font-size: 0.85rem;
   }
   .add-leader-suggestion-chip .badge {
     font-size: 0.7rem;
-    color: #6c757d;
+    color: var(--text-secondary);
     margin-top: 2px;
   }
 
@@ -1489,7 +1489,7 @@ onMount(() => {
     justify-content: flex-end;
     gap: 0.75rem;
     padding: 1rem 2rem 2rem;
-    border-top: 1px solid #dee2e6;
+    border-top: 1px solid var(--border-color);
   }
 
   @media (max-width: 1024px) {
