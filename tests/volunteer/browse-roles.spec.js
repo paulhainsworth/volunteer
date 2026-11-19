@@ -64,16 +64,18 @@ test('the signup dialog affiliation select matches the full-width form fields in
   await expect(affiliation).toBeVisible();
   expect(await affiliation.boundingBox()).toMatchObject({ width: (await email.boundingBox()).width });
   await expect(affiliation).toHaveCSS('min-height', '44px');
-  await expect(affiliation).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+  await expect(affiliation).toHaveCSS('background-color', 'rgb(27, 30, 36)');
+  await expect(affiliation).toHaveCSS('color', 'rgb(226, 232, 240)');
   await affiliation.selectOption('fixture-team');
   await expect(affiliation).toHaveValue('fixture-team');
 
-  await page.evaluate(() => {
-    localStorage.setItem('theme', 'dark');
-    document.documentElement.dataset.theme = 'dark';
-  });
-  await expect(affiliation).toHaveCSS('background-color', 'rgb(27, 30, 36)');
-  await expect(affiliation).toHaveCSS('color', 'rgb(226, 232, 240)');
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  const menu = page.getByRole('button', { name: 'Toggle menu' });
+  await menu.click();
+  await page.getByRole('button', { name: 'Dark mode' }).click();
+  await menu.press('Escape');
+  await page.getByRole('button', { name: 'Sign Up', exact: true }).click();
+  await expect(affiliation).toHaveCSS('background-color', 'rgb(255, 255, 255)');
 });
 
 test('homepage leads to volunteer shifts and shows open spots', async ({ page, backend }) => {

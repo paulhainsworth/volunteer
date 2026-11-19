@@ -273,13 +273,18 @@ END:VCALENDAR`;
 
               <div class="signup-details">
                 <div class="detail">
-                  <span class="icon">📅</span>
+                  <span class="icon" aria-hidden="true">📅</span>
                   <span>{formatRoleScheduleDate(role, 'long')}</span>
                 </div>
                 
                 <div class="detail">
-                  <span class="icon">🕐</span>
-                  <span>{formatTimeRange(role)}{#if duration != null} ({duration}h){/if}</span>
+                  <span class="icon" aria-hidden="true">🕐</span>
+                  <div class="shift-time">
+                    <span>{formatTimeRange(role)}</span>
+                    {#if duration != null}
+                      <span class="shift-duration">({duration}h)</span>
+                    {/if}
+                  </div>
                 </div>
 
                 {#if role.location}
@@ -342,7 +347,7 @@ END:VCALENDAR`;
             {@const role = signup.role}
             {@const duration = calculateDuration(role.start_time, role.end_time)}
             
-            <div class="signup-card past">
+            <div class="signup-card">
               <div class="signup-header">
                 <h3>{role.name}</h3>
                 <span class="past-badge">Completed</span>
@@ -350,13 +355,18 @@ END:VCALENDAR`;
 
               <div class="signup-details">
                 <div class="detail">
-                  <span class="icon">📅</span>
+                  <span class="icon" aria-hidden="true">📅</span>
                   <span>{formatRoleScheduleDate(role, 'long')}</span>
                 </div>
                 
                 <div class="detail">
-                  <span class="icon">🕐</span>
-                  <span>{formatTimeRange(role)}{#if duration != null} ({duration}h){/if}</span>
+                  <span class="icon" aria-hidden="true">🕐</span>
+                  <div class="shift-time">
+                    <span>{formatTimeRange(role)}</span>
+                    {#if duration != null}
+                      <span class="shift-duration">({duration}h)</span>
+                    {/if}
+                  </div>
                 </div>
               </div>
             </div>
@@ -591,10 +601,6 @@ END:VCALENDAR`;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   }
 
-  .signup-card.past {
-    opacity: 0.7;
-  }
-
   .signup-header {
     display: flex;
     justify-content: space-between;
@@ -635,11 +641,25 @@ END:VCALENDAR`;
     margin-bottom: 1rem;
   }
 
+  .signup-details:last-child {
+    margin-bottom: 0;
+  }
+
   .detail {
     display: flex;
     align-items: center;
     gap: 0.5rem;
     color: var(--text-muted);
+  }
+
+  .shift-time {
+    display: flex;
+    flex-wrap: wrap;
+    column-gap: 0.5rem;
+  }
+
+  .shift-duration {
+    color: var(--text-secondary);
   }
 
   .icon {

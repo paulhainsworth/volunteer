@@ -1,28 +1,60 @@
 import { test, expect, ownProfile, profile, role, signInFixture } from '../helpers/browser.js';
 
-test('dark mode themes the sign-in form and role dialog and persists on reload', async ({ page, backend }) => {
+test('dark mode is the default and the header logo adapts to both themes', async ({ page, backend }) => {
   backend.reply('GET', '/rest/v1/volunteer_roles', [role]);
   backend.reply('GET', '/rest/v1/team_club_affiliations', []);
   backend.reply('POST', '/rest/v1/rpc/get_confirmed_signup_counts', []);
   await page.goto('/#/auth/login');
   const themeToggle = page.getByRole('button', { name: 'Dark mode' });
+  const logo = page.getByRole('img', { name: 'Berkeley Bicycle Club', exact: true });
   const login = page.locator('.auth-card');
-  await expect(login).toHaveCSS('background-color', 'rgb(255, 255, 255)');
-  await themeToggle.click();
   await expect(themeToggle).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('html')).toHaveCSS('color-scheme', 'dark');
   await expect(login).toHaveCSS('background-color', 'rgb(27, 30, 36)');
+  await expect(logo).toBeVisible();
+  await expect.poll(() => logo.evaluate((img) => img.naturalWidth)).toBeGreaterThan(0);
+  await expect(logo).toHaveCSS('filter', 'brightness(0) invert(1)');
 
   await page.goto('/#/volunteer');
   await page.getByRole('button', { name: /General Opportunities/ }).click();
   await page.getByRole('button', { name: 'Info', exact: true }).click();
   await expect(page.locator('.modal-content')).toHaveCSS('background-color', 'rgb(27, 30, 36)');
+  await page.getByRole('button', { name: 'Close' }).click();
+
+  await themeToggle.click();
+  await expect(themeToggle).toHaveAttribute('aria-pressed', 'false');
+  await expect(logo).toHaveCSS('filter', 'none');
+  await expect(page.locator('.domain-section')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
 
   await page.reload();
-  await expect(themeToggle).toHaveAttribute('aria-pressed', 'true');
-  await themeToggle.click();
+  await expect(themeToggle).toHaveAttribute('aria-pressed', 'false');
   await expect(page.locator('html')).toHaveCSS('color-scheme', 'light');
-  await expect(page.locator('.domain-section')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+});
+
+test('the My Signups footer fills the viewport on short pages and follows long pages', async ({ page, backend }) => {
+  await signInFixture(page, backend);
+  await expect(page.getByRole('heading', { name: 'My Volunteer Signups' })).toBeVisible();
+  const footer = page.getByRole('contentinfo');
+
+  for (const width of [1024, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect(footer).toBeInViewport();
+    const box = await footer.boundingBox();
+    expect(box.y + box.height).toBeCloseTo(900, 0);
+    expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBe(900);
+  }
+
+  await page.setViewportSize({ width: 390, height: 240 });
+  await expect(footer).not.toBeInViewport();
+  await footer.scrollIntoViewIfNeeded();
+  await expect(footer).toBeInViewport();
+  expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+});
+
+test('the footer shows the current calendar year', async ({ page, backend }) => {
+  await page.clock.setFixedTime(new Date('2032-07-01T12:00:00Z'));
+  await page.goto('/#/auth/login');
+  await expect(page.getByRole('contentinfo')).toContainText('© 2032 Berkeley Bicycle Club');
 });
 
 for (const [accountRole, destinations] of [

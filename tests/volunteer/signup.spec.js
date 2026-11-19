@@ -58,6 +58,39 @@ test('a returning volunteer sees the existing signup instead of a second checkou
   expect(backend.calls('POST', confirmation)).toBe(0);
 });
 
+test('completed signups remain readable in both themes at phone width', async ({ page, backend }) => {
+  const pastRole = { ...role, event_date: '2026-04-19', end_time: '11:00:00', name: 'Demo · BSC Course Marshal' };
+  await page.clock.setFixedTime(new Date('2026-11-18T20:00:00Z'));
+  await signInFixture(page, backend, 'volunteer', {
+    signups: [{ id: 'fixture-completed-signup', role_id: role.id, status: 'confirmed', role: pastRole }],
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.getByRole('heading', { name: 'Past (1)' })).toBeVisible();
+  const card = page.locator('.signup-card').filter({ has: page.getByRole('heading', { name: pastRole.name }) });
+  const time = card.getByText('8:00 AM – 11:00 AM', { exact: true });
+  const duration = card.getByText('(3h)', { exact: true });
+
+  for (const mode of ['dark', 'light']) {
+    await expect(page.locator('html')).toHaveCSS('color-scheme', mode);
+    await expect(card).toHaveCSS('opacity', '1');
+    await expect(card.getByText('Completed', { exact: true })).toBeVisible();
+    await expect(card.getByText('Sunday, April 19, 2026', { exact: true })).toBeVisible();
+    await expect(time).toBeVisible();
+    await expect(duration).toBeVisible();
+    const timeBox = await time.boundingBox();
+    const durationBox = await duration.boundingBox();
+    expect(durationBox.x - (timeBox.x + timeBox.width)).toBeGreaterThan(4);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
+
+    if (mode === 'dark') {
+      const menu = page.getByRole('button', { name: 'Toggle menu' });
+      await menu.click();
+      await page.getByRole('button', { name: 'Dark mode' }).click();
+      await menu.press('Escape');
+    }
+  }
+});
+
 test('volunteer cancellation removes the assignment from My Signups', async ({ page, backend }) => {
   await signInFixture(page, backend, 'volunteer', {
     signups: [{ id: 'fixture-signup', role_id: role.id, status: 'confirmed', role }],

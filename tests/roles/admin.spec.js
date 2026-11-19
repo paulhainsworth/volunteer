@@ -19,8 +19,10 @@ test('admin dashboard loads role statistics and opens the new role form', async 
   await page.goto('/#/admin');
   await expect(page.getByRole('heading', { name: 'Admin Dashboard' })).toBeVisible();
   await expect(page.getByText('Total Roles', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Dark mode' }).click();
+  const themeToggle = page.getByRole('button', { name: 'Dark mode' });
   await expect(page.locator('.stat-card').first()).toHaveCSS('background-color', 'rgb(27, 30, 36)');
+  await themeToggle.click();
+  await expect(page.locator('.stat-card').first()).toHaveCSS('background-color', 'rgb(255, 255, 255)');
   await page.getByRole('link', { name: /create role/i }).click();
   await expect(page.getByRole('heading', { name: 'Create New Role' })).toBeVisible();
 });
