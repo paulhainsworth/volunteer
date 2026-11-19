@@ -31,8 +31,15 @@ test('a signed-out visit to My Signups redirects to sign-in', async ({ page, bac
 });
 
 test('first login collects an emergency contact before opening volunteer opportunities', async ({ page, backend }) => {
+  backend.reply('GET', '/rest/v1/website_messages', {
+    event_year: 2027,
+    onboarding_title: 'Welcome, {year} volunteers!',
+    onboarding_message: 'Thank you for joining in {year}.',
+  });
   await signInFixture(page, backend, 'volunteer', { profileFields: { emergency_contact_name: null } });
   await expect(page).toHaveURL(/#\/onboarding$/);
+  await expect(page.getByRole('heading', { name: 'Welcome, 2027 volunteers!' })).toBeVisible();
+  await expect(page.getByText('Thank you for joining in 2027.')).toBeVisible();
   backend.reply('GET', '/rest/v1/volunteer_roles', []);
   backend.handle('PATCH', '/rest/v1/profiles', (request) => {
     expect(request.postDataJSON()).toMatchObject({ emergency_contact_relationship: 'Friend' });
@@ -58,6 +65,9 @@ for (const role of ['volunteer', 'volunteer_leader']) {
     await page.goto('/#/admin/roles');
     await expect(page).toHaveURL(/#\/volunteer$/);
     await expect(page.getByRole('heading', { name: 'Volunteer Opportunities' })).toBeVisible();
+    await page.goto('/#/admin/communications/website-messages');
+    await expect(page).toHaveURL(/#\/volunteer$/);
+    await expect(page.getByRole('heading', { name: 'Website Messages' })).toHaveCount(0);
     if (role === 'volunteer') expect(backend.calls('GET', '/rest/v1/volunteer_leader_domains')).toBe(0);
   });
 }

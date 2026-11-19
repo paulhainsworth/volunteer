@@ -4,7 +4,9 @@
   import { push } from 'svelte-spa-router';
   import { onMount } from 'svelte';
   import { formatRoleScheduleDate } from '../lib/utils/timeDisplay';
+  import { formatWebsiteMessage, loadPublishedWebsiteMessages } from '../lib/websiteMessages';
 
+  let websiteMessages;
   let homeRoles = [];
   let rolesLoading = true;
   let rolesLoadFailed = false;
@@ -34,6 +36,10 @@
         rolesLoading = false;
         return;
       }
+
+      void loadPublishedWebsiteMessages().then((messages) => {
+        if (!cancelled) websiteMessages = messages;
+      });
 
       const timeoutMs = 20000;
       const timeoutPromise = new Promise((_, reject) =>
@@ -160,10 +166,9 @@
       </div>
     </dl>
 
-    <p>
-      Every shift helps make the races possible. Thank you for giving your time and helping more
-      East Bay students ride and race.
-    </p>
+    {#if websiteMessages?.homepage_thanks}
+      <p class="homepage-thanks">{formatWebsiteMessage(websiteMessages.homepage_thanks, websiteMessages.event_year)}</p>
+    {/if}
 
     <ul class="impact-links" role="list">
       <li><a href="https://berkeleyomnium.com/">Berkeley Omnium</a></li>
@@ -345,6 +350,11 @@
   .impact p {
     color: var(--text-muted);
     max-width: 65ch;
+  }
+
+  .homepage-thanks {
+    white-space: pre-line;
+    overflow-wrap: anywhere;
   }
 
   .impact-stats {

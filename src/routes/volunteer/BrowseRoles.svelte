@@ -1,5 +1,6 @@
 <script>
   import { onMount } from 'svelte';
+  import { formatWebsiteMessage, loadPublishedWebsiteMessages } from '../../lib/websiteMessages';
   import { roles } from '../../lib/stores/roles';
   import { auth } from '../../lib/stores/auth';
   import { push } from 'svelte-spa-router';
@@ -31,6 +32,7 @@
   let expandedDomains = new Set(); // Track which domains are expanded
   let domainsInitialized = false; // Track if we've initialized domains
   let isProspectiveVolunteer = false;
+  let websiteMessages;
 
   // Race dates
   const BHRR_DATE = '2026-04-18'; // Saturday April 18, 2026
@@ -55,6 +57,10 @@
   let awaitingVerification = false;
 
   onMount(async () => {
+    if (!$auth.user) {
+      void loadPublishedWebsiteMessages().then((messages) => { websiteMessages = messages; });
+    }
+
     // Redirect to onboarding if no emergency contact
     if ($auth.user && !$auth.profile?.emergency_contact_name) {
       loading = false;
@@ -663,11 +669,9 @@
 
     {#if isProspectiveVolunteer && topCriticalRoles.length > 0}
       <section class="critical-spotlight" aria-label="Critical volunteer spots still needed">
-        <p class="critical-spotlight-intro">
-          Thanks for volunteering at 2026 Berkeley Omnium! In our final days before race weekend,
-          please consider choosing one of the remaining critical spots. We can't host the races
-          without these spots filled. Thank you! — 2026 Berkeley Omnium Team
-        </p>
+        {#if websiteMessages?.opportunities_message}
+          <p class="critical-spotlight-intro">{formatWebsiteMessage(websiteMessages.opportunities_message, websiteMessages.event_year)}</p>
+        {/if}
         <div class="roles-grid critical-spotlight-grid">
           {#each topCriticalRoles as role (role.id)}
             {@const status = getFillStatus(role)}
@@ -1133,6 +1137,8 @@
   }
 
   .critical-spotlight-intro {
+    white-space: pre-line;
+    overflow-wrap: anywhere;
     margin: 0 0 1.25rem 0;
     padding: 1.25rem 1.35rem;
     background: var(--info-surface);

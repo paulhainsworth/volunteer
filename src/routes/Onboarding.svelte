@@ -2,10 +2,12 @@
   import { onMount } from 'svelte';
   import { auth } from '../lib/stores/auth';
   import { supabase } from '../lib/supabaseClient';
+  import { defaultWebsiteMessages, formatWebsiteMessage, loadPublishedWebsiteMessages } from '../lib/websiteMessages';
   import { push } from 'svelte-spa-router';
 
   let loading = false;
   let error = '';
+  let websiteMessages;
 
   let emergencyContactName = '';
   let emergencyContactPhone = '';
@@ -20,7 +22,10 @@
     // If emergency contact already exists, redirect to dashboard
     if ($auth.profile?.emergency_contact_name) {
       redirectToDashboard();
+      return;
     }
+
+    void loadPublishedWebsiteMessages().then((messages) => { websiteMessages = messages; });
   });
 
   function redirectToDashboard() {
@@ -90,12 +95,11 @@
 <div class="onboarding-page">
   <div class="onboarding-container">
     <div class="welcome-section">
-      <h1>🚴 Welcome to the 2026 Berkeley Omnium!</h1>
-      <p class="welcome-text">
-        Thank you for volunteering to help make this event a success! 
-        Your time and dedication are what make our cycling community thrive.
-      </p>
-      
+      <h1>{websiteMessages ? formatWebsiteMessage(websiteMessages.onboarding_title, websiteMessages.event_year) : defaultWebsiteMessages.onboarding_title}</h1>
+      {#if websiteMessages?.onboarding_message}
+        <p class="welcome-text">{formatWebsiteMessage(websiteMessages.onboarding_message, websiteMessages.event_year)}</p>
+      {/if}
+
       <div class="info-box">
         <h3>What Happens Next?</h3>
         <ul>
@@ -212,6 +216,12 @@
   .welcome-section h1 {
     margin: 0 0 1rem 0;
     font-size: 2.5rem;
+  }
+
+  .welcome-section h1,
+  .welcome-text {
+    white-space: pre-line;
+    overflow-wrap: anywhere;
   }
 
   .welcome-text {
@@ -360,7 +370,13 @@
       font-size: 1.8rem;
     }
 
-    .welcome-text {
+    .welcome-section h1,
+  .welcome-text {
+    white-space: pre-line;
+    overflow-wrap: anywhere;
+  }
+
+  .welcome-text {
       font-size: 1rem;
     }
 

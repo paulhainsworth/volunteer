@@ -432,3 +432,40 @@ test('administrator and volunteer-leader accounts can use the staff directory', 
   expect(fixture.status, fixture.stderr).toBe(0);
   expect(fixture.stdout.trim().split('\n')).toEqual(expect.arrayContaining(['f', 'admin|1', 'leader|1', 'volunteer|0']));
 });
+
+test('website messages are publicly readable and editable only by administrators', () => {
+  const results = sql('fresh', ['-qAtc', `
+    BEGIN;
+    INSERT INTO auth.users (id, email, raw_user_meta_data) VALUES
+      ('00000000-0000-4000-8000-000000000171', 'message-admin@example.invalid', '{}'),
+      ('00000000-0000-4000-8000-000000000172', 'message-leader@example.invalid', '{}'),
+      ('00000000-0000-4000-8000-000000000173', 'message-volunteer@example.invalid', '{}');
+    UPDATE public.profiles SET role = 'admin' WHERE email = 'message-admin@example.invalid';
+    UPDATE public.profiles SET role = 'volunteer_leader' WHERE email = 'message-leader@example.invalid';
+    SELECT has_column_privilege('anon', 'public.website_messages', 'event_year', 'UPDATE'),
+           has_column_privilege('authenticated', 'public.website_messages', 'revision', 'UPDATE'),
+           has_table_privilege('authenticated', 'public.website_messages', 'INSERT'),
+           has_table_privilege('authenticated', 'public.website_messages', 'DELETE');
+    SET LOCAL ROLE anon;
+    SELECT 'public|' || event_year FROM public.website_messages;
+    SET LOCAL ROLE authenticated;
+    SELECT set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-000000000172', true);
+    WITH changed AS (UPDATE public.website_messages SET event_year = 2027 RETURNING id)
+    SELECT 'leader|' || count(*) FROM changed;
+    SELECT set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-000000000173', true);
+    WITH changed AS (UPDATE public.website_messages SET event_year = 2027 RETURNING id)
+    SELECT 'volunteer|' || count(*) FROM changed;
+    SELECT set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-000000000171', true);
+    UPDATE public.website_messages SET event_year = 2027 WHERE revision = 1
+    RETURNING 'admin|' || event_year || '|' || revision;
+    WITH changed AS (UPDATE public.website_messages SET event_year = 2028 WHERE revision = 1 RETURNING id)
+    SELECT 'outdated|' || count(*) FROM changed;
+    SET LOCAL ROLE anon;
+    SELECT 'published|' || event_year FROM public.website_messages;
+    ROLLBACK;
+  `]);
+  expect(results.status, results.stderr).toBe(0);
+  expect(results.stdout.trim().split('\n')).toEqual(expect.arrayContaining([
+    'f|f|f|f', 'public|2026', 'leader|0', 'volunteer|0', 'admin|2027|2', 'outdated|0', 'published|2027',
+  ]));
+});

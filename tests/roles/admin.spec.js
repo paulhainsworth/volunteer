@@ -27,6 +27,77 @@ test('admin dashboard loads role statistics and opens the new role form', async 
   await expect(page.getByRole('heading', { name: 'Create New Role' })).toBeVisible();
 });
 
+test('admin updates the event year and publishes website messages', async ({ page, backend }) => {
+  const endpoint = '/rest/v1/website_messages';
+  let published = {
+    event_year: 2026,
+    opportunities_message: 'Help fill critical shifts for {year}.',
+    homepage_thanks: 'Thank you for volunteering in {year}.',
+    onboarding_title: 'Welcome to the {year} Berkeley Omnium!',
+    onboarding_message: 'Thank you for joining.',
+    revision: 1,
+  };
+  backend.handle('GET', endpoint, () => ({ body: published }));
+  await signInFixture(page, backend, 'admin');
+  await expect(page).toHaveURL(/#\/my-signups$/);
+  mockAdminReads(backend);
+  backend.reply('GET', '/rest/v1/email_digest_settings', [{ admin_daily_volunteer_summary_enabled: true }]);
+  await page.getByRole('link', { name: 'Communications' }).click();
+  await page.getByRole('link', { name: 'edit website messages' }).click();
+  await expect(page.getByRole('heading', { name: 'Website Messages' })).toBeVisible();
+
+  const year = page.getByLabel('Event year');
+  const banner = page.getByLabel('Volunteer Opportunities banner');
+  await expect(year).toHaveValue('2026');
+  await year.fill('2027');
+  await banner.fill('Join our {year} crew. <strong>Thank you!</strong>');
+  await page.getByLabel('Homepage thank-you').fill('Your {year} shift helps East Bay riders.');
+  await page.getByLabel('New volunteer welcome heading').fill('Welcome, {year} volunteers!');
+  await page.getByLabel('New volunteer welcome message').fill('Thank you for joining in {year}.');
+
+  const publish = page.getByRole('button', { name: 'Publish messages' });
+  backend.reply('PATCH', endpoint, { message: 'Fixture temporary failure' }, 503);
+  await publish.click();
+  await expect(page.getByRole('alert')).toContainText('Your edits are still here');
+  await expect(year).toHaveValue('2027');
+
+  backend.handle('PATCH', endpoint, (request, url) => {
+    expect(url.searchParams.get('revision')).toBe('eq.1');
+    const edits = request.postDataJSON();
+    expect(edits).toEqual({
+      event_year: 2027,
+      opportunities_message: 'Join our {year} crew. <strong>Thank you!</strong>',
+      homepage_thanks: 'Your {year} shift helps East Bay riders.',
+      onboarding_title: 'Welcome, {year} volunteers!',
+      onboarding_message: 'Thank you for joining in {year}.',
+    });
+    published = { ...edits, revision: 2 };
+    return { body: published };
+  });
+  await publish.click();
+  await expect(page.getByRole('status')).toContainText('Website messages published.');
+  backend.reply('PATCH', endpoint, null);
+  await publish.click();
+  await expect(page.getByRole('alert')).toContainText('messages have changed since you opened this page');
+
+  backend.reply('POST', '/auth/v1/logout', {});
+  await page.getByRole('button', { name: 'Sign Out' }).click();
+  await expect(page).toHaveURL(/#\/auth\/login$/);
+  await page.goto('/#/');
+  await expect(page.getByText('Your 2027 shift helps East Bay riders.')).toBeVisible();
+  await expect(page.getByText('Raised in 2026')).toBeVisible();
+
+  backend.reply('GET', roles, [{ ...role, critical_positions_required: 1 }]);
+  await page.goto('/#/volunteer');
+  const spotlight = page.getByRole('region', { name: 'Critical volunteer spots still needed' });
+  await expect(spotlight.getByText('Join our 2027 crew. <strong>Thank you!</strong>', { exact: true })).toBeVisible();
+
+  published = { ...published, opportunities_message: '' };
+  await page.reload();
+  await expect(spotlight.getByText('Join our 2027 crew.', { exact: false })).toHaveCount(0);
+  await expect(spotlight.getByRole('heading', { name: role.name })).toBeVisible();
+});
+
 test('admin creates, edits, duplicates, and deletes a role', async ({ page, backend }) => {
   const duplicateId = '00000000-0000-4000-8000-000000000014';
   const records = new Map();
