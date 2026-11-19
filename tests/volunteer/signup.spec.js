@@ -1,4 +1,4 @@
-import { test, expect, fixtureSession, profile, role, signInFixture, user, waiver } from '../helpers/browser.js';
+import { test, expect, ownProfile, fixtureSession, profile, role, signInFixture, user, waiver } from '../helpers/browser.js';
 
 const confirmation = '/rest/v1/rpc/confirm_volunteer_signup';
 
@@ -109,7 +109,7 @@ test('a verification callback returns the volunteer to the selected role', async
 });
 
 test('a guest signup with an immediate session submits consent and confirms the seat', async ({ page, backend }) => {
-  backend.reply('GET', '/rest/v1/profiles', [profile]);
+  backend.reply('POST', ownProfile, profile);
   backend.reply('POST', '/rest/v1/rpc/volunteer_waiver_is_current', true);
   backend.reply('GET', '/rest/v1/signups', []);
   backend.reply('POST', '/functions/v1/send-email', { success: true });

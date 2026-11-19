@@ -1,5 +1,6 @@
 import { writable } from 'svelte/store';
 import { supabase } from '../supabaseClient';
+import { fetchEmergencyContacts } from '../profileAccess';
 import { withSupabaseReadTimeout } from '../utils/withTimeout';
 
 function createVolunteersStore() {
@@ -8,12 +9,12 @@ function createVolunteersStore() {
   return {
     subscribe,
     
-    fetchVolunteers: async () => {
+    fetchVolunteers: async ({ includeEmergencyContacts = false } = {}) => {
       const { data, error } = await withSupabaseReadTimeout(
         () => supabase
           .from('profiles')
           .select(`
-            *,
+            id, email, role, first_name, last_name, phone, team_club_affiliation_id,
             signups:signups!volunteer_id(
               id,
               role:volunteer_roles!role_id(
@@ -38,6 +39,11 @@ function createVolunteersStore() {
 
       if (error) throw error;
 
+      const emergencyContacts = includeEmergencyContacts
+        ? await fetchEmergencyContacts(data.map(({ id }) => id))
+        : [];
+      const contactsByProfile = new Map(emergencyContacts.map(({ profile_id, ...contact }) => [profile_id, contact]));
+
       // Calculate total hours for each volunteer
       const volunteersWithStats = data.map(volunteer => {
         const confirmedSignups = volunteer.signups?.filter(s => s.status === 'confirmed') || [];
@@ -54,6 +60,7 @@ function createVolunteersStore() {
 
         return {
           ...volunteer,
+          ...contactsByProfile.get(volunteer.id),
           signups: confirmedSignups,
           totalSignups: confirmedSignups.length,
           totalHours: Math.round(totalHours * 10) / 10,

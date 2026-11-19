@@ -109,6 +109,7 @@ test('explicit baseline patches support migrations, profile editing, and scoped 
   expect(seed.status, seed.stderr).toBe(0);
   for (const file of migrations) apply('patched', `${migrationDirectory}/${file}`);
   apply('patched', 'tests/database/profile-access.sql');
+  apply('patched', 'tests/database/emergency-contact-access.sql');
   apply('patched', 'tests/database/cleanup-scope.sql');
   apply('patched', 'tests/database/auth-mail-rate-limit.sql');
   apply('patched', 'tests/database/volunteer-mail-notifications.sql');

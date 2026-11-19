@@ -15,3 +15,5 @@ Run the suite with `npm test` after following the [test setup](tests/README.md).
 See the [test plan](TEST_PLAN.md) for coverage gaps and [audit](AUDIT.md) for prioritized fixes.
 
 The volunteer contact directory is available to administrators and volunteer leaders.
+
+Volunteers can read and edit their own emergency-contact details. Admins and all volunteer leaders can read emergency-contact details through authorized staff workflows.

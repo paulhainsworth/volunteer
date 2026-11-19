@@ -81,7 +81,7 @@
     }
 
     try {
-      await volunteers.fetchVolunteers();
+      await volunteers.fetchVolunteers({ includeEmergencyContacts: true });
       affiliations.fetchAffiliations().catch(() => {});
     } catch (err) {
       error = err.message;
@@ -453,7 +453,7 @@
 
       // Refresh signups and volunteer list
       await loadRolesAndSignups(editingUser.id);
-      await volunteers.fetchVolunteers();
+      await volunteers.fetchVolunteers({ includeEmergencyContacts: true });
       
       // Show success message briefly
       const successMsg = error;
@@ -494,7 +494,7 @@
           emergency_contact_relationship: editForm.emergency_contact_relationship.trim() || null
         })
         .eq('id', editingUser.id)
-        .select();
+        .select('id');
 
       if (updateError) {
         console.error('Update error:', updateError);
@@ -508,7 +508,7 @@
       console.log('User updated successfully:', updateData);
 
       // Refresh volunteer list
-      await volunteers.fetchVolunteers();
+      await volunteers.fetchVolunteers({ includeEmergencyContacts: true });
       
       closeEditModal();
       alert('User information updated successfully!');
@@ -710,7 +710,7 @@
       await createVolunteerAsAdmin(body);
 
       // Refresh volunteers list
-      await volunteers.fetchVolunteers();
+      await volunteers.fetchVolunteers({ includeEmergencyContacts: true });
 
       closeAddVolunteerModal();
       alert(`✅ Volunteer created successfully! A welcome email with sign-in link is being sent to ${createdVolunteerEmail}.`);
@@ -749,7 +749,7 @@
       if (updateError) throw updateError;
 
       // Refresh volunteer list
-      await volunteers.fetchVolunteers();
+      await volunteers.fetchVolunteers({ includeEmergencyContacts: true });
       
       alert(`User role changed to ${roleNames[newRole]} successfully! Changes take effect on their next login.`);
     } catch (err) {

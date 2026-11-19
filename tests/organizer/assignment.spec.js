@@ -1,4 +1,4 @@
-import { test, expect, profile, role, signInFixture } from '../helpers/browser.js';
+import { test, expect, emergencyContacts, profile, role, signInFixture } from '../helpers/browser.js';
 
 async function fillAdminAssignment(page, email) {
   await page.getByRole('link', { name: 'Users', exact: true }).click();
@@ -14,11 +14,18 @@ test('an organizer creates one volunteer assignment and requests a welcome email
   const assignment = '/functions/v1/create-volunteer-and-signup';
   const welcome = '/functions/v1/send-welcome-with-magic-link';
   await signInFixture(page, backend, 'admin');
-  const newVolunteer = { ...profile, id: 'created-volunteer', email: 'new@example.invalid', first_name: 'New' };
+  const newVolunteer = {
+    id: '00000000-0000-4000-8000-000000000009', email: 'new@example.invalid',
+    first_name: 'New', last_name: 'Volunteer', role: 'volunteer',
+  };
   let saved = false;
   backend.handle('GET', '/rest/v1/profiles', (_request, url) => ({
     body: url.searchParams.has('id') ? [{ ...profile, role: 'admin' }] : saved ? [newVolunteer] : [],
   }));
+  backend.handle('POST', emergencyContacts, (request) => {
+    expect(request.postDataJSON()).toEqual({ p_profile_ids: [newVolunteer.id] });
+    return { body: [{ profile_id: newVolunteer.id, emergency_contact_name: 'Fixture Admin Roster Contact' }] };
+  });
   backend.reply('GET', '/rest/v1/volunteer_contacts', []);
   backend.reply('GET', '/rest/v1/volunteer_roles', [role]);
   backend.reply('GET', '/rest/v1/team_club_affiliations', [{ id: 'fixture-team', name: 'Fixture Club' }]);
@@ -36,6 +43,7 @@ test('an organizer creates one volunteer assignment and requests a welcome email
   expect(dialog.message()).toContain('Volunteer created successfully');
   await dialog.accept();
   await expect(page.getByText(newVolunteer.email, { exact: true })).toBeVisible();
+  await expect(page.getByTitle('Has emergency contact')).toBeVisible();
   expect(backend.calls('POST', assignment)).toBe(1);
   await expect.poll(() => backend.calls('POST', welcome)).toBe(1);
 });
@@ -50,6 +58,29 @@ test('the leader dashboard displays roles assigned to the leader', async ({ page
   await expect(page.getByText(role.name, { exact: true })).toBeVisible();
 });
 
+
+test('a volunteer leader can request emergency details for a roster entry', async ({ page, backend }) => {
+  const volunteer = { id: '00000000-0000-4000-8000-000000000010', first_name: 'Roster', last_name: 'Volunteer' };
+  await signInFixture(page, backend, 'volunteer_leader');
+  backend.reply('GET', '/rest/v1/team_club_affiliations', []);
+  backend.reply('GET', '/rest/v1/volunteer_leader_domains', []);
+  backend.reply('GET', '/rest/v1/volunteer_roles', [{
+    ...role, signups: [{ id: 'fixture-roster-signup', status: 'confirmed', volunteer }],
+  }]);
+  backend.handle('POST', emergencyContacts, (request) => {
+    expect(request.postDataJSON()).toEqual({ p_profile_ids: [volunteer.id] });
+    return { body: [{ profile_id: volunteer.id, emergency_contact_name: 'Fixture Roster Contact' }] };
+  });
+
+  await page.getByRole('link', { name: 'My Roles', exact: true }).click();
+  await expect(page.getByText('Roster Volunteer', { exact: true })).toBeVisible();
+  expect(backend.calls('POST', emergencyContacts)).toBe(0);
+  await page.getByRole('button', { name: 'Open volunteer actions' }).click();
+  await page.getByRole('button', { name: 'View emergency contact' }).click();
+  await expect(page.getByText('Fixture Roster Contact', { exact: false })).toBeVisible();
+  await page.getByRole('button', { name: 'Hide emergency contact' }).click();
+  await expect(page.getByText('Fixture Roster Contact', { exact: false })).toHaveCount(0);
+});
 
 test('a rejected organizer assignment shows an error and sends no welcome email', async ({ page, backend }) => {
   await signInFixture(page, backend, 'admin');
