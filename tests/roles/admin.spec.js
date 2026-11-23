@@ -494,6 +494,13 @@ for (const mode of ['bulk', 'individual']) {
         waivers: [{ waiver_version: 1, declared_minor: false, age_assessment_date: '2020-01-01' }],
       },
       {
+        // Signing during signup records the shift's future event date as the assessment date.
+        ...pending,
+        id: '00000000-0000-4000-8000-000000000026',
+        email: 'signed-at-signup@example.invalid',
+        waivers: [{ waiver_version: 1, declared_minor: false, age_assessment_date: role.event_date }],
+      },
+      {
         ...pending,
         id: '00000000-0000-4000-8000-000000000024',
         email: 'guardian-signed@example.invalid',

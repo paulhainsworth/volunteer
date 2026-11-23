@@ -129,15 +129,27 @@ Berkeley Omnium Volunteer Team`;
     return (volunteer?.signups || []).some((signup) => signup.status === 'confirmed');
   }
 
-  function hasSignedCurrentWaiver(volunteer, waiverVersion) {
-    const today = new Date().toISOString().slice(0, 10);
-    // Match the standalone waiver policy used by the sign-in link destination.
+  function localIsoDate() {
+    const now = new Date();
+    return new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  }
+
+  // Mirrors public.has_applicable_waiver: an adult declaration covers events on or after its assessment date.
+  function hasApplicableWaiver(volunteer, waiverVersion, assessmentDate) {
     return (volunteer.waivers || []).some((waiver) =>
       waiver.waiver_version === waiverVersion && waiver.age_assessment_date && (
         (waiver.declared_minor === true && waiver.parent_signed_at) ||
-        (waiver.declared_minor === false && waiver.age_assessment_date <= today)
+        (waiver.declared_minor === false && waiver.age_assessment_date <= assessmentDate)
       )
     );
+  }
+
+  // The database checks each confirmed signup against its event date (or today when the role has none).
+  function hasSignedCurrentWaiver(volunteer, waiverVersion) {
+    const today = localIsoDate();
+    return (volunteer.signups || [])
+      .filter((signup) => signup.status === 'confirmed')
+      .every((signup) => hasApplicableWaiver(volunteer, waiverVersion, signup.role?.event_date ?? today));
   }
 
   function sleep(ms) {
