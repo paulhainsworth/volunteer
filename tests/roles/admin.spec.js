@@ -471,23 +471,74 @@ test('admin previews a CSV before importing a role and can export the roster', a
   expect(imported).toMatchObject({ featured: true, critical_positions_required: 2 });
 });
 
-test('admin targets confirmed volunteers who have yet to sign the current waiver', async ({ page, backend }) => {
-  await signInFixture(page, backend, 'admin');
-  await expect(page).toHaveURL(/#\/my-signups$/);
-  mockAdminReads(backend);
-  backend.reply('GET', '/rest/v1/profiles', [
-    { ...profile, signups: [{ status: 'confirmed', role }], waivers: [] },
-    { ...profile, id: '00000000-0000-4000-8000-000000000022', email: 'signed@example.invalid',
-      signups: [{ status: 'confirmed', role }], waivers: [{ waiver_version: 1 }] },
-  ]);
-  backend.reply('GET', '/rest/v1/email_digest_settings', [{ admin_daily_volunteer_summary_enabled: true }]);
-  await page.goto('/#/admin/communications');
-  await expect(page.getByRole('button', { name: 'Send Email to 2 Recipients' })).toBeEnabled();
-  await page.getByRole('radio', { name: /haven't signed the current waiver/ }).check();
-  await expect(page.getByRole('button', { name: 'Send Email to 1 Recipient' })).toBeEnabled();
-  await page.getByRole('button', { name: 'Use waiver reminder template' }).click();
-  await expect(page.getByLabel('Subject')).toHaveValue(/waiver/i);
-});
+for (const mode of ['bulk', 'individual']) {
+  test(`admin sends ${mode} waiver reminders only to selected eligible volunteers`, async ({ page, backend }) => {
+    await signInFixture(page, backend, 'admin');
+    await expect(page).toHaveURL(/#\/my-signups$/);
+    mockAdminReads(backend);
+    const pending = { ...profile, signups: [{ status: 'confirmed', role }], waivers: [] };
+    const legacy = {
+      ...pending,
+      id: '00000000-0000-4000-8000-000000000022',
+      email: 'legacy@example.invalid',
+      first_name: 'Legacy',
+      waivers: [{ waiver_version: 1, declared_minor: null, age_assessment_date: null }],
+    };
+    backend.reply('GET', '/rest/v1/profiles', [
+      pending,
+      legacy,
+      {
+        ...pending,
+        id: '00000000-0000-4000-8000-000000000023',
+        email: 'signed@example.invalid',
+        waivers: [{ waiver_version: 1, declared_minor: false, age_assessment_date: '2020-01-01' }],
+      },
+      {
+        ...pending,
+        id: '00000000-0000-4000-8000-000000000024',
+        email: 'guardian-signed@example.invalid',
+        waivers: [{ waiver_version: 1, declared_minor: true, age_assessment_date: '2020-01-01', parent_signed_at: '2020-01-01T12:00:00Z' }],
+      },
+      {
+        ...pending,
+        id: '00000000-0000-4000-8000-000000000025',
+        email: 'cancelled@example.invalid',
+        signups: [{ status: 'cancelled', role }],
+      },
+    ]);
+    backend.reply('GET', '/rest/v1/email_digest_settings', [{ admin_daily_volunteer_summary_enabled: true }]);
+    backend.reply('POST', '/auth/v1/token', fixtureSession());
+
+    const linkRecipients = [];
+    backend.handle('POST', '/functions/v1/send-magic-link', (request) => {
+      const { to, redirectTo, sendEmail } = request.postDataJSON();
+      expect(sendEmail).toBe(false);
+      expect(new URL(redirectTo).searchParams.get('post_login')).toBe('waiver');
+      linkRecipients.push(to);
+      return { body: { action_link: 'https://volunteer-test.invalid/auth/verify' } };
+    });
+    const sentRecipients = [];
+    backend.handle('POST', '/functions/v1/send-email', (request) => {
+      const { to, html, subject } = request.postDataJSON();
+      expect(subject).toMatch(/waiver/i);
+      expect(html).toContain('<a href="https://volunteer-test.invalid/auth/verify"');
+      sentRecipients.push(to);
+      return { body: { success: true } };
+    });
+
+    await page.goto('/#/admin/communications');
+    await page.getByRole('radio', { name: /haven't signed the current waiver/ }).check();
+    const picker = page.getByLabel('Waiver reminder recipients');
+    await expect(picker.getByRole('option')).toHaveCount(3);
+    if (mode === 'individual') await picker.selectOption(legacy.id);
+    await page.getByRole('button', { name: 'Use waiver reminder template' }).click();
+    const expected = mode === 'individual' ? [legacy.email] : [pending.email, legacy.email];
+    await page.getByRole('button', { name: new RegExp(`Send Email to ${expected.length} Recipient`) }).click();
+    await expect(page.getByText(new RegExp(`Email sent to ${expected.length} recipient`))).toBeVisible();
+    expect(linkRecipients).toEqual(expected);
+    expect(sentRecipients).toEqual(expected);
+  });
+}
 
 test('admin grants the volunteer leader role to a selected account', async ({ page, backend }) => {
   await signInFixture(page, backend, 'admin');

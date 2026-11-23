@@ -36,7 +36,10 @@ function createVolunteersStore() {
             waivers:waivers(
               id,
               agreed_at,
-              waiver_version
+              waiver_version,
+              declared_minor,
+              age_assessment_date,
+              parent_signed_at
             )
           `)
           .order('last_name', { ascending: true }),

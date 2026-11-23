@@ -25,6 +25,7 @@
   let recipientType = 'all';
   let selectedRoleId = '';
   let selectedDate = '';
+  let selectedWaiverVolunteerId = '';
   let sending = false;
   let currentWaiverVersion = null;
 
@@ -129,7 +130,14 @@ Berkeley Omnium Volunteer Team`;
   }
 
   function hasSignedCurrentWaiver(volunteer, waiverVersion) {
-    return (volunteer?.waivers || []).some((waiver) => (waiver.waiver_version ?? 0) >= waiverVersion);
+    const today = new Date().toISOString().slice(0, 10);
+    // Match the standalone waiver policy used by the sign-in link destination.
+    return (volunteer.waivers || []).some((waiver) =>
+      waiver.waiver_version === waiverVersion && waiver.age_assessment_date && (
+        (waiver.declared_minor === true && waiver.parent_signed_at) ||
+        (waiver.declared_minor === false && waiver.age_assessment_date <= today)
+      )
+    );
   }
 
   function sleep(ms) {
@@ -265,6 +273,7 @@ Berkeley Omnium Volunteer Team`;
   }
 
   async function handleSend() {
+    if (sending) return;
     error = '';
     success = '';
     sendFailureRows = [];
@@ -389,6 +398,7 @@ Berkeley Omnium Volunteer Team`;
       recipientType = 'all';
       selectedRoleId = '';
       selectedDate = '';
+      selectedWaiverVolunteerId = '';
     } catch (err) {
       error = 'Failed to send email: ' + (err?.message || err);
     } finally {
@@ -405,7 +415,9 @@ Berkeley Omnium Volunteer Team`;
       return $volunteers;
     }
     if (recipientType === 'waiver_unsigned') {
-      return unsignedVolunteers;
+      return selectedWaiverVolunteerId
+        ? unsignedVolunteers.filter((volunteer) => volunteer.id === selectedWaiverVolunteerId)
+        : unsignedVolunteers;
     }
     if (recipientType === 'role' && selectedRoleId) {
       return volunteersWithConfirmedSignups.filter((volunteer) =>
@@ -569,16 +581,31 @@ Berkeley Omnium Volunteer Team`;
               bind:group={recipientType}
               value="waiver_unsigned"
             />
-            Volunteers with signups who haven't signed the current waiver ({unsignedVolunteers.length})
+            Volunteers with confirmed signups who haven't signed the current waiver ({unsignedVolunteers.length})
           </label>
           {#if recipientType === 'waiver_unsigned'}
-            <button type="button" class="btn btn-secondary btn-template" on:click={fillWaiverReminderTemplate}>
-              Use waiver reminder template
-            </button>
+            {#if unsignedVolunteers.length > 0}
+              <div class="waiver-recipient-options">
+                <label for="waiver-recipient">Waiver reminder recipients</label>
+                <select id="waiver-recipient" class="select-input" bind:value={selectedWaiverVolunteerId} disabled={sending}>
+                  <option value="">Everyone who needs a reminder ({unsignedVolunteers.length})</option>
+                  {#each unsignedVolunteers as volunteer (volunteer.id)}
+                    <option value={volunteer.id}>
+                      {volunteer.first_name ?? ''} {volunteer.last_name ?? ''} ({volunteer.email})
+                    </option>
+                  {/each}
+                </select>
+                <button type="button" class="btn btn-secondary btn-template" on:click={fillWaiverReminderTemplate} disabled={sending}>
+                  Use waiver reminder template
+                </button>
+              </div>
+            {:else}
+              <p class="waiver-empty">No volunteers with confirmed signups need a waiver reminder.</p>
+            {/if}
           {/if}
         </div>
 
-        <div class="recipient-count">
+        <div class="recipient-count" aria-live="polite">
           Will send to <strong>{recipientCount}</strong> {recipientCount === 1 ? 'recipient' : 'recipients'}
         </div>
       </div>
@@ -652,9 +679,9 @@ Berkeley Omnium Volunteer Team`;
         <li>Use merge fields like <code>{'{volunteer_name}'}</code> to personalize emails</li>
         <li>
           <code>{'{magic_link_word}'}</code> inserts the word <strong>link</strong> as a clickable sign-in URL (recommended). <code>{'{magic_link}'}</code> inserts the raw URL. After sign-in: emergency contact if missing, otherwise the waiver page. Add the redirect URL to Supabase Auth → URL Configuration → Redirect URLs:
-          <code>?post_login=waiver</code> on your site origin (e.g. <code>https://www.berkeleyomnium.com/?post_login=waiver</code>).
+          <code>?post_login=waiver</code> on your site origin (e.g. <code>https://volunteer.berkeleyomnium.com/?post_login=waiver</code>).
         </li>
-        <li><strong>Waiver reminder:</strong> Choose "Volunteers who haven't signed the waiver", then "Use waiver reminder template" — it uses <code>{'{magic_link_word}'}</code> so the email shows “Click this link…” without a long URL. Only unsigned volunteers receive it.</li>
+        <li><strong>Waiver reminders</strong> Choose the unsigned waiver group, select everyone or one volunteer, then load the reminder template to include a link to the waiver.</li>
         <li>Send test emails to yourself first by selecting a specific role or date with few recipients</li>
         <li>Schedule reminder emails 7 days and 1 day before events</li>
         <li>Keep subject lines clear and concise</li>
@@ -880,6 +907,11 @@ Berkeley Omnium Volunteer Team`;
     background: var(--info-surface);
     border-radius: 6px;
     color: var(--info-text);
+  }
+
+  .waiver-recipient-options,
+  .waiver-empty {
+    margin-top: 0.75rem;
   }
 
   .merge-fields {
