@@ -76,6 +76,8 @@ When escalating, include the environment, release commit, affected flow, timesta
 
 ## Notification monitoring
 
+To send a waiver reminder, open **Admin → Communications** and select the volunteers with confirmed signups who still need the current waiver. Choose everyone in that group or pick one person by name or email. Select **Use waiver reminder template**, review the recipient count and message, then send. The template includes a personal sign-in link that opens the waiver. Current valid waivers and cancelled signups are excluded.
+
 Assign the NICA scheduler alert to a repository maintainer who receives failed workflow notifications. The scheduled job flags gaps longer than 45 minutes on the next run and keeps delivery results separate from scheduler freshness. Confirm notification routing using an approved environment. Run this check from a separate scheduler with read access to the repository's Actions metadata. Route a nonzero exit to the maintainer. The check also works from an authenticated terminal.
 
 ```sh
