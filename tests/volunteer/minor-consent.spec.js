@@ -255,6 +255,7 @@ test('standalone waiver names the missing age choice and rejects a bad parent em
   const box = await minor.boundingBox();
   const label = await page.getByText('I am under 18 today', { exact: true }).boundingBox();
   expect(box.width).toBeLessThan(40);
+  expect(label.x).toBeGreaterThan(box.x);
   expect(label.x).toBeLessThan(box.x + box.width + 24);
   await minor.check();
   await page.getByRole('checkbox', { name: /I have read/i }).check();
