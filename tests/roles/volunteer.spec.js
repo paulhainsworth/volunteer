@@ -5,7 +5,7 @@ test('dark mode is the default and the header logo adapts to both themes', async
   backend.reply('GET', '/rest/v1/team_club_affiliations', []);
   backend.reply('POST', '/rest/v1/rpc/get_confirmed_signup_counts', []);
   await page.goto('/#/auth/login');
-  const themeToggle = page.getByRole('button', { name: 'Dark mode' });
+  const themeToggle = page.getByRole('button', { name: 'Switch to light mode' });
   const logo = page.getByRole('img', { name: 'Berkeley Bicycle Club', exact: true });
   const login = page.locator('.auth-card');
   await expect(themeToggle).toHaveAttribute('aria-pressed', 'true');
@@ -22,12 +22,13 @@ test('dark mode is the default and the header logo adapts to both themes', async
   await page.getByRole('button', { name: 'Close' }).click();
 
   await themeToggle.click();
-  await expect(themeToggle).toHaveAttribute('aria-pressed', 'false');
+  const lightThemeToggle = page.getByRole('button', { name: 'Switch to dark mode' });
+  await expect(lightThemeToggle).toHaveAttribute('aria-pressed', 'false');
   await expect(logo).toHaveCSS('filter', 'none');
   await expect(page.locator('.domain-section')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
 
   await page.reload();
-  await expect(themeToggle).toHaveAttribute('aria-pressed', 'false');
+  await expect(lightThemeToggle).toHaveAttribute('aria-pressed', 'false');
   await expect(page.locator('html')).toHaveCSS('color-scheme', 'light');
 });
 
@@ -78,7 +79,7 @@ for (const [accountRole, destinations] of [
       const controls = [
         nav.getByRole('link', { name: /Omnium Volunteer Hub/ }),
         ...destinations.map((name) => nav.getByRole('link', { name, exact: true })),
-        nav.getByRole('button', { name: 'Dark mode' }),
+        nav.getByRole('button', { name: 'Switch to light mode' }),
         profileLink,
         signOut,
       ];

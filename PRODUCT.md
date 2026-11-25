@@ -58,12 +58,12 @@ Constraints:
 
 ## Brand Commitments
 
-The product name is Berkeley Omnium Volunteer Hub. It belongs to the Berkeley Bicycle Club and the Berkeley Omnium, a two-day race weekend of the Berkeley Hills Road Race and the Berkeley Streets Criterium. Public copy states that the event supports East Bay youth cycling, including the NICA teams linked from the homepage. The club publishes homepage and welcome copy through website messages. No visual system, palette, or type commitment is recorded here.
+The product name is Berkeley Omnium Volunteer Hub. It belongs to the Berkeley Bicycle Club and the Berkeley Omnium, a two-day race weekend of the Berkeley Hills Road Race and the Berkeley Streets Criterium. Public copy states that the event supports East Bay youth cycling. The club publishes homepage and welcome copy through website messages. No visual system, palette, or type commitment is recorded here.
 
 ## Evidence on Hand
 
 - Public name and description: `index.html`.
-- Homepage job, Omnium description, and 2026 NICA team links: `src/routes/Home.svelte`.
+- Homepage job and Omnium support line: `src/routes/Home.svelte`.
 - Feature inventory matched to the test suite: `features.md`.
 - Routes: `src/App.svelte`.
 - Named board biographies: `src/routes/Board.svelte`.

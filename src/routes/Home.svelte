@@ -3,18 +3,99 @@
   import { roles } from '../lib/stores/roles';
   import { push } from 'svelte-spa-router';
   import { onMount } from 'svelte';
-  import { formatRoleScheduleDate } from '../lib/utils/timeDisplay';
+  import { formatRoleScheduleDate, formatTimeRange, getRoleScheduleSortTime } from '../lib/utils/timeDisplay';
+  import { getCriticalOpenSpots } from '../lib/utils/criticalSpots';
   import { formatWebsiteMessage, loadPublishedWebsiteMessages } from '../lib/websiteMessages';
 
   let websiteMessages;
   let homeRoles = [];
   let rolesLoading = true;
   let rolesLoadFailed = false;
+  let loadGeneration = 0;
+
+  function openSpotCount(role) {
+    if (role?.positions_total == null) return null;
+    return Math.max((role.positions_total ?? 0) - (role.positions_filled ?? 0), 0);
+  }
+
+  function isOpenShift(role) {
+    const open = openSpotCount(role);
+    return open == null || open > 0;
+  }
+
+  function pickHomeShifts(list) {
+    return [...list]
+      .filter(isOpenShift)
+      .sort((a, b) => {
+        const critical = Number(getCriticalOpenSpots(b) > 0) - Number(getCriticalOpenSpots(a) > 0);
+        if (critical !== 0) return critical;
+        const day = getRoleScheduleSortTime(a) - getRoleScheduleSortTime(b);
+        if (day !== 0) return day;
+        return String(a.start_time ?? '').localeCompare(String(b.start_time ?? ''));
+      })
+      .slice(0, 6);
+  }
+
+  function groupByDay(list) {
+    const groups = [];
+    for (const role of list) {
+      const label = formatRoleScheduleDate(role, 'long');
+      const last = groups[groups.length - 1];
+      if (!last || last.label !== label) groups.push({ label, roles: [role] });
+      else last.roles.push(role);
+    }
+    return groups;
+  }
+
+  async function loadBoard() {
+    const generation = ++loadGeneration;
+    rolesLoading = true;
+    rolesLoadFailed = false;
+    const withTimeout = (promise) => Promise.race([
+      promise,
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 20000))
+    ]);
+    try {
+      const featured = await withTimeout(roles.fetchFeaturedRoles()) || [];
+      if (generation !== loadGeneration) return;
+      let pool = featured;
+      if (pickHomeShifts(featured).length < 6) {
+        const all = await withTimeout(roles.fetchRoles()) || [];
+        if (generation !== loadGeneration) return;
+        const seen = new Set();
+        pool = [];
+        for (const role of [...featured, ...(Array.isArray(all) ? all : [])]) {
+          if (role?.id == null || seen.has(role.id)) continue;
+          seen.add(role.id);
+          pool.push(role);
+        }
+      }
+      homeRoles = pickHomeShifts(pool);
+      rolesLoadFailed = false;
+    } catch (e) {
+      if (generation !== loadGeneration) return;
+      homeRoles = [];
+      rolesLoadFailed = true;
+      if (e?.message === 'timeout') {
+        console.warn('[Omnium] Home roles fetch timed out. If this happens on production, check Supabase Dashboard — the project may be paused (free tier).');
+      }
+    } finally {
+      if (generation === loadGeneration) rolesLoading = false;
+    }
+  }
+
+  $: dayGroups = groupByDay(homeRoles);
+  $: boardStatus = rolesLoading
+    ? 'Loading shifts…'
+    : rolesLoadFailed
+      ? 'Shifts could not load.'
+      : homeRoles.length === 0
+        ? 'No open shifts right now.'
+        : `Showing ${homeRoles.length} open ${homeRoles.length === 1 ? 'shift' : 'shifts'}`;
 
   onMount(() => {
     let cancelled = false;
     const run = async () => {
-      // Wait for auth to settle so we don't fetch then redirect
       let waited = 0;
       while ($auth.loading && waited < 5000 && !cancelled) {
         await new Promise((r) => setTimeout(r, 100));
@@ -40,45 +121,27 @@
       void loadPublishedWebsiteMessages().then((messages) => {
         if (!cancelled) websiteMessages = messages;
       });
-
-      const timeoutMs = 20000;
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('timeout')), timeoutMs)
-      );
-      try {
-        const featured = await Promise.race([roles.fetchFeaturedRoles(), timeoutPromise]) || [];
-        if (cancelled) return;
-        if (featured.length > 0) {
-          homeRoles = featured;
-        } else {
-          const all = await Promise.race([roles.fetchRoles(), timeoutPromise]) || [];
-          if (cancelled) return;
-          homeRoles = Array.isArray(all) ? all.slice(0, 6) : [];
-        }
-        rolesLoadFailed = false;
-      } catch (e) {
-        if (cancelled) return;
-        homeRoles = [];
-        rolesLoadFailed = true;
-        if (e?.message === 'timeout') {
-          console.warn('[Omnium] Home roles fetch timed out. If this happens on production, check Supabase Dashboard — the project may be paused (free tier).');
-        }
-      } finally {
-        if (!cancelled) rolesLoading = false;
-      }
+      await loadBoard();
     };
     run();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      loadGeneration += 1;
+    };
   });
 </script>
 
 <div class="home">
-  <div class="hero">
+  <header class="hero">
     <h1>Find a volunteer shift</h1>
     <p class="tagline">Help put on the Berkeley Omnium. Find a shift that fits your schedule.</p>
-    
-    <div class="cta-buttons">
-      {#if $auth.user}
+    {#if !$auth.user}
+      <p class="stakes">Sign in with the link we email you. If you are under 18, a parent or guardian signs the waiver before the seat is confirmed. Your first visit asks for an emergency contact.</p>
+      <div class="cta-buttons">
+        <a href="#/volunteer" class="btn btn-primary">Browse volunteer shifts</a>
+      </div>
+    {:else}
+      <div class="cta-buttons">
         {#if $auth.isAdmin}
           <a href="#/admin" class="btn btn-primary">Go to Dashboard</a>
         {:else if $auth.profile?.role === 'volunteer_leader'}
@@ -86,42 +149,61 @@
         {:else}
           <a href="#/my-signups" class="btn btn-primary">My Signups</a>
         {/if}
-      {/if}
-      {#if !$auth.user}
-        <a href="#/volunteer" class="btn btn-primary">Browse volunteer shifts</a>
-      {:else}
         <a href="#/volunteer" class="btn btn-secondary">Browse Opportunities</a>
-      {/if}
-    </div>
-  </div>
+      </div>
+    {/if}
+  </header>
 
   {#if !$auth.user}
-    <div class="roles-section">
-      {#if rolesLoading}
-        <p class="roles-loading">Loading roles…</p>
-      {:else if rolesLoadFailed}
-        <p class="roles-empty">Shifts couldn’t load. Try <a href="#/volunteer">browsing volunteer shifts</a>.</p>
-      {:else if homeRoles.length === 0}
-        <p class="roles-empty">No volunteer roles yet. Check back soon.</p>
-      {:else}
-        <h2>Volunteer shifts</h2>
-        <div class="role-cards">
-          {#each homeRoles as role (role.id)}
-            {@const openSpots = Math.max((role.positions_total ?? 0) - (role.positions_filled ?? 0), 0)}
-            <a href="#/volunteer?info={role.id}" class="role-card">
-              <h3 class="role-card-name">{role.name}</h3>
-              <p class="role-card-date">{formatRoleScheduleDate(role, 'short')}</p>
-              {#if role.domain?.name}
-                <p class="role-card-domain">{role.domain.name}</p>
-              {/if}
-              {#if role.positions_total != null}
-                <p class="role-card-slots">{openSpots ? `${openSpots} ${openSpots === 1 ? 'spot' : 'spots'} open` : 'Full'}</p>
-              {/if}
-            </a>
-          {/each}
-        </div>
+    <section class="roles-section" aria-labelledby="shifts-title">
+      <h2 id="shifts-title">Volunteer shifts</h2>
+      <p class="board-status" role="status">{boardStatus}</p>
+      {#if rolesLoadFailed}
+        <p class="roles-empty">
+          <button type="button" class="retry" on:click={loadBoard}>Try again</button>
+          <a href="#/volunteer">Browse volunteer shifts</a>
+        </p>
+      {:else if !rolesLoading && homeRoles.length === 0}
+        <p class="roles-empty">
+          <a href="#/volunteer">Browse volunteer shifts</a>
+        </p>
+      {:else if homeRoles.length > 0}
+        {#each dayGroups as group (group.label)}
+          <h3 class="day-label">{group.label}</h3>
+          <div class="role-cards">
+            {#each group.roles as role (role.id)}
+              {@const openSpots = openSpotCount(role)}
+              {@const criticalOpen = getCriticalOpenSpots(role)}
+              <a href="#/volunteer?info={role.id}" class="role-card">
+                <p class="role-card-name">{role.name}</p>
+                <p class="role-card-time">{formatTimeRange(role)}</p>
+                {#if role.location}
+                  <p class="role-card-place">Place: {role.location}</p>
+                {/if}
+                {#if role.domain?.name}
+                  <p class="role-card-domain">Domain: {role.domain.name}</p>
+                {/if}
+                {#if criticalOpen > 0}
+                  <p class="role-card-critical">{criticalOpen} critical {criticalOpen === 1 ? 'spot' : 'spots'} still needed</p>
+                {/if}
+                {#if openSpots != null}
+                  <p class="role-card-slots">{openSpots} {openSpots === 1 ? 'spot' : 'spots'} open</p>
+                {/if}
+                <p class="role-card-action">View details</p>
+              </a>
+            {/each}
+          </div>
+        {/each}
       {/if}
-    </div>
+    </section>
+
+    <p class="support">
+      Proceeds from the Berkeley Omnium support East Bay youth cycling.
+      <a href="https://berkeleyomnium.com/impact">Where the proceeds go</a>
+    </p>
+    {#if websiteMessages?.homepage_thanks}
+      <p class="support homepage-thanks">{formatWebsiteMessage(websiteMessages.homepage_thanks, websiteMessages.event_year)}</p>
+    {/if}
   {:else}
     <div class="features">
       <div class="feature-card">
@@ -146,48 +228,6 @@
       </div>
     </div>
   {/if}
-
-  <section class="impact" aria-labelledby="impact-title">
-    <h2 id="impact-title">Your shift supports East Bay youth cycling</h2>
-    <p>
-      The Berkeley Omnium is a two-day race weekend organized by the Berkeley Bicycle Club.
-      Proceeds from the Berkeley Hills Road Race and Berkeley Streets Criterium help local
-      high school mountain bike teams pay for equipment, coaching, and race opportunities.
-    </p>
-
-    <dl class="impact-stats">
-      <div>
-        <dt>Raised in 2026</dt>
-        <dd>$28,610</dd>
-      </div>
-      <div>
-        <dt>East Bay high school teams supported</dt>
-        <dd>6</dd>
-      </div>
-    </dl>
-
-    {#if websiteMessages?.homepage_thanks}
-      <p class="homepage-thanks">{formatWebsiteMessage(websiteMessages.homepage_thanks, websiteMessages.event_year)}</p>
-    {/if}
-
-    <div class="impact-teams">
-      <h3 id="impact-teams-title">NICA teams supported in 2026</h3>
-      <ul class="impact-links team-links" aria-labelledby="impact-teams-title" role="list">
-        <li><a href="https://www.instagram.com/ahscougarsmtb/">Albany High School</a></li>
-        <li><a href="https://www.berkeleymtbteam.com/">Berkeley High School</a></li>
-        <li><a href="https://echsmtb.com/">El Cerrito High School</a></li>
-        <li><a href="https://oaklandcompositemtb.com/">Oakland Composite</a></li>
-        <li><a href="https://www.facebook.com/OaklandTechMTB">Oakland Technical High School</a></li>
-        <li><a href="https://skylinehighbiketeam.com/">Skyline High School</a></li>
-      </ul>
-    </div>
-
-    <ul class="impact-links" role="list">
-      <li><a href="https://berkeleyomnium.com/">Berkeley Omnium</a></li>
-      <li><a href="https://berkeleyomnium.com/impact">Where the proceeds go</a></li>
-      <li><a href="https://berkeleybikeclub.org/">Berkeley Bicycle Club</a></li>
-    </ul>
-  </section>
 </div>
 
 <style>
@@ -197,44 +237,49 @@
   }
 
   .hero {
-    text-align: center;
-    padding: 3rem 1rem;
+    text-align: left;
+    padding: 1.5rem 0 0.5rem;
   }
 
   .hero h1 {
-    font-size: 3rem;
-    margin-bottom: 1rem;
+    font-size: 1.375rem;
+    font-weight: 600;
+    line-height: 1.2;
+    margin: 0 0 0.5rem;
   }
 
-  .tagline {
-    font-size: 1.5rem;
+  .tagline,
+  .stakes {
+    font-size: 1rem;
+    line-height: 1.6;
     color: var(--text-muted);
-    margin-bottom: 2rem;
+    margin: 0 0 1rem;
+    max-width: 65ch;
   }
 
   .cta-buttons {
     display: flex;
     gap: 1rem;
-    justify-content: center;
+    justify-content: flex-start;
     flex-wrap: wrap;
   }
 
-  .btn {
-    padding: 1rem 2rem;
-    font-size: 1.1rem;
-    text-decoration: none;
-    border-radius: 8px;
+  .btn,
+  .retry {
+    padding: 0.75rem 1.5rem;
+    font-size: 0.9375rem;
     font-weight: 600;
-    transition: transform 0.2s, box-shadow 0.2s;
+    text-decoration: none;
+    border-radius: var(--radius-md);
+    border: none;
+    cursor: pointer;
+    transition: background-color 0.2s ease, box-shadow 0.2s ease;
   }
 
-  .btn-primary {
-    background: #0056b3;
-    color: white;
-  }
-
-  .btn-primary:active {
-    background: #00458e;
+  .btn-primary,
+  .retry {
+    background: var(--primary-color);
+    color: #fff;
   }
 
   .btn-secondary {
@@ -244,23 +289,40 @@
   }
 
   .roles-section {
-    margin: 0.5rem 0 3rem;
+    margin: 1.5rem 0 1rem;
   }
 
   .roles-section h2 {
     font-size: 1.375rem;
+    font-weight: 600;
+    line-height: 1.2;
+    margin: 0;
   }
 
-  .roles-loading,
+  .board-status,
   .roles-empty {
-    text-align: center;
     color: var(--text-muted);
-    margin: 2rem 0;
+    margin: 0.5rem 0 0;
   }
 
-  .roles-empty a {
-    color: var(--primary-color, #007bff);
+  .roles-empty {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem 1rem;
+    align-items: center;
+  }
+
+  .roles-empty a,
+  .support a {
+    color: var(--primary-color);
     text-decoration: underline;
+    text-underline-offset: 0.16em;
+  }
+
+  .day-label {
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 1rem 0 0;
   }
 
   .role-cards {
@@ -273,95 +335,80 @@
   .role-card {
     background: var(--bg-primary);
     padding: 1.25rem;
-    border-radius: 12px;
+    border-radius: var(--radius-lg);
     text-decoration: none;
     color: inherit;
-    transition: transform 0.2s, box-shadow 0.2s;
-    border: 1px solid var(--border-color, var(--border-color));
+    border: 1px solid var(--border-color);
+    transition: box-shadow 0.2s ease;
+  }
+
+  .btn-primary:active,
+  .retry:active {
+    background: var(--primary-hover);
   }
 
   @media (hover: hover) and (pointer: fine) {
-    .btn:hover,
-    .role-card:hover {
-      text-decoration: none;
+    .btn-primary:hover,
+    .retry:hover {
+      background: var(--primary-hover);
+      box-shadow: var(--shadow-md);
+    }
+
+    .role-card:hover,
+    .btn-secondary:hover {
       box-shadow: var(--shadow-md);
     }
   }
 
   .btn:focus-visible,
-  .role-card:focus-visible {
+  .retry:focus-visible,
+  .role-card:focus-visible,
+  .support a:focus-visible {
     outline: 2px solid var(--primary-color);
     outline-offset: 2px;
   }
 
   .role-card-name {
     margin: 0 0 0.5rem;
-    font-size: 1.15rem;
+    font-size: 1.125rem;
+    font-weight: 650;
+    line-height: 1.2;
   }
 
-  .role-card-date,
+  .role-card-time,
+  .role-card-place,
   .role-card-domain,
-  .role-card-slots {
+  .role-card-slots,
+  .role-card-action {
     margin: 0.25rem 0;
-    font-size: 0.9rem;
+    font-size: 1rem;
+    line-height: 1.4;
     color: var(--text-muted);
   }
 
-  .role-card-slots {
+  .role-card-slots,
+  .role-card-critical {
     font-weight: 600;
     color: var(--text-primary);
   }
 
-  .features {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 2rem;
-    margin: 4rem 0;
+  .role-card-critical {
+    margin: 0.25rem 0;
+    font-size: 1rem;
   }
 
-  .feature-card {
-    background: var(--bg-primary);
-    padding: 2rem;
-    border-radius: 12px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-    text-align: center;
-    transition: transform 0.2s;
+  .role-card-action {
+    margin-top: 0.75rem;
+    color: var(--primary-color);
+    font-weight: 600;
   }
 
-  .feature-card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
-  }
-
-  .icon {
-    font-size: 3rem;
-    margin-bottom: 1rem;
-  }
-
-  .feature-card h3 {
-    margin-bottom: 0.5rem;
-    color: var(--text-primary);
-  }
-
-  .feature-card p {
-    color: var(--text-secondary);
-  }
-
-  .impact {
-    background: var(--bg-secondary);
-    border: 1px solid var(--border-color);
-    border-radius: 12px;
-    margin: 2rem 0;
-    padding: clamp(1rem, 4vw, 2rem);
-  }
-
-  .impact h2 {
-    margin-bottom: 0.75rem;
-  }
-
-  .impact p {
+  .support {
     color: var(--text-muted);
+    font-size: 1rem;
+    line-height: 1.6;
     max-width: 65ch;
+    margin: 1.5rem 0 2rem;
   }
 
   .homepage-thanks {
@@ -369,90 +416,40 @@
     overflow-wrap: anywhere;
   }
 
-  .impact-stats {
+  .features {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.75rem;
-    max-width: 42rem;
-    margin: 1.25rem 0;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 2rem;
+    margin: 2rem 0;
   }
 
-  .impact-stats > div {
-    display: flex;
-    flex-direction: column-reverse;
-    justify-content: flex-end;
-    gap: 0.25rem;
-    padding: clamp(0.75rem, 3vw, 1.25rem);
+  .feature-card {
     background: var(--bg-primary);
+    padding: 1.25rem;
+    border-radius: var(--radius-lg);
     border: 1px solid var(--border-color);
-    border-radius: 8px;
+    text-align: left;
   }
 
-  .impact-stats dt {
-    color: var(--text-muted);
-    font-size: 0.9375rem;
-    line-height: 1.35;
+  .icon {
+    font-size: 1.375rem;
+    margin-bottom: 0.5rem;
   }
 
-  .impact-stats dd {
+  .feature-card h3 {
+    margin: 0 0 0.5rem;
+    font-size: 1.125rem;
     color: var(--text-primary);
-    font-size: clamp(1.5rem, 5vw, 2.25rem);
-    font-weight: 700;
-    line-height: 1.15;
   }
 
-  .impact-links {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0 1rem;
-    list-style: none;
-    margin-top: 0.75rem;
-  }
-
-  .impact-teams {
-    margin-top: 1.5rem;
-  }
-
-  .impact-teams h3 {
-    font-size: 1rem;
-  }
-
-  .team-links {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
-    margin-top: 0.25rem;
-  }
-
-  .impact-links a {
-    display: inline-flex;
-    align-items: center;
-    min-height: 44px;
-    color: var(--link-hover);
-    text-decoration: underline;
-    text-underline-offset: 0.16em;
-  }
-
-  .impact-links a:focus-visible {
-    outline: 2px solid var(--primary-color);
-    outline-offset: 2px;
+  .feature-card p {
+    margin: 0;
+    color: var(--text-secondary);
   }
 
   @media (max-width: 768px) {
     .hero {
-      padding: 1rem 0 2rem;
-    }
-
-    .hero h1 {
-      font-size: 2rem;
-    }
-
-    .tagline {
-      font-size: 1.2rem;
-    }
-
-    .features {
-      grid-template-columns: 1fr;
+      padding-top: 1rem;
     }
   }
 </style>
-

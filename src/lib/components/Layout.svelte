@@ -6,6 +6,7 @@
   const currentYear = new Date().getFullYear();
 
   $: isKidsLanding = $location === '/kids';
+  $: themeLabel = $theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
 
   let showMobileMenu = false;
   let mobileMenuButton;
@@ -47,6 +48,7 @@
 <svelte:window on:keydown={handleMenuKeydown} on:hashchange={handleNavClick} />
 
 <div class="app-layout" class:kids-landing={isKidsLanding}>
+  <a class="skip-link" href="#main-content">Skip to main content</a>
   {#if !isKidsLanding}
   <nav class="navbar" aria-label="Main">
     <div class="nav-container">
@@ -86,7 +88,7 @@
             <a href="#/my-signups" class="nav-link" aria-current={$location === '/my-signups' ? 'page' : undefined} on:click={handleNavClick}>My Signups</a>
           {/if}
           
-          <button class="theme-toggle" on:click={() => theme.toggle()} aria-label="Dark mode" aria-pressed={$theme === 'dark'} title="Toggle {$theme === 'light' ? 'dark' : 'light'} mode">
+          <button class="theme-toggle" on:click={() => theme.toggle()} aria-label={themeLabel} aria-pressed={$theme === 'dark'} title={themeLabel}>
             {#if $theme === 'light'}
               🌙
             {:else}
@@ -105,7 +107,7 @@
         {:else}
           <a href="#/auth/login" class="nav-link" aria-current={$location === '/auth/login' ? 'page' : undefined} on:click={handleNavClick}>Sign In</a>
           
-          <button class="theme-toggle" on:click={() => theme.toggle()} aria-label="Dark mode" aria-pressed={$theme === 'dark'} title="Toggle {$theme === 'light' ? 'dark' : 'light'} mode">
+          <button class="theme-toggle" on:click={() => theme.toggle()} aria-label={themeLabel} aria-pressed={$theme === 'dark'} title={themeLabel}>
             {#if $theme === 'light'}
               🌙
             {:else}
@@ -119,7 +121,7 @@
   </nav>
   {/if}
 
-  <main class="main-content" class:main-content--kids={isKidsLanding}>
+  <main id="main-content" class="main-content" class:main-content--kids={isKidsLanding} tabindex="-1">
     <slot />
   </main>
 
@@ -136,6 +138,35 @@
     min-height: 100dvh;
     display: flex;
     flex-direction: column;
+    position: relative;
+  }
+
+  .skip-link {
+    position: absolute;
+    left: 0.75rem;
+    top: 0.75rem;
+    z-index: 100;
+    padding: 0.5rem 0.75rem;
+    background: var(--primary-color);
+    color: #fff;
+    border-radius: var(--radius-md);
+    text-decoration: none;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    height: 1px;
+    width: 1px;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  .skip-link:focus {
+    clip: auto;
+    clip-path: none;
+    height: auto;
+    width: auto;
+    overflow: visible;
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
   }
 
   .navbar {
