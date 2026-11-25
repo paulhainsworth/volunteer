@@ -285,10 +285,6 @@
     margin-bottom: 1rem;
   }
 
-  .checkbox-group.minor-toggle {
-    margin-bottom: 0.75rem;
-  }
-
   .form-group {
     margin-bottom: 1rem;
   }
@@ -333,9 +329,11 @@
     display: flex;
     align-items: flex-start;
     gap: 0.5rem;
-    margin: 0 0 0.5rem;
+    margin: 0 0 0.25rem;
+    padding: 0.25rem 0;
     font-weight: 400;
     font-size: 1rem;
+    line-height: 1.4;
     color: var(--text-primary);
   }
 
@@ -390,28 +388,39 @@
 
   .btn {
     display: inline-block;
+    box-sizing: border-box;
     padding: 0.75rem 1.25rem;
     border-radius: 6px;
+    border: 1px solid transparent;
     font-weight: 600;
     font-size: 1rem;
+    line-height: 1.25;
     cursor: pointer;
     text-decoration: none;
-    border: none;
-    transition: background 0.2s;
+    transition: background 0.2s, border-color 0.2s;
   }
 
   .btn-primary {
     background: #007bff;
     color: white;
+    border-color: #007bff;
   }
 
   .btn-primary:hover:not(:disabled) {
     background: #0056b3;
+    border-color: #0056b3;
+  }
+
+  .btn-primary:active:not(:disabled) {
+    background: #00458e;
+    border-color: #00458e;
   }
 
   .btn-primary:disabled {
-    background: #007bff;
-    opacity: 0.45;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border-color: #007bff;
+    opacity: 1;
     cursor: not-allowed;
   }
 
