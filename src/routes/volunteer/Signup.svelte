@@ -1,5 +1,5 @@
 <script>
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { roles } from '../../lib/stores/roles';
   import { signups } from '../../lib/stores/signups';
   import { waiver as waiverStore } from '../../lib/stores/waiver';
@@ -39,7 +39,9 @@
   };
   let guestSubmitting = false;
   let guestError = '';
+  let guestInvalidField = '';
   let awaitingVerification = false;
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
   // Consent for the signed-in confirmation step
   let isMinor = false;
@@ -89,6 +91,12 @@
   onMount(async () => {
     isAuthenticated = !!$auth.user;
 
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(roleId)) {
+      error = "That link isn't a shift.";
+      loading = false;
+      return;
+    }
+
     try {
       role = await roles.fetchRole(roleId);
 
@@ -102,7 +110,8 @@
         alreadySignedUp = mySignups.some((s) => s.role_id === roleId || s.role?.id === roleId);
       }
     } catch (err) {
-      error = err.message || 'Unable to load volunteer role.';
+      const missing = err?.code === 'PGRST116' || /invalid input syntax for type uuid/i.test(err?.message || '');
+      error = missing ? "That link isn't a shift." : 'Could not load this shift.';
     } finally {
       loading = false;
       // If URL had extra text appended (e.g. from share dialog), clean it so future shares work
@@ -135,22 +144,37 @@
     minorAssent = '';
   }
 
-  async function submitGuestSignup() {
+  function firstGuestIssue() {
     const f = guestForm;
-    if (!f.first_name?.trim() || !f.last_name?.trim() || !f.email?.trim()) {
-      guestError = 'First name, last name, and email are required.';
-      return;
-    }
-    if (!f.team_club_affiliation_id?.trim()) {
-      guestError = 'Please select a team or club affiliation.';
+    if (!f.first_name?.trim()) return ['guest-first', 'Enter a first name.'];
+    if (!f.last_name?.trim()) return ['guest-last', 'Enter a last name.'];
+    const email = f.email?.trim() || '';
+    if (!email) return ['guest-email', 'Enter an email address.'];
+    if (!EMAIL_RE.test(email)) return ['guest-email', 'Enter an email address like name@example.com.'];
+    if (!f.emergency_contact_name?.trim()) return ['guest-emergency-name', 'Enter an emergency contact name.'];
+    if (!f.emergency_contact_phone?.trim()) return ['guest-emergency-phone', 'Enter an emergency contact phone.'];
+    if (!f.team_club_affiliation_id?.trim()) return ['guest-affiliation', 'Select a team or club.'];
+    return null;
+  }
+
+  async function submitGuestSignup() {
+    const issue = firstGuestIssue();
+    if (issue) {
+      guestInvalidField = issue[0];
+      guestError = issue[1];
+      await tick();
+      document.getElementById(guestInvalidField)?.focus();
       return;
     }
     if (!role) {
-      guestError = 'Role could not be loaded.';
+      guestInvalidField = '';
+      guestError = 'Could not load this shift.';
       return;
     }
     guestSubmitting = true;
+    guestInvalidField = '';
     guestError = '';
+    const f = guestForm;
 
     try {
       const result = await createVolunteerAccount(
@@ -258,12 +282,12 @@
     <div class="error-card">
       <h2>Error</h2>
       <p>{error}</p>
-      <a href="#/volunteer" class="btn btn-primary">Back to Opportunities</a>
+      <a href="#/volunteer" class="btn btn-primary">Back to shifts</a>
     </div>
   {:else if awaitingVerification}
     <div class="success-card" role="status">
       <h2>Check your email to finish signing up</h2>
-      <p>Follow the link to return to this role and complete the waiver. If you are under 18, ask your parent or guardian to sign then. A spot has not been reserved.</p>
+      <p>Follow the link to return to this shift and complete the waiver. If you are under 18, ask your parent or guardian to sign then. A spot has not been reserved.</p>
     </div>
   {:else if success}
     <div class="success-card">
@@ -294,7 +318,10 @@
 
       <div class="role-summary">
         <h2>{role.name}</h2>
-        
+        {#if !isAuthenticated}
+          <p class="signup-stakes">The waiver comes next. Nothing is held yet. If you are under 18, a parent or guardian signs before the seat is confirmed. The emergency contact is for race day.</p>
+        {/if}
+
         <div class="summary-details">
           <div class="detail">
             <strong>Date:</strong>
@@ -330,25 +357,34 @@
       {#if !isAuthenticated}
         <div class="guest-signup">
           <h3 class="guest-signup-title">Sign up for {role.name}</h3>
-          <p class="guest-signup-subtitle">Enter your information to continue to the waiver.</p>
+          <p class="guest-signup-subtitle">We'll email you a link to finish.</p>
 
-          {#if guestError}
-            <div class="alert alert-error">{guestError}</div>
+          {#if guestError && !guestInvalidField}
+            <div class="alert alert-error" role="alert">{guestError}</div>
           {/if}
 
           <div class="form-row">
             <div class="form-group">
               <label for="guest-first">First Name *</label>
-              <input id="guest-first" type="text" bind:value={guestForm.first_name} placeholder="First name" disabled={guestSubmitting} />
+              <input id="guest-first" type="text" bind:value={guestForm.first_name} placeholder="First name" disabled={guestSubmitting} required aria-invalid={guestInvalidField === 'guest-first'} aria-describedby={guestInvalidField === 'guest-first' ? 'guest-first-error' : null} />
+              {#if guestInvalidField === 'guest-first'}
+                <p id="guest-first-error" class="field-error" role="alert">{guestError}</p>
+              {/if}
             </div>
             <div class="form-group">
               <label for="guest-last">Last Name *</label>
-              <input id="guest-last" type="text" bind:value={guestForm.last_name} placeholder="Last name" disabled={guestSubmitting} />
+              <input id="guest-last" type="text" bind:value={guestForm.last_name} placeholder="Last name" disabled={guestSubmitting} required aria-invalid={guestInvalidField === 'guest-last'} aria-describedby={guestInvalidField === 'guest-last' ? 'guest-last-error' : null} />
+              {#if guestInvalidField === 'guest-last'}
+                <p id="guest-last-error" class="field-error" role="alert">{guestError}</p>
+              {/if}
             </div>
           </div>
           <div class="form-group">
             <label for="guest-email">Email Address *</label>
-            <input id="guest-email" type="email" bind:value={guestForm.email} placeholder="you@example.com" disabled={guestSubmitting} />
+            <input id="guest-email" type="email" bind:value={guestForm.email} placeholder="you@example.com" disabled={guestSubmitting} required aria-invalid={guestInvalidField === 'guest-email'} aria-describedby={guestInvalidField === 'guest-email' ? 'guest-email-error' : null} />
+            {#if guestInvalidField === 'guest-email'}
+              <p id="guest-email-error" class="field-error" role="alert">{guestError}</p>
+            {/if}
           </div>
           <div class="form-group">
             <label for="guest-phone">Phone Number (optional)</label>
@@ -357,21 +393,30 @@
           <div class="form-row">
             <div class="form-group">
               <label for="guest-emergency-name">Emergency Contact Name *</label>
-              <input id="guest-emergency-name" type="text" bind:value={guestForm.emergency_contact_name} placeholder="Full name" disabled={guestSubmitting} />
+              <input id="guest-emergency-name" type="text" bind:value={guestForm.emergency_contact_name} placeholder="Full name" disabled={guestSubmitting} required aria-invalid={guestInvalidField === 'guest-emergency-name'} aria-describedby={guestInvalidField === 'guest-emergency-name' ? 'guest-emergency-name-error' : null} />
+              {#if guestInvalidField === 'guest-emergency-name'}
+                <p id="guest-emergency-name-error" class="field-error" role="alert">{guestError}</p>
+              {/if}
             </div>
             <div class="form-group">
               <label for="guest-emergency-phone">Emergency Contact Phone *</label>
-              <input id="guest-emergency-phone" type="tel" bind:value={guestForm.emergency_contact_phone} placeholder="(555) 123-4567" disabled={guestSubmitting} />
+              <input id="guest-emergency-phone" type="tel" bind:value={guestForm.emergency_contact_phone} placeholder="(555) 123-4567" disabled={guestSubmitting} required aria-invalid={guestInvalidField === 'guest-emergency-phone'} aria-describedby={guestInvalidField === 'guest-emergency-phone' ? 'guest-emergency-phone-error' : null} />
+              {#if guestInvalidField === 'guest-emergency-phone'}
+                <p id="guest-emergency-phone-error" class="field-error" role="alert">{guestError}</p>
+              {/if}
             </div>
           </div>
           <div class="form-group">
             <label for="guest-affiliation">Team / Club Affiliation *</label>
-            <select id="guest-affiliation" bind:value={guestForm.team_club_affiliation_id} disabled={guestSubmitting} required>
+            <select id="guest-affiliation" bind:value={guestForm.team_club_affiliation_id} disabled={guestSubmitting} required aria-invalid={guestInvalidField === 'guest-affiliation'} aria-describedby={guestInvalidField === 'guest-affiliation' ? 'guest-affiliation-error' : null}>
               <option value="">-- Select team or club --</option>
               {#each $affiliations as aff (aff.id)}
                 <option value={aff.id}>{aff.name}</option>
               {/each}
             </select>
+            {#if guestInvalidField === 'guest-affiliation'}
+              <p id="guest-affiliation-error" class="field-error" role="alert">{guestError}</p>
+            {/if}
           </div>
 
           <div class="guest-form-actions">
@@ -381,7 +426,7 @@
               on:click={submitGuestSignup}
               disabled={guestSubmitting}
             >
-              {guestSubmitting ? 'Signing up...' : 'Continue to Waiver'}
+              {guestSubmitting ? 'Sending the link…' : 'Email me the link'}
             </button>
             <p class="guest-login-hint">
               Already have an account?
@@ -658,6 +703,22 @@
   .role-summary h2 {
     margin: 0 0 1rem 0;
     color: var(--text-primary);
+  }
+
+  .role-summary h2:has(+ .signup-stakes) {
+    margin-bottom: 0.5rem;
+  }
+
+  .signup-stakes {
+    margin: 0 0 1rem 0;
+    color: var(--text-secondary);
+    line-height: 1.5;
+  }
+
+  .field-error {
+    margin: 0.35rem 0 0 0;
+    color: var(--danger-text);
+    font-size: 0.875rem;
   }
 
   .summary-details {

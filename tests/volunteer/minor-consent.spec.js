@@ -45,7 +45,7 @@ async function openForm(page, backend, path) {
   await page.getByLabel(/Emergency Contact Name/).fill('Fixture Contact');
   await page.getByLabel(/Emergency Contact Phone/).fill('5550100');
   await page.getByLabel(/Team \/ Club Affiliation/).selectOption('fixture-team');
-  return page.getByRole('button', { name: 'Continue to Waiver' });
+  return page.getByRole('button', { name: path === 'browse' ? 'Continue to Waiver' : 'Email me the link' });
 }
 
 function under18(page) {
