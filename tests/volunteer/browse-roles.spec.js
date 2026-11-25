@@ -72,7 +72,7 @@ test('the signup dialog affiliation select matches the full-width form fields in
   await page.getByRole('button', { name: 'Cancel', exact: true }).click();
   const menu = page.getByRole('button', { name: 'Toggle menu' });
   await menu.click();
-  await page.getByRole('button', { name: 'Dark mode' }).click();
+  await page.getByRole('button', { name: 'Switch to light mode' }).click();
   await menu.press('Escape');
   await page.getByRole('button', { name: 'Sign Up', exact: true }).click();
   await expect(affiliation).toHaveCSS('background-color', 'rgb(255, 255, 255)');
@@ -88,37 +88,16 @@ test('homepage leads to volunteer shifts and shows open spots', async ({ page, b
   await expect(page.getByRole('heading', { name: 'Volunteer Opportunities' })).toBeVisible();
 });
 
-test('homepage explains the 2026 volunteer impact and serves a favicon', async ({ page, backend }) => {
+test('homepage states how proceeds are used and serves a favicon', async ({ page, backend }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   backend.reply('GET', '/rest/v1/volunteer_roles', []);
   await page.goto('/#/');
-  const impact = page.getByRole('region', { name: 'Your shift supports East Bay youth cycling' });
-  await expect(impact).toBeVisible();
-  const amount = impact.getByText('$28,610', { exact: true });
-  await expect(amount).toBeVisible();
-  await expect(amount).toHaveCSS('color', 'rgb(226, 232, 240)');
-  await expect(impact).toContainText('Raised in 2026');
-  await expect(impact).toContainText('East Bay high school teams supported');
-  await expect(impact.getByText('6', { exact: true })).toBeVisible();
-  await expect(impact.getByRole('link', { name: 'Berkeley Omnium', exact: true })).toHaveAttribute('href', 'https://berkeleyomnium.com/');
-  await expect(impact.getByRole('link', { name: 'Where the proceeds go' })).toHaveAttribute('href', 'https://berkeleyomnium.com/impact');
-  await expect(impact.getByRole('link', { name: 'Berkeley Bicycle Club' })).toHaveAttribute('href', 'https://berkeleybikeclub.org/');
-  const teams = impact.getByRole('list', { name: 'NICA teams supported in 2026' });
-  const teamLinks = [
-    ['Albany High School', 'https://www.instagram.com/ahscougarsmtb/'],
-    ['Berkeley High School', 'https://www.berkeleymtbteam.com/'],
-    ['El Cerrito High School', 'https://echsmtb.com/'],
-    ['Oakland Composite', 'https://oaklandcompositemtb.com/'],
-    ['Oakland Technical High School', 'https://www.facebook.com/OaklandTechMTB'],
-    ['Skyline High School', 'https://skylinehighbiketeam.com/'],
-  ];
-  await expect(teams.getByRole('link')).toHaveCount(teamLinks.length);
-  for (const [name, url] of teamLinks) {
-    const link = teams.getByRole('link', { name, exact: true });
-    await expect(link).toBeVisible();
-    await expect(link).toHaveAttribute('href', url);
-    await expect(link).toHaveCSS('min-height', '44px');
-  }
+  await expect(page.getByRole('status')).toHaveText('No open shifts right now.');
+  await expect(page.getByRole('link', { name: 'Browse volunteer shifts' })).toHaveCount(2);
+  const support = page.getByText('Proceeds from the Berkeley Omnium support East Bay youth cycling.');
+  await expect(support).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Where the proceeds go' })).toHaveAttribute('href', 'https://berkeleyomnium.com/impact');
+  await expect(page.getByText('$28,610')).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
 
   await expect(page).toHaveTitle('Berkeley Omnium Volunteer Hub');

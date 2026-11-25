@@ -85,7 +85,7 @@ test('completed signups remain readable in both themes at phone width', async ({
     if (mode === 'dark') {
       const menu = page.getByRole('button', { name: 'Toggle menu' });
       await menu.click();
-      await page.getByRole('button', { name: 'Dark mode' }).click();
+      await page.getByRole('button', { name: 'Switch to light mode' }).click();
       await menu.press('Escape');
     }
   }

@@ -20,7 +20,7 @@ test('admin dashboard loads role statistics and opens the new role form', async 
   await page.goto('/#/admin');
   await expect(page.getByRole('heading', { name: 'Admin Dashboard' })).toBeVisible();
   await expect(page.getByText('Total Roles', { exact: true })).toBeVisible();
-  const themeToggle = page.getByRole('button', { name: 'Dark mode' });
+  const themeToggle = page.getByRole('button', { name: 'Switch to light mode' });
   await expect(page.locator('.stat-card').first()).toHaveCSS('background-color', 'rgb(27, 30, 36)');
   await themeToggle.click();
   await expect(page.locator('.stat-card').first()).toHaveCSS('background-color', 'rgb(255, 255, 255)');
@@ -272,7 +272,7 @@ test('admin inline assignment fields match both themes and fit phone width', asy
   await expect(firstName).toHaveCSS('outline-width', '2px');
   await affiliation.selectOption('fixture-team');
 
-  await page.getByRole('button', { name: 'Dark mode' }).click();
+  await page.getByRole('button', { name: 'Switch to light mode' }).click();
   for (const field of [...inputs, critical]) {
     await expect(field).toHaveCSS('background-color', 'rgb(255, 255, 255)');
   }
