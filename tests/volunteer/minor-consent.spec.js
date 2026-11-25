@@ -247,6 +247,28 @@ test('MG-08 standalone adult without a current age declaration must re-sign', as
   expect(backend.calls('POST', mail)).toBe(0);
 });
 
+test('standalone waiver names the missing age choice and rejects a bad parent email', async ({ page, backend }) => {
+  const submit = await openForm(page, backend, 'waiver');
+  await expect(submit).toBeDisabled();
+  await expect(page.getByText('Select whether you are under 18 today.')).toBeVisible();
+  const minor = page.getByLabel('I am under 18 today');
+  const box = await minor.boundingBox();
+  const label = await page.getByText('I am under 18 today', { exact: true }).boundingBox();
+  expect(box.width).toBeLessThan(40);
+  expect(label.x).toBeLessThan(box.x + box.width + 24);
+  await minor.check();
+  await page.getByRole('checkbox', { name: /I have read/i }).check();
+  await page.getByLabel(/parent\/guardian full name/i).fill(guardian.parent_guardian_name);
+  await page.getByLabel(/parent\/guardian email/i).fill('not-an-email');
+  await page.getByLabel(/parent\/guardian digital signature/i).fill(guardian.parent_signature_name);
+  await expect(submit).toBeDisabled();
+  await expect(page.getByRole('alert')).toHaveText('Enter a valid parent/guardian email.');
+  expect(backend.calls('POST', signWaiver)).toBe(0);
+  await page.getByLabel(/parent\/guardian email/i).fill(`  ${guardian.parent_guardian_email}  `);
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  await expect(submit).toBeEnabled();
+});
+
 test('MG-09 failed guardian mail leaves signup confirmed and logs no contact data', async ({ page, backend }) => {
   const submit = await openForm(page, backend, 'signed-in');
   const emails = [];
