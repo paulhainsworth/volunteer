@@ -19,7 +19,7 @@ test('reload keeps a signed-in volunteer on My Signups', async ({ page, backend 
   await signInFixture(page, backend);
   await expect(page).toHaveURL(/#\/my-signups$/);
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'My Volunteer Signups' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'My Omnium shifts' })).toBeVisible();
   await expect(page).toHaveURL(/#\/my-signups$/);
 });
 

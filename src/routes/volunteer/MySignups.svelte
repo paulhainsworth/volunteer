@@ -1,5 +1,5 @@
 <script>
-  import { onDestroy, onMount } from 'svelte';
+  import { onDestroy, onMount, tick } from 'svelte';
   import { signups as signupsStore } from '../../lib/stores/signups';
   import { sendVolunteerNotification } from '../../lib/volunteerSignup';
   import { auth } from '../../lib/stores/auth';
@@ -22,6 +22,45 @@
   let cancellingSignup = null;
   let showContactLeaderModal = false;
   let contactLeaderSignup = null;
+  let cancelDialog = null;
+  let contactDialog = null;
+  let restoreFocusEl = null;
+
+  function captureFocus() {
+    if (showCancelModal || showContactLeaderModal) return;
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && active !== document.body) restoreFocusEl = active;
+  }
+
+  function restoreFocus() {
+    const el = restoreFocusEl;
+    restoreFocusEl = null;
+    el?.focus();
+  }
+
+  async function focusNode(getNode) {
+    await tick();
+    getNode()?.focus();
+  }
+
+  function trapDialogTab(event) {
+    if (event.key !== 'Tab') return;
+    const root = event.currentTarget;
+    const focusable = [...root.querySelectorAll('button, a[href], input, select, textarea')].filter(
+      (el) => !el.disabled && el.tabIndex !== -1
+    );
+    if (focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    const active = document.activeElement;
+    if (event.shiftKey && (active === first || active === root)) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && (active === last || active === root)) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
 
   let active = true;
   onDestroy(() => { active = false; });
@@ -99,28 +138,39 @@
   });
 
   function showCancelConfirmation(signup) {
+    captureFocus();
     cancellingSignup = signup;
     showCancelModal = true;
+    focusNode(() => cancelDialog);
   }
 
   function closeCancelModal() {
     showCancelModal = false;
     cancellingSignup = null;
+    if (!showContactLeaderModal) restoreFocus();
   }
 
   function handleContactLeaderFirst() {
-    // Close cancel modal and open contact leader modal
     contactLeaderSignup = cancellingSignup;
-    console.log('Contact leader signup:', contactLeaderSignup);
-    console.log('Role:', contactLeaderSignup.role);
-    console.log('Leader:', getEffectiveLeader(contactLeaderSignup.role));
-    closeCancelModal();
+    showCancelModal = false;
+    cancellingSignup = null;
     showContactLeaderModal = true;
+    focusNode(() => contactDialog);
   }
 
   function closeContactLeaderModal() {
     showContactLeaderModal = false;
     contactLeaderSignup = null;
+    if (!showCancelModal) restoreFocus();
+  }
+
+  function stillWantToCancel() {
+    const signup = contactLeaderSignup;
+    showContactLeaderModal = false;
+    contactLeaderSignup = null;
+    cancellingSignup = signup;
+    showCancelModal = true;
+    focusNode(() => cancelDialog);
   }
 
   async function confirmCancel() {
@@ -148,14 +198,9 @@
   }
 
   function handleKeydown(event) {
-    if (event.key === 'Escape') {
-      if (showCancelModal) {
-        closeCancelModal();
-      }
-      if (showContactLeaderModal) {
-        closeContactLeaderModal();
-      }
-    }
+    if (event.key !== 'Escape') return;
+    if (showContactLeaderModal) closeContactLeaderModal();
+    else if (showCancelModal) closeCancelModal();
   }
 
   function downloadCalendar(signup) {
@@ -215,10 +260,6 @@ END:VCALENDAR`;
 
   $: upcomingSignups = mySignups.filter((s) => !isRoleScheduleInPast(s.role));
   $: pastSignups = mySignups.filter((s) => isRoleScheduleInPast(s.role));
-  $: totalHours = mySignups.reduce((sum, signup) => {
-    const d = calculateDuration(signup.role.start_time, signup.role.end_time);
-    return sum + (d ?? 0);
-  }, 0);
 </script>
 
 <svelte:window on:keydown={handleKeydown} />
@@ -226,22 +267,9 @@ END:VCALENDAR`;
 <div class="my-signups">
   <div class="header">
     <div>
-      <h1>My Volunteer Signups</h1>
-      <p>Manage your volunteer commitments</p>
+      <h1>My Omnium shifts</h1>
+      <p>Shifts you're signed up for</p>
     </div>
-    
-    {#if mySignups.length > 0}
-      <div class="stats">
-        <div class="stat">
-          <div class="stat-value">{mySignups.length}</div>
-          <div class="stat-label">Total Signups</div>
-        </div>
-        <div class="stat">
-          <div class="stat-value">{Math.round(totalHours * 10) / 10}</div>
-          <div class="stat-label">Total Hours</div>
-        </div>
-      </div>
-    {/if}
   </div>
 
   {#if loading}
@@ -251,8 +279,8 @@ END:VCALENDAR`;
   {:else if mySignups.length === 0}
     <div class="empty">
       <h2>No signups yet</h2>
-      <p>You haven't signed up for any volunteer opportunities yet.</p>
-      <a href="#/volunteer" class="btn btn-primary">Browse Opportunities</a>
+      <p>You haven't signed up for a shift yet.</p>
+      <a href="#/volunteer" class="btn btn-primary">Find a shift</a>
     </div>
   {:else}
     {#if upcomingSignups.length > 0}
@@ -313,7 +341,7 @@ END:VCALENDAR`;
               {/if}
 
               {#if leader}
-                <ContactLeader {leader} roleName={role.name} />
+                <ContactLeader {leader} />
               {/if}
 
               <div class="signup-actions">
@@ -350,7 +378,7 @@ END:VCALENDAR`;
             <div class="signup-card">
               <div class="signup-header">
                 <h3>{role.name}</h3>
-                <span class="past-badge">Completed</span>
+                <span class="past-badge">Past</span>
               </div>
 
               <div class="signup-details">
@@ -379,13 +407,20 @@ END:VCALENDAR`;
 
 {#if showCancelModal && cancellingSignup}
   <div class="modal-overlay" on:click={closeCancelModal}>
-    <div class="modal-content" on:click|stopPropagation>
-      <button class="modal-close" on:click={closeCancelModal} aria-label="Close">
-        ✕
-      </button>
-      
+    <div
+      class="modal-content"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="cancel-signup-title"
+      tabindex="-1"
+      bind:this={cancelDialog}
+      on:click|stopPropagation
+      on:keydown={trapDialogTab}
+    >
+      <button class="modal-close" on:click={closeCancelModal} aria-label="Close">×</button>
+
       <div class="modal-header">
-        <h2>Cancel Signup Confirmation</h2>
+        <h2 id="cancel-signup-title">Cancel Signup Confirmation</h2>
       </div>
 
       <div class="modal-body">
@@ -446,13 +481,20 @@ END:VCALENDAR`;
   {@const leader = getEffectiveLeader(contactLeaderSignup.role)}
   
   <div class="modal-overlay" on:click={closeContactLeaderModal}>
-    <div class="modal-content contact-leader-modal" on:click|stopPropagation>
-      <button class="modal-close" on:click={closeContactLeaderModal} aria-label="Close">
-        ✕
-      </button>
-      
+    <div
+      class="modal-content contact-leader-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="contact-leader-title"
+      tabindex="-1"
+      bind:this={contactDialog}
+      on:click|stopPropagation
+      on:keydown={trapDialogTab}
+    >
+      <button class="modal-close" on:click={closeContactLeaderModal} aria-label="Close">×</button>
+
       <div class="modal-header">
-        <h2>Contact Your Volunteer Leader</h2>
+        <h2 id="contact-leader-title">Contact Your Volunteer Leader</h2>
       </div>
 
       <div class="modal-body">
@@ -474,7 +516,7 @@ END:VCALENDAR`;
 
         {#if leader}
           <div class="leader-contact-section">
-            <ContactLeader {leader} roleName={contactLeaderSignup.role.name} />
+            <ContactLeader {leader} />
           </div>
         {:else}
           <div class="no-leader-notice">
@@ -494,10 +536,7 @@ END:VCALENDAR`;
         
         <button
           class="btn btn-danger-outline"
-          on:click={() => {
-            closeContactLeaderModal();
-            showCancelConfirmation(contactLeaderSignup);
-          }}
+          on:click={stillWantToCancel}
         >
           Still Want to Cancel
         </button>
@@ -529,26 +568,6 @@ END:VCALENDAR`;
   .header p {
     color: var(--text-secondary);
     margin: 0;
-  }
-
-  .stats {
-    display: flex;
-    gap: 2rem;
-  }
-
-  .stat {
-    text-align: center;
-  }
-
-  .stat-value {
-    font-size: 2rem;
-    font-weight: bold;
-    color: var(--primary-color);
-  }
-
-  .stat-label {
-    font-size: 0.9rem;
-    color: var(--text-secondary);
   }
 
   .loading,
@@ -770,14 +789,18 @@ END:VCALENDAR`;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
   }
 
+  .modal-content:focus {
+    outline: none;
+  }
+
   .modal-close {
     position: absolute;
     top: 1rem;
     right: 1rem;
     background: var(--bg-secondary);
     border: none;
-    width: 36px;
-    height: 36px;
+    width: 44px;
+    height: 44px;
     border-radius: 50%;
     font-size: 1.5rem;
     cursor: pointer;
@@ -794,10 +817,15 @@ END:VCALENDAR`;
     color: var(--text-primary);
   }
 
+  .modal-close:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+  }
+
   .modal-header {
     padding: 2rem 2rem 1rem 2rem;
     border-bottom: 1px solid var(--border-color);
-    padding-right: 4rem;
+    padding-right: 4.75rem;
   }
 
   .modal-header h2 {
@@ -998,11 +1026,6 @@ END:VCALENDAR`;
       flex-direction: column;
     }
 
-    .stats {
-      width: 100%;
-      justify-content: space-around;
-    }
-
     .modal-content {
       max-height: 95vh;
       margin: 0.5rem;
@@ -1010,7 +1033,7 @@ END:VCALENDAR`;
 
     .modal-header {
       padding: 1.5rem 1.5rem 1rem 1.5rem;
-      padding-right: 3.5rem;
+      padding-right: 4.75rem;
     }
 
     .modal-header h2 {
