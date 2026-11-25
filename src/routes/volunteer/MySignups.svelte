@@ -52,10 +52,11 @@
     if (focusable.length === 0) return;
     const first = focusable[0];
     const last = focusable[focusable.length - 1];
-    if (event.shiftKey && document.activeElement === first) {
+    const active = document.activeElement;
+    if (event.shiftKey && (active === first || active === root)) {
       event.preventDefault();
       last.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
+    } else if (!event.shiftKey && (active === last || active === root)) {
       event.preventDefault();
       first.focus();
     }
@@ -1025,11 +1026,6 @@ END:VCALENDAR`;
       flex-direction: column;
     }
 
-    .stats {
-      width: 100%;
-      justify-content: space-around;
-    }
-
     .modal-content {
       max-height: 95vh;
       margin: 0.5rem;
@@ -1037,7 +1033,7 @@ END:VCALENDAR`;
 
     .modal-header {
       padding: 1.5rem 1.5rem 1rem 1.5rem;
-      padding-right: 3.5rem;
+      padding-right: 4.75rem;
     }
 
     .modal-header h2 {
