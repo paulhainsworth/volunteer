@@ -23,7 +23,7 @@ async function openSignup(page, backend, authResponse = user) {
 
 test('requests identity verification before collecting consent or assigning a seat', async ({ page, backend }) => {
   await openSignup(page, backend);
-  const submit = page.getByRole('button', { name: 'Continue to Waiver' });
+  const submit = page.getByRole('button', { name: 'Email me the link' });
   await expect(page.getByRole('heading', { name: 'Liability Waiver' })).toHaveCount(0);
   await submit.click();
   await expect(page.getByRole('heading', { name: 'Check your email to finish signing up' })).toBeVisible();
@@ -156,7 +156,7 @@ test('a guest with an immediate session signs the waiver before confirming the s
     return { body: { signup: { id: 'fixture-assignment' }, created: true } };
   });
   await openSignup(page, backend, fixtureSession());
-  await page.getByRole('button', { name: 'Continue to Waiver' }).click();
+  await page.getByRole('button', { name: 'Email me the link' }).click();
   const confirm = page.getByRole('button', { name: 'Confirm Signup' });
   await expect(confirm).toBeDisabled();
   expect(backend.calls('POST', confirmation)).toBe(0);
