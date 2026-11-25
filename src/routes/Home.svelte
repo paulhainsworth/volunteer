@@ -155,7 +155,7 @@
   </header>
 
   {#if !$auth.user}
-    <section class="roles-section" aria-labelledby="shifts-title">
+    <section class="roles-section" aria-labelledby="shifts-title" aria-busy={rolesLoading}>
       <h2 id="shifts-title">Volunteer shifts</h2>
       <p class="board-status" role="status">{boardStatus}</p>
       {#if rolesLoadFailed}
@@ -322,7 +322,11 @@
   .day-label {
     font-size: 1rem;
     font-weight: 600;
-    margin: 1rem 0 0;
+    margin: 1.75rem 0 0;
+  }
+
+  .day-label:first-of-type {
+    margin-top: 1rem;
   }
 
   .role-cards {
@@ -333,6 +337,8 @@
   }
 
   .role-card {
+    display: flex;
+    flex-direction: column;
     background: var(--bg-primary);
     padding: 1.25rem;
     border-radius: var(--radius-lg);
@@ -340,6 +346,10 @@
     color: inherit;
     border: 1px solid var(--border-color);
     transition: box-shadow 0.2s ease;
+  }
+
+  .role-card:active {
+    box-shadow: var(--shadow-md);
   }
 
   .btn-primary:active,
@@ -395,10 +405,12 @@
   .role-card-critical {
     margin: 0.25rem 0;
     font-size: 1rem;
+    color: var(--danger-text);
   }
 
   .role-card-action {
-    margin-top: 0.75rem;
+    margin-top: auto;
+    padding-top: 0.75rem;
     color: var(--primary-color);
     font-weight: 600;
   }
@@ -409,9 +421,15 @@
     line-height: 1.6;
     max-width: 65ch;
     margin: 1.5rem 0 2rem;
+    text-wrap: pretty;
+  }
+
+  .support a {
+    white-space: nowrap;
   }
 
   .homepage-thanks {
+    margin-top: 0.75rem;
     white-space: pre-line;
     overflow-wrap: anywhere;
   }
