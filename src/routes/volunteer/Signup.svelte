@@ -647,7 +647,12 @@
     padding: 3rem;
     border-radius: 12px;
     text-align: center;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    border: 1px solid var(--border-color);
+  }
+
+  .error-card p,
+  .success-card p {
+    text-wrap: pretty;
   }
 
   .success-icon {
@@ -711,14 +716,17 @@
 
   .signup-stakes {
     margin: 0 0 1rem 0;
+    max-width: 65ch;
     color: var(--text-secondary);
     line-height: 1.5;
+    text-wrap: pretty;
   }
 
   .field-error {
     margin: 0.35rem 0 0 0;
     color: var(--danger-text);
     font-size: 0.875rem;
+    text-wrap: pretty;
   }
 
   .summary-details {
@@ -881,9 +889,19 @@
     background: #0056b3;
   }
 
+  .btn-primary:active:not(:disabled) {
+    background: #00458e;
+  }
+
   .btn-primary:disabled {
     background: #6c757d;
     cursor: not-allowed;
+  }
+
+  .btn:focus-visible,
+  .link-button:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
   }
 
   .btn-secondary {
@@ -912,6 +930,28 @@
     margin: 0 0 1.25rem 0;
     color: var(--text-secondary);
     font-size: 0.95rem;
+    text-wrap: pretty;
+  }
+
+  .guest-signup input,
+  .guest-signup select {
+    min-height: 44px;
+    color: var(--text-primary);
+  }
+
+  .guest-signup input::placeholder {
+    color: var(--text-muted);
+  }
+
+  .guest-signup input:focus-visible,
+  .guest-signup select:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+  }
+
+  .guest-signup input[aria-invalid='true'],
+  .guest-signup select[aria-invalid='true'] {
+    border-color: var(--danger-border);
   }
 
   .form-row {
@@ -920,9 +960,14 @@
     gap: 1rem;
   }
 
-  @media (max-width: 640px) {
+  @media (max-width: 768px) {
     .form-row {
       grid-template-columns: 1fr;
+    }
+
+    .error-card,
+    .success-card {
+      padding: 1.5rem;
     }
   }
 
@@ -938,8 +983,10 @@
 
   .btn-guest-submit {
     width: 100%;
+    min-height: 44px;
     padding: 0.85rem 1.25rem;
     font-size: 1.05rem;
+    white-space: nowrap;
   }
 
   .guest-login-hint {
