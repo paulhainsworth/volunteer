@@ -566,7 +566,7 @@ END:VCALENDAR`;
   }
 
   .header p {
-    color: var(--text-secondary);
+    color: var(--text-muted);
     margin: 0;
   }
 
@@ -575,7 +575,7 @@ END:VCALENDAR`;
   .empty {
     text-align: center;
     padding: 4rem 2rem;
-    color: var(--text-secondary);
+    color: var(--text-muted);
   }
 
   .empty h2 {
@@ -700,12 +700,23 @@ END:VCALENDAR`;
   }
 
   .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    min-height: 44px;
     padding: 0.75rem 1.5rem;
     border: none;
     border-radius: 6px;
     font-weight: 600;
     cursor: pointer;
-    transition: background 0.2s;
+    text-decoration: none;
+    transition: background 0.2s, border-color 0.2s;
+  }
+
+  .btn:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
   }
 
   .btn-sm {
@@ -722,6 +733,10 @@ END:VCALENDAR`;
     background: #0056b3;
   }
 
+  .btn-primary:active {
+    background: #00458e;
+  }
+
   .btn-secondary {
     background: var(--bg-primary);
     color: var(--text-secondary);
@@ -730,6 +745,10 @@ END:VCALENDAR`;
 
   .btn-secondary:hover {
     background: var(--bg-secondary);
+  }
+
+  .btn-secondary:active {
+    background: var(--bg-tertiary);
   }
 
   .btn-danger {
@@ -903,6 +922,10 @@ END:VCALENDAR`;
     background: #138496;
   }
 
+  .btn-contact:active {
+    background: #117a8b;
+  }
+
   .btn-danger {
     background: #dc3545;
     color: white;
@@ -913,6 +936,10 @@ END:VCALENDAR`;
 
   .btn-danger:hover:not(:disabled) {
     background: #c82333;
+  }
+
+  .btn-danger:active:not(:disabled) {
+    background: #a71d2a;
   }
 
   .btn-danger:disabled {
@@ -931,6 +958,13 @@ END:VCALENDAR`;
 
   .btn-danger-outline:hover {
     background: #dc3545;
+    color: white;
+  }
+
+  .btn-danger-outline:hover:active,
+  .btn-danger-outline:active {
+    background: #a71d2a;
+    border-color: #a71d2a;
     color: white;
   }
 
