@@ -64,7 +64,7 @@ for (const role of ['volunteer', 'volunteer_leader']) {
     backend.reply('GET', '/rest/v1/volunteer_roles', []);
     await page.goto('/#/admin/roles');
     await expect(page).toHaveURL(/#\/volunteer$/);
-    await expect(page.getByRole('heading', { name: 'Volunteer Opportunities' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Volunteer shifts' })).toBeVisible();
     await page.goto('/#/admin/communications/website-messages');
     await expect(page).toHaveURL(/#\/volunteer$/);
     await expect(page.getByRole('heading', { name: 'Website Messages' })).toHaveCount(0);

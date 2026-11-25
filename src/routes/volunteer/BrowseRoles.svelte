@@ -1,5 +1,5 @@
 <script>
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { formatWebsiteMessage, loadPublishedWebsiteMessages } from '../../lib/websiteMessages';
   import { roles } from '../../lib/stores/roles';
   import { auth } from '../../lib/stores/auth';
@@ -39,6 +39,43 @@
   const BSC_DATE = '2026-04-19'; // Sunday April 19, 2026
   let copyMessage = '';
   let copyMessageTimeout = null;
+  let infoDialog = null;
+  let signupDialog = null;
+  let restoreFocusEl = null;
+
+  function captureFocus() {
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && active !== document.body) restoreFocusEl = active;
+  }
+
+  function restoreFocus() {
+    const el = restoreFocusEl;
+    restoreFocusEl = null;
+    el?.focus();
+  }
+
+  async function focusNode(getNode) {
+    await tick();
+    getNode()?.focus();
+  }
+
+  function trapDialogTab(event) {
+    if (event.key !== 'Tab') return;
+    const root = event.currentTarget;
+    const focusable = [...root.querySelectorAll('button, a[href], input, select, textarea')].filter(
+      (el) => !el.disabled && el.tabIndex !== -1
+    );
+    if (focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
 
   // PII modal for new volunteer signup (unauthenticated)
   let showPiiModal = false;
@@ -89,7 +126,7 @@
     try {
       rolesData = await Promise.race([roles.fetchRoles(), timeoutPromise]) || [];
     } catch (err) {
-      error = err?.message || 'Failed to load opportunities.';
+      error = err?.message || 'Failed to load shifts.';
       console.error('BrowseRoles fetch error:', err);
     } finally {
       loading = false;
@@ -105,7 +142,10 @@
       const signupId = queryParams.get('signup');
       if (infoId) {
         const r = rolesData.find((x) => x.id === infoId);
-        if (r) selectedRole = r;
+        if (r) {
+          selectedRole = r;
+          focusNode(() => infoDialog);
+        }
       } else if (signupId) {
         const r = rolesData.find((x) => x.id === signupId);
         if (r) {
@@ -123,6 +163,7 @@
           }
           piiRole = r;
           showPiiModal = true;
+          focusNode(() => signupDialog);
         }
       }
     }
@@ -168,6 +209,21 @@
       leaderName,
       leader
     };
+  }
+
+  function domainWhenLabel(domainEntry) {
+    const seen = [];
+    const ordered = [...domainEntry.roles].sort(
+      (a, b) => getRoleScheduleSortTime(a) - getRoleScheduleSortTime(b)
+    );
+    for (const role of ordered) {
+      const label = formatRoleScheduleDate(role, 'long');
+      if (label && !seen.includes(label)) seen.push(label);
+    }
+    if (seen.length === 0) return '';
+    if (seen.length === 1) return seen[0];
+    if (seen.length === 2) return `${seen[0]} and ${seen[1]}`;
+    return `${seen[0]} and ${seen.length - 1} other days`;
   }
 
   function getRemainingSpots(role) {
@@ -429,6 +485,7 @@
   function handleSignup(roleOrId) {
     const role = typeof roleOrId === 'object' ? roleOrId : $roles.find((r) => r.id === roleOrId);
     if (!$auth.user) {
+      if (!showPiiModal && !selectedRole) captureFocus();
       piiRole = role;
       piiForm = {
         first_name: '',
@@ -443,6 +500,7 @@
       awaitingVerification = false;
       showPiiModal = true;
       affiliations.fetchAffiliations().catch(() => {});
+      focusNode(() => signupDialog);
       return;
     }
     push(`/signup/${role?.id || roleOrId}`);
@@ -454,6 +512,8 @@
     piiError = '';
     awaitingVerification = false;
     piiSubmitting = false;
+    if (selectedRole) focusNode(() => infoDialog);
+    else restoreFocus();
   }
 
   async function submitPiiModal() {
@@ -466,8 +526,12 @@
       piiError = 'Please select a team or club affiliation.';
       return;
     }
+    if (!f.emergency_contact_name?.trim() || !f.emergency_contact_phone?.trim()) {
+      piiError = 'Add an emergency contact name and phone. We use them on race day.';
+      return;
+    }
     if (!piiRole) {
-      piiError = 'No role selected.';
+      piiError = 'No shift selected.';
       return;
     }
     const signupRoleId = piiRole.id;
@@ -546,12 +610,12 @@
         showCopyMessage('Link copied to clipboard!');
       } else {
         showCopyMessage('Copy not supported. Please copy the link manually.', true);
-        window.prompt('Copy this volunteer role link:', url);
+        window.prompt('Copy this shift link:', url);
       }
     } catch (err) {
       console.error('Copy failed:', err);
       showCopyMessage('Copy not supported. Please copy the link manually.', true);
-      window.prompt('Copy this volunteer role link:', url);
+      window.prompt('Copy this shift link:', url);
     }
   }
 
@@ -569,11 +633,14 @@
   }
 
   function showMoreInfo(role) {
+    if (!selectedRole && !showPiiModal) captureFocus();
     selectedRole = role;
+    focusNode(() => infoDialog);
   }
 
   function closeModal() {
     selectedRole = null;
+    if (!showPiiModal) restoreFocus();
   }
 
   function handleKeydown(event) {
@@ -588,14 +655,14 @@
 
 <div class="browse-roles">
   <div class="header">
-    <h1>Volunteer Opportunities</h1>
-    <p>Find a role that fits your schedule and interests</p>
+    <h1>Volunteer shifts</h1>
+    <p>Find a shift that fits your schedule.</p>
   </div>
 
   <div class="filters">
     <label class="filter-field filter-search">
-      <span>Search roles</span>
-      <input type="search" placeholder="Search roles..." bind:value={searchQuery} />
+      <span>Search shifts</span>
+      <input type="search" placeholder="Search shifts..." bind:value={searchQuery} />
     </label>
 
     <label class="filter-field">
@@ -632,8 +699,8 @@
         <span>Event day</span>
         <select bind:value={raceDayFilter}>
           <option value="all">Any day</option>
-          <option value="bhrr">Race day: BHRR</option>
-          <option value="bsc">Race day: BSC</option>
+          <option value="bhrr">Saturday: Hills Road Race</option>
+          <option value="bsc">Sunday: Streets Criterium</option>
           <option value="pre-race">Pre-race</option>
           <option value="post-race">Post-race</option>
         </select>
@@ -654,12 +721,12 @@
   </div>
 
   {#if loading}
-    <div class="loading">Loading opportunities...</div>
+    <div class="loading">Loading shifts…</div>
   {:else if error}
     <div class="error">{error}</div>
   {:else if groupedDomainsDisplay.length === 0 && topCriticalRoles.length === 0}
     <div class="empty">
-      <p>No volunteer opportunities found matching your filters.</p>
+      <p>No shifts match these filters.</p>
     </div>
   {:else}
     {@const totalOpenSpots = filteredRoles.reduce((sum, r) => sum + getRemainingSpots(r), 0)}
@@ -668,7 +735,8 @@
     </div>
 
     {#if isProspectiveVolunteer && topCriticalRoles.length > 0}
-      <section class="critical-spotlight" aria-label="Critical volunteer spots still needed">
+      <section class="critical-spotlight" aria-labelledby="critical-shifts-title">
+        <h2 id="critical-shifts-title" class="domains-section-heading">Shifts that need people</h2>
         {#if websiteMessages?.opportunities_message}
           <p class="critical-spotlight-intro">{formatWebsiteMessage(websiteMessages.opportunities_message, websiteMessages.event_year)}</p>
         {/if}
@@ -684,7 +752,7 @@
                 <div class="role-title-row">
                   <h3>
                     {#if criticalOpenSpots > 0}
-                      <span class="critical-icon" title={`Critical need: ${criticalOpenSpots} open`} aria-label="Critical role">⚠</span>
+                      <span class="critical-icon" aria-hidden="true">⚠</span>
                     {/if}
                     {role.name}
                   </h3>
@@ -693,35 +761,35 @@
 
                 <div class="role-details-compact">
                   <div class="detail-inline">
-                    <span class="icon">📅</span>
+                    <span class="icon" aria-hidden="true">📅</span>
                     <span>{formatDateCompact(role)}</span>
                   </div>
 
                   <div class="detail-inline">
-                    <span class="icon">🕐</span>
+                    <span class="icon" aria-hidden="true">🕐</span>
                     <span>{formatTimeRange(role)}{#if duration != null} (~{duration}h){/if}</span>
                   </div>
 
                   <div class="detail-inline">
-                    <span class="icon">⏱</span>
+                    <span class="icon" aria-hidden="true">⏱</span>
                     <span>Est. {formatEstimateDuration(role.estimate_duration_hours)}</span>
                   </div>
 
                   {#if role.location}
                     <div class="detail-inline">
-                      <span class="icon">📍</span>
+                      <span class="icon" aria-hidden="true">📍</span>
                       <span>{role.location}</span>
                     </div>
                   {/if}
 
                   <div class="detail-inline">
-                    <span class="icon">👥</span>
+                    <span class="icon" aria-hidden="true">👥</span>
                     <span>{role.positions_filled} / {role.positions_total} spots filled</span>
                   </div>
 
                   {#if criticalOpenSpots > 0}
                     <div class="detail-inline critical-detail">
-                      <span class="icon">⚠</span>
+                      <span class="icon" aria-hidden="true">⚠</span>
                       <span>{criticalOpenSpots} critical spot{criticalOpenSpots === 1 ? '' : 's'} still needed</span>
                     </div>
                   {/if}
@@ -753,24 +821,34 @@
 
     {#if isProspectiveVolunteer && topCriticalRoles.length > 0 && groupedDomainsDisplay.length > 0}
       <h2 class="domains-section-heading">Browse by team</h2>
-      <p class="domains-section-lead">Expand a team to see more roles and sign up.</p>
+      <p class="domains-section-lead">Expand a team to see more shifts and sign up.</p>
     {/if}
 
     <div class="domains-list">
       {#each groupedDomainsDisplay as domain (domain.id)}
         {@const isExpanded = expandedDomains.has(domain.id)}
+        {@const whenLabel = domainWhenLabel(domain)}
         <section class="domain-section">
           <div 
             class="domain-header clickable" 
             on:click={() => toggleDomain(domain.id)}
             role="button"
             tabindex="0"
-            on:keydown={(e) => e.key === 'Enter' && toggleDomain(domain.id)}
+            aria-expanded={isExpanded}
+            on:keydown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                toggleDomain(domain.id);
+              }
+            }}
           >
             <div class="domain-toggle">
-              <span class="toggle-icon">{isExpanded ? '▼' : '►'}</span>
+              <span class="toggle-icon" aria-hidden="true">{isExpanded ? '▼' : '►'}</span>
               <div class="domain-info">
                 <h2>{domain.name}</h2>
+                {#if whenLabel}
+                  <p class="domain-when">{whenLabel}</p>
+                {/if}
                 <p>Led by {domain.leaderName}</p>
               </div>
             </div>
@@ -792,7 +870,7 @@
                     <div class="role-title-row">
                       <h3>
                         {#if criticalOpenSpots > 0}
-                          <span class="critical-icon" title={`Critical need: ${criticalOpenSpots} open`} aria-label="Critical role">⚠</span>
+                          <span class="critical-icon" aria-hidden="true">⚠</span>
                         {/if}
                         {role.name}
                       </h3>
@@ -801,35 +879,35 @@
 
                     <div class="role-details-compact">
                       <div class="detail-inline">
-                        <span class="icon">📅</span>
+                        <span class="icon" aria-hidden="true">📅</span>
                         <span>{formatDateCompact(role)}</span>
                       </div>
                       
                       <div class="detail-inline">
-                        <span class="icon">🕐</span>
+                        <span class="icon" aria-hidden="true">🕐</span>
                         <span>{formatTimeRange(role)}{#if duration != null} (~{duration}h){/if}</span>
                       </div>
 
                       <div class="detail-inline">
-                        <span class="icon">⏱</span>
+                        <span class="icon" aria-hidden="true">⏱</span>
                         <span>Est. {formatEstimateDuration(role.estimate_duration_hours)}</span>
                       </div>
 
                       {#if role.location}
                         <div class="detail-inline">
-                          <span class="icon">📍</span>
+                          <span class="icon" aria-hidden="true">📍</span>
                           <span>{role.location}</span>
                         </div>
                       {/if}
 
                       <div class="detail-inline">
-                        <span class="icon">👥</span>
+                        <span class="icon" aria-hidden="true">👥</span>
                         <span>{role.positions_filled} / {role.positions_total} spots filled</span>
                       </div>
 
                       {#if criticalOpenSpots > 0}
                         <div class="detail-inline critical-detail">
-                          <span class="icon">⚠</span>
+                          <span class="icon" aria-hidden="true">⚠</span>
                           <span>{criticalOpenSpots} critical spot{criticalOpenSpots === 1 ? '' : 's'} still needed</span>
                         </div>
                       {/if}
@@ -871,20 +949,29 @@
   {@const timeDisplay = formatTimeRange(selectedRole) + (duration != null ? ` (${duration}h)` : '')}
   
   <div class="modal-overlay" on:click={closeModal}>
-    <div class="modal-content" on:click|stopPropagation>
+    <div
+      class="modal-content"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="shift-info-title"
+      tabindex="-1"
+      bind:this={infoDialog}
+      on:click|stopPropagation
+      on:keydown={trapDialogTab}
+    >
       <button class="modal-close" on:click={closeModal} aria-label="Close">
         ✕
       </button>
       
       <div class="modal-header">
-        <h2>{selectedRole.name}</h2>
+        <h2 id="shift-info-title">{selectedRole.name}</h2>
         <span class="status-badge {status.class}">{status.label}</span>
       </div>
 
       <div class="modal-body">
         <div class="modal-details">
           <div class="detail-row">
-            <span class="icon">📅</span>
+            <span class="icon" aria-hidden="true">📅</span>
             <div>
               <strong>Date</strong>
               <p>{formatDateForDisplay(selectedRole)}</p>
@@ -892,7 +979,7 @@
           </div>
           
           <div class="detail-row">
-            <span class="icon">🕐</span>
+            <span class="icon" aria-hidden="true">🕐</span>
             <div>
               <strong>Time</strong>
               <p>{timeDisplay}</p>
@@ -900,7 +987,7 @@
           </div>
 
           <div class="detail-row">
-            <span class="icon">⏱</span>
+            <span class="icon" aria-hidden="true">⏱</span>
             <div>
               <strong>Est. duration</strong>
               <p>{formatEstimateDuration(selectedRole.estimate_duration_hours)}</p>
@@ -909,7 +996,7 @@
 
           {#if selectedRole.location}
             <div class="detail-row">
-              <span class="icon">📍</span>
+              <span class="icon" aria-hidden="true">📍</span>
               <div>
                 <strong>Location</strong>
                 <p>{selectedRole.location}</p>
@@ -918,7 +1005,7 @@
           {/if}
 
           <div class="detail-row">
-            <span class="icon">👥</span>
+            <span class="icon" aria-hidden="true">👥</span>
             <div>
               <strong>Positions</strong>
               <p>{selectedRole.positions_filled} / {selectedRole.positions_total} spots filled</p>
@@ -926,7 +1013,7 @@
           </div>
 
           <div class="detail-row">
-            <span class="icon">🤝</span>
+            <span class="icon" aria-hidden="true">🤝</span>
             <div>
               <strong>Team</strong>
               <p>{domainMeta.name} • Led by {domainMeta.leaderName}</p>
@@ -948,14 +1035,14 @@
           on:click={() => handleSignup(selectedRole)}
           disabled={isFull}
         >
-          {isFull ? 'This role is full' : 'Sign Up for This Role'}
+          {isFull ? 'This shift is full' : 'Sign up for this shift'}
         </button>
         
         <button
           class="btn btn-secondary"
           on:click={() => handleShare(selectedRole)}
         >
-          Share This Opportunity
+          Share this shift
         </button>
 
         <button
@@ -977,15 +1064,24 @@
 
 {#if showPiiModal && piiRole}
   <div class="modal-overlay" on:click={closePiiModal}>
-    <div class="modal-content pii-modal" on:click|stopPropagation>
+    <div
+      class="modal-content pii-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="shift-signup-title"
+      tabindex="-1"
+      bind:this={signupDialog}
+      on:click|stopPropagation
+      on:keydown={trapDialogTab}
+    >
       <button class="modal-close" on:click={closePiiModal} aria-label="Close">×</button>
       <div class="modal-header">
-        <h2>Sign Up for {piiRole.name}</h2>
-        <p class="modal-subtitle">Enter your information to continue to the waiver.</p>
+        <h2 id="shift-signup-title">Sign up for {piiRole.name}</h2>
+        <p class="modal-subtitle">The waiver comes next. Nothing is held yet. If you are under 18, a parent or guardian signs before the seat is confirmed. The emergency contact is for race day.</p>
       </div>
       {#if awaitingVerification}
         <div class="modal-body" role="status">
-          <p>Check your email to finish signing up. Follow the link to return to this role and complete the waiver. If you are under 18, ask your parent or guardian to sign then. A spot has not been reserved.</p>
+          <p>Check your email to finish signing up. Follow the link to return to this shift and complete the waiver. If you are under 18, ask your parent or guardian to sign then. A spot has not been reserved.</p>
         </div>
       {:else}
       <div class="modal-body">
@@ -1013,11 +1109,11 @@
         <div class="form-row">
           <div class="form-group">
             <label for="pii-emergency-name">Emergency Contact Name *</label>
-            <input id="pii-emergency-name" type="text" bind:value={piiForm.emergency_contact_name} placeholder="Full name" disabled={piiSubmitting} />
+            <input id="pii-emergency-name" type="text" bind:value={piiForm.emergency_contact_name} placeholder="Full name" disabled={piiSubmitting} required />
           </div>
           <div class="form-group">
             <label for="pii-emergency-phone">Emergency Contact Phone *</label>
-            <input id="pii-emergency-phone" type="tel" bind:value={piiForm.emergency_contact_phone} placeholder="(555) 123-4567" disabled={piiSubmitting} />
+            <input id="pii-emergency-phone" type="tel" bind:value={piiForm.emergency_contact_phone} placeholder="(555) 123-4567" disabled={piiSubmitting} required />
           </div>
         </div>
         <div class="form-group">
@@ -1154,10 +1250,14 @@
   }
 
   .domains-section-heading {
-    margin: 0 0 0.35rem 0;
+    margin: 1.75rem 0 0.35rem;
     font-size: 1.25rem;
     color: var(--text-primary);
     font-weight: 600;
+  }
+
+  .critical-spotlight .domains-section-heading {
+    margin-top: 0;
   }
 
   .domains-section-lead {
@@ -1190,7 +1290,7 @@
   .domain-header {
     display: flex;
     justify-content: space-between;
-    align-items: center;
+    align-items: flex-start;
     gap: 1rem;
     padding: 0.5rem 0;
   }
@@ -1231,6 +1331,15 @@
     color: var(--text-secondary);
     font-weight: 400;
     font-size: 0.9rem;
+  }
+
+  .domain-when {
+    margin: 0.35rem 0 0;
+    color: var(--text-primary);
+    font-size: 1rem;
+    font-weight: 600;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
   }
 
   .domain-summary {
@@ -1616,9 +1725,16 @@
   }
 
   .pii-modal .modal-subtitle {
-    margin: 0.5rem 0 0;
-    color: var(--text-secondary);
-    font-size: 0.95rem;
+    margin: 0.75rem 0 0;
+    color: var(--text-primary);
+    font-size: 1rem;
+    font-weight: 400;
+    line-height: 1.5;
+    max-width: 65ch;
+  }
+
+  .modal-content:focus {
+    outline: none;
   }
 
   .pii-modal .form-row {
