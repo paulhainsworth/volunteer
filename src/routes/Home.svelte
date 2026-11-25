@@ -91,7 +91,7 @@
       ? 'Shifts could not load.'
       : homeRoles.length === 0
         ? 'No open shifts right now.'
-        : `${homeRoles.length} open ${homeRoles.length === 1 ? 'shift' : 'shifts'}`;
+        : `Showing ${homeRoles.length} open ${homeRoles.length === 1 ? 'shift' : 'shifts'}`;
 
   onMount(() => {
     let cancelled = false;
