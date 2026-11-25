@@ -46,31 +46,35 @@
     font-size: 1rem;
   }
 
-  .leader-info {
-    margin-bottom: 1rem;
-  }
-
   .leader-name {
     font-weight: 600;
     font-size: 1.1rem;
     color: var(--warning-text);
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.25rem;
   }
 
   .contact-options {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
   }
 
   .contact-link {
     color: var(--primary-color);
     text-decoration: none;
     font-size: 0.9rem;
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    overflow-wrap: anywhere;
   }
 
   .contact-link:hover {
     text-decoration: underline;
+  }
+
+  .contact-link:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
   }
 </style>
 
