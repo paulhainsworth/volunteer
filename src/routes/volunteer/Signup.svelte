@@ -174,6 +174,7 @@
     guestSubmitting = true;
     guestInvalidField = '';
     guestError = '';
+    const f = guestForm;
 
     try {
       const result = await createVolunteerAccount(
