@@ -7,19 +7,19 @@ test('loads fill counts, filters roles, and opens signup', async ({ page, backen
   backend.reply('POST', '/rest/v1/rpc/get_confirmed_signup_counts', [{ role_id: role.id, cnt: 1 }]);
   backend.reply('GET', '/rest/v1/team_club_affiliations', []);
   await page.goto('/#/volunteer');
-  await expect(page.getByText('Loading opportunities...')).toBeVisible();
+  await expect(page.getByText('Loading shifts…')).toBeVisible();
   for (const name of ['Sort by', 'Event day', 'Availability', 'Duration']) {
     await expect(page.getByRole('combobox', { name, exact: true })).toBeVisible();
   }
   finish({ body: [role, { ...role, id: 'other-role', name: 'Registration Desk' }] });
   await page.getByRole('button', { name: /General Opportunities/ }).click();
   await expect(page.getByText(role.name, { exact: true })).toBeVisible();
-  const search = page.getByRole('searchbox', { name: 'Search roles' });
+  const search = page.getByRole('searchbox', { name: 'Search shifts' });
   await search.fill('Marshal');
   await expect(page.getByText('Registration Desk', { exact: true })).toHaveCount(0);
   await expect(page.getByText('1 / 3 spots filled')).toBeVisible();
   await page.getByRole('button', { name: 'Sign Up', exact: true }).click();
-  await expect(page.getByRole('heading', { name: `Sign Up for ${role.name}` })).toBeVisible();
+  await expect(page.getByRole('heading', { name: `Sign up for ${role.name}` })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Continue to Waiver' })).toBeVisible();
 });
 
@@ -29,7 +29,7 @@ test('phone filters keep search and availability visible and retain selections',
   backend.reply('POST', '/rest/v1/rpc/get_confirmed_signup_counts', []);
   await page.goto('/#/volunteer');
 
-  await expect(page.getByRole('searchbox', { name: 'Search roles' })).toBeVisible();
+  await expect(page.getByRole('searchbox', { name: 'Search shifts' })).toBeVisible();
   await expect(page.getByRole('combobox', { name: 'Availability' })).toBeVisible();
   const filters = page.getByRole('button', { name: /^Filters/ });
   const duration = page.getByRole('combobox', { name: 'Duration', exact: true });
@@ -41,7 +41,7 @@ test('phone filters keep search and availability visible and retain selections',
   await filters.press('Enter');
   await expect(filters).toHaveAttribute('aria-expanded', 'true');
   await duration.selectOption('1-or-less');
-  await expect(page.getByText('No volunteer opportunities found matching your filters.')).toBeVisible();
+  await expect(page.getByText('No shifts match these filters.')).toBeVisible();
   await filters.press('Enter');
   await expect(filters).toHaveAccessibleName('Filters (1)');
   await expect(duration).toBeHidden();
@@ -85,7 +85,7 @@ test('homepage leads to volunteer shifts and shows open spots', async ({ page, b
   await expect(page.getByRole('heading', { name: 'Find a volunteer shift' })).toBeVisible();
   await expect(page.getByRole('link', { name: /Course Marshal.*1 spot open/ })).toBeVisible();
   await page.getByRole('link', { name: 'Browse volunteer shifts' }).click();
-  await expect(page.getByRole('heading', { name: 'Volunteer Opportunities' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Volunteer shifts' })).toBeVisible();
 });
 
 test('homepage states how proceeds are used and serves a favicon', async ({ page, backend }) => {
@@ -108,7 +108,7 @@ test('homepage states how proceeds are used and serves a favicon', async ({ page
 });
 
 for (const [status, response, message] of [
-  [200, [], 'No volunteer opportunities found matching your filters.'],
+  [200, [], 'No shifts match these filters.'],
   [503, { message: 'Fixture roles unavailable' }, 'Fixture roles unavailable'],
 ]) {
   test(`distinguishes a roles response with status ${status}`, async ({ page, backend }) => {

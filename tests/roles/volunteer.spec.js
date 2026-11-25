@@ -146,7 +146,7 @@ test('mobile navigation exposes its state and restores focus on Escape', async (
   await menu.press('Enter');
   await page.evaluate(() => { window.location.hash = '/volunteer'; });
   await expect(menu).toHaveAttribute('aria-expanded', 'false');
-  await expect(page.getByRole('heading', { name: 'Volunteer Opportunities' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Volunteer shifts' })).toBeVisible();
 });
 
 test('volunteer saves an emergency-contact edit', async ({ page, backend }) => {
