@@ -313,6 +313,15 @@
     expandedDomains = newSet;
   }
 
+  function clearFilters() {
+    searchQuery = '';
+    filterStatus = 'all';
+    sortBy = 'date';
+    raceDayFilter = 'all';
+    filterDuration = 'all';
+    showExtraFilters = false;
+  }
+
   $: isProspectiveVolunteer = !$auth.user;
 
   $: isProspectiveVolunteer = !$auth.user;
@@ -727,6 +736,7 @@
   {:else if groupedDomainsDisplay.length === 0 && topCriticalRoles.length === 0}
     <div class="empty">
       <p>No shifts match these filters.</p>
+      <button type="button" class="btn btn-secondary" on:click={clearFilters}>Clear filters</button>
     </div>
   {:else}
     {@const totalOpenSpots = filteredRoles.reduce((sum, r) => sum + getRemainingSpots(r), 0)}
@@ -959,9 +969,7 @@
       on:click|stopPropagation
       on:keydown={trapDialogTab}
     >
-      <button class="modal-close" on:click={closeModal} aria-label="Close">
-        ✕
-      </button>
+      <button class="modal-close" on:click={closeModal} aria-label="Close">×</button>
       
       <div class="modal-header">
         <h2 id="shift-info-title">{selectedRole.name}</h2>
@@ -1217,6 +1225,18 @@
     color: var(--text-secondary);
   }
 
+  .empty .btn {
+    flex: none;
+    margin-top: 1rem;
+    min-height: 44px;
+    padding: 0.75rem 1.25rem;
+  }
+
+  .empty .btn:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+  }
+
   .error {
     color: var(--danger-color);
   }
@@ -1302,8 +1322,14 @@
     transition: background-color 0.2s;
   }
 
-  .domain-header.clickable:hover {
+  .domain-header.clickable:hover,
+  .domain-header.clickable:active {
     background: var(--bg-secondary);
+  }
+
+  .domain-header.clickable:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
   }
 
   .domain-toggle {
@@ -1340,6 +1366,7 @@
     font-weight: 600;
     line-height: 1.4;
     overflow-wrap: anywhere;
+    text-wrap: pretty;
   }
 
   .domain-summary {
@@ -1614,22 +1641,26 @@
     right: 1rem;
     background: var(--bg-secondary);
     border: none;
-    width: 36px;
-    height: 36px;
+    width: 44px;
+    height: 44px;
     border-radius: 50%;
     font-size: 1.5rem;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--text-secondary);
-    transition: background 0.2s, color 0.2s;
+    color: var(--text-primary);
+    transition: background 0.2s;
     z-index: 1;
   }
 
   .modal-close:hover {
     background: var(--bg-tertiary);
-    color: var(--text-primary);
+  }
+
+  .modal-close:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
   }
 
   .modal-header {
@@ -1638,7 +1669,7 @@
     display: flex;
     align-items: flex-start;
     gap: 1rem;
-    padding-right: 4rem; /* Space for close button */
+    padding-right: 4.75rem;
   }
 
   .modal-header h2 {
@@ -1720,8 +1751,20 @@
     gap: 0.75rem;
   }
 
+  .pii-modal {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
   .pii-modal .modal-header {
     flex-direction: column;
+    flex-shrink: 0;
+  }
+
+  .pii-modal .modal-body {
+    overflow-y: auto;
+    min-height: 0;
   }
 
   .pii-modal .modal-subtitle {
@@ -1731,6 +1774,7 @@
     font-weight: 400;
     line-height: 1.5;
     max-width: 65ch;
+    text-wrap: pretty;
   }
 
   .modal-content:focus {
@@ -1796,6 +1840,12 @@
   .pii-modal .modal-actions {
     flex-direction: row;
     justify-content: flex-end;
+    flex-shrink: 0;
+  }
+
+  .pii-modal .modal-actions .btn:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
   }
 
   .btn-large {
@@ -1880,7 +1930,20 @@
 
     .modal-header {
       padding: 1.5rem 1.5rem 1rem 1.5rem;
-      padding-right: 3.5rem;
+      padding-right: 4.75rem;
+    }
+
+    .pii-modal .form-row {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .pii-modal .modal-actions {
+      flex-direction: column;
+    }
+
+    .pii-modal .modal-actions .btn {
+      width: 100%;
+      white-space: nowrap;
     }
 
     .modal-header h2 {
