@@ -1,0 +1,138 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-25T01:20:00Z",
+  "title": "Design System: Berkeley Omnium Volunteer Hub",
+  "extensions": {
+    "colorMeta": {
+      "shift-blue": { "role": "primary", "displayName": "Shift Blue", "canonical": "#4d9fff" },
+      "shift-blue-hover": { "role": "primary", "displayName": "Shift Blue Hover", "canonical": "#2d7dd2" },
+      "link-hover": { "role": "primary", "displayName": "Link Hover", "canonical": "#8ac1ff" },
+      "action-blue": { "role": "primary", "displayName": "Action Blue", "canonical": "#007bff" },
+      "action-blue-press": { "role": "primary", "displayName": "Action Blue Press", "canonical": "#0056b3" },
+      "action-blue-deep": { "role": "primary", "displayName": "Action Blue Deep", "canonical": "#00458e" },
+      "page": { "role": "neutral", "displayName": "Night Page", "canonical": "#0e1014" },
+      "surface": { "role": "neutral", "displayName": "Panel", "canonical": "#1b1e24" },
+      "surface-sunken": { "role": "neutral", "displayName": "Sunken Bar", "canonical": "#14171c" },
+      "surface-raised": { "role": "neutral", "displayName": "Raised Step", "canonical": "#252a32" },
+      "text": { "role": "neutral", "displayName": "Mist Text", "canonical": "#e2e8f0" },
+      "text-secondary": { "role": "neutral", "displayName": "Secondary Text", "canonical": "#a0aec0" },
+      "text-muted": { "role": "neutral", "displayName": "Muted Text", "canonical": "#cbd5e0" },
+      "border": { "role": "neutral", "displayName": "Hairline", "canonical": "#383f4a" },
+      "input-border": { "role": "neutral", "displayName": "Field Edge", "canonical": "#626e7e" },
+      "success": { "role": "status", "displayName": "Success", "canonical": "#48bb78" },
+      "warning": { "role": "status", "displayName": "Warning", "canonical": "#f6ad55" },
+      "danger": { "role": "status", "displayName": "Danger", "canonical": "#fc8181" },
+      "info": { "role": "status", "displayName": "Info", "canonical": "#4fd1c5" }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "The homepage headline only." },
+      "headline": { "displayName": "Headline", "purpose": "Section titles." },
+      "title": { "displayName": "Title", "purpose": "The wordmark beside the club logo." },
+      "body": { "displayName": "Body", "purpose": "Paragraphs, fields, and form buttons." },
+      "label": { "displayName": "Label", "purpose": "Navigation items and field labels." }
+    },
+    "shadows": [
+      { "name": "whisper", "value": "0 1px 2px rgba(0, 0, 0, 0.3)", "purpose": "A minor raised control. Not a card at rest." },
+      { "name": "point", "value": "0 2px 8px rgba(0, 0, 0, 0.4)", "purpose": "Hover on a shift card or homepage button, fine pointer only." },
+      { "name": "overlay", "value": "0 4px 16px rgba(0, 0, 0, 0.5)", "purpose": "The open mobile menu and a few overlays." }
+    ],
+    "motion": [
+      { "name": "theme", "value": "0.3s ease", "purpose": "Background, border, and text color when the theme changes." },
+      { "name": "hover", "value": "0.2s", "purpose": "Button and card hover." }
+    ],
+    "breakpoints": [
+      { "name": "nav", "value": "1100px" },
+      { "name": "form", "value": "768px" }
+    ],
+    "lightTheme": {
+      "shift-blue": "#007bff",
+      "shift-blue-hover": "#0056b3",
+      "text": "#1a1a1a",
+      "text-secondary": "#6c757d",
+      "text-muted": "#495057",
+      "page": "#f5f7fa",
+      "surface": "#ffffff",
+      "surface-sunken": "#f8f9fa",
+      "surface-raised": "#e9ecef",
+      "border": "#dee2e6",
+      "input-border": "#ced4da",
+      "success": "#28a745",
+      "warning": "#ffc107",
+      "danger": "#dc3545",
+      "info": "#17a2b8"
+    }
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The form primary action. Solid Action Blue, white label.",
+      "html": "<button class=\"ds-btn-primary\">Browse volunteer shifts</button>",
+      "css": ".ds-btn-primary { background: #007bff; color: #fff; padding: 0.75rem 1.5rem; border: none; border-radius: 6px; font-weight: 600; font-size: 1rem; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; cursor: pointer; transition: background 0.2s; } .ds-btn-primary:hover { background: #0056b3; } .ds-btn-primary:focus-visible { outline: 2px solid #4d9fff; outline-offset: 2px; } .ds-btn-primary:disabled { background: #6c757d; cursor: not-allowed; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "The outlined alternate on the homepage.",
+      "html": "<a class=\"ds-btn-secondary\" href=\"#/volunteer\">Browse Opportunities</a>",
+      "css": ".ds-btn-secondary { display: inline-block; background: #1b1e24; color: #4d9fff; border: 2px solid #4d9fff; border-radius: 8px; padding: 1rem 2rem; font-weight: 600; font-size: 1.1rem; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; text-decoration: none; } .ds-btn-secondary:hover { box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4); } .ds-btn-secondary:focus-visible { outline: 2px solid #4d9fff; outline-offset: 2px; }"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "A full-width field with the label above it.",
+      "html": "<label class=\"ds-field\"><span>Email</span><input type=\"email\" placeholder=\"\"></label>",
+      "css": ".ds-field { display: block; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; } .ds-field span { display: block; margin-bottom: 0.5rem; font-weight: 600; color: #e2e8f0; } .ds-field input { width: 100%; padding: 0.75rem; border: 1px solid #626e7e; border-radius: 6px; background: #1b1e24; color: #e2e8f0; font-size: 1rem; font-family: inherit; } .ds-field input:focus { outline: none; border-color: #4d9fff; box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1); }"
+    },
+    {
+      "name": "Navigation",
+      "kind": "nav",
+      "refersTo": "nav",
+      "description": "The club bar. Current page is a raised step, not a blue link.",
+      "html": "<nav class=\"ds-nav\"><span class=\"ds-nav-title\">Omnium Volunteer Hub</span><a class=\"ds-nav-link\" aria-current=\"page\" href=\"#/volunteer\">Shifts</a></nav>",
+      "css": ".ds-nav { display: flex; align-items: center; justify-content: space-between; gap: 1rem; background: #14171c; color: #e2e8f0; padding: 0.625rem 1rem; border-bottom: 1px solid #383f4a; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; } .ds-nav-title { font-size: 1.125rem; font-weight: 650; } .ds-nav-link { color: #e2e8f0; text-decoration: none; padding: 0.625rem; border-radius: 6px; font-size: 0.9375rem; font-weight: 600; } .ds-nav-link:hover, .ds-nav-link[aria-current='page'] { background: #252a32; } .ds-nav-link:focus-visible { outline: 2px solid #4d9fff; outline-offset: 2px; }"
+    },
+    {
+      "name": "Shift Card",
+      "kind": "card",
+      "refersTo": "card-shift",
+      "description": "A shift on the board. Flat until the pointer can hover.",
+      "html": "<a class=\"ds-card\" href=\"#/signup\"><strong>Course marshal</strong><span>Sunday morning</span></a>",
+      "css": ".ds-card { display: flex; flex-direction: column; gap: 0.5rem; background: #1b1e24; color: #e2e8f0; padding: 1.25rem; border-radius: 12px; border: 1px solid #383f4a; text-decoration: none; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; } .ds-card strong { font-size: 1.15rem; font-weight: 600; } .ds-card span { color: #cbd5e0; } @media (hover: hover) and (pointer: fine) { .ds-card:hover { box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4); } } .ds-card:focus-visible { outline: 2px solid #4d9fff; outline-offset: 2px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Shift Board",
+    "overview": "This is a plain club tool. Dark is the default. Type is the system font. Shift Blue marks a link or an action, and status colors say whether something succeeded, needs attention, or failed. The page should read like a board of shifts, not a campaign.\n\nDensity sits between a form and a roster. The homepage has room for the headline and the shift cards. Admin and signup screens are closer together. Nothing here is a marketing site, and nothing here should grow a second visual language beside the board.\n\nThe kids' clinic page keeps its own cream, blue, and orange. That palette stays on that page.",
+    "keyCharacteristics": [
+      "Dark by default, with a light theme remembered in the browser.",
+      "One job color: Shift Blue for links and primary actions.",
+      "System type at a readable body size. Headings are the same family, heavier, tighter.",
+      "Surfaces are flat at rest. A border and a background step do the separating.",
+      "A shadow appears when someone points at a shift card or button, or when a menu overlays the page."
+    ],
+    "rules": [
+      { "name": "The One Blue Rule", "body": "Shift Blue is the only action color on the hub. Success, warning, danger, and info are status. They do not become buttons.", "section": "colors" },
+      { "name": "The Theme Token Rule", "body": "New color uses the theme variables. Do not paste Action Blue into a new screen.", "section": "colors" },
+      { "name": "The One Family Rule", "body": "Do not add a second typeface for emphasis. Weight and size are the emphasis.", "section": "typography" },
+      { "name": "The Flat Until You Point Rule", "body": "A card at rest has no shadow. If a shadow is doing the job of a border, use the border.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do keep dark as the default and honor a stored light preference.",
+      "Do use the theme variables for new color, type, space, and radius.",
+      "Do leave cards flat, and add a shadow only for hover or an overlay.",
+      "Do keep one Shift Blue for links, focus, and the primary action.",
+      "Do put the focus ring on anything that can be reached from the keyboard."
+    ],
+    "donts": [
+      "Don't add a second typeface, a gradient, or a marketing hero treatment.",
+      "Don't hardcode Action Blue, Action Blue Press, or Action Blue Deep in new UI.",
+      "Don't use status colors as button fills.",
+      "Don't let the kids' clinic cream, orange, or clinic blue into the hub.",
+      "Don't invent an 8px radius. Use the small, medium, or large step."
+    ]
+  }
+}
