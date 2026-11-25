@@ -748,7 +748,7 @@ END:VCALENDAR`;
   }
 
   .btn-secondary:active {
-    background: var(--bg-tertiary);
+    background: var(--bg-page);
   }
 
   .btn-danger {
