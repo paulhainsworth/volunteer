@@ -34,7 +34,7 @@ test('dark mode is the default and the header logo adapts to both themes', async
 
 test('the My Signups footer fills the viewport on short pages and follows long pages', async ({ page, backend }) => {
   await signInFixture(page, backend);
-  await expect(page.getByRole('heading', { name: 'My Volunteer Signups' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'My Omnium shifts' })).toBeVisible();
   const footer = page.getByRole('contentinfo');
 
   for (const width of [1024, 390]) {

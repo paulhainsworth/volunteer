@@ -73,7 +73,7 @@ test('completed signups remain readable in both themes at phone width', async ({
   for (const mode of ['dark', 'light']) {
     await expect(page.locator('html')).toHaveCSS('color-scheme', mode);
     await expect(card).toHaveCSS('opacity', '1');
-    await expect(card.getByText('Completed', { exact: true })).toBeVisible();
+    await expect(card.getByText('Past', { exact: true })).toBeVisible();
     await expect(card.getByText('Sunday, April 19, 2026', { exact: true })).toBeVisible();
     await expect(time).toBeVisible();
     await expect(duration).toBeVisible();
