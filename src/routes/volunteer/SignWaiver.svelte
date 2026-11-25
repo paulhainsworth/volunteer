@@ -20,6 +20,30 @@
   let parentGuardianEmail = '';
   let parentGuardianPhone = '';
   let parentSignatureName = '';
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  $: emailValue = parentGuardianEmail.trim();
+  $: emailFormatBad = isMinor && emailValue !== '' && !EMAIL_RE.test(emailValue);
+  $: blocker = !ageDeclaration
+    ? 'Select whether you are under 18 today.'
+    : !waiverAgreed
+      ? 'You must agree to the waiver to continue.'
+      : !isMinor && !signatureName.trim()
+        ? 'Please enter your full name as your digital signature.'
+        : isMinor && !parentGuardianName.trim()
+          ? 'Parent/guardian full name is required for volunteers under 18.'
+          : isMinor && !emailValue
+            ? 'Parent/guardian email is required for volunteers under 18.'
+            : isMinor && !EMAIL_RE.test(emailValue)
+              ? 'Enter a valid parent/guardian email.'
+              : isMinor && !parentSignatureName.trim()
+                ? 'Parent/guardian must sign (enter their full name) for volunteers under 18.'
+                : '';
+  $: emailMessage = emailFormatBad
+    ? 'Enter a valid parent/guardian email.'
+    : blocker === 'Parent/guardian email is required for volunteers under 18.'
+      ? blocker
+      : '';
 
   onMount(async () => {
     if (!$auth.user) {
@@ -62,24 +86,7 @@
 
   async function handleSubmit() {
     error = '';
-    if (!ageDeclaration) {
-      error = 'Select whether you are under 18 today.';
-      return;
-    }
-    if (!waiverAgreed) {
-      error = 'You must agree to the waiver to continue.';
-      return;
-    }
-    if (!isMinor && !signatureName.trim()) {
-      error = 'Please enter your full name as your digital signature.';
-      return;
-    }
-    if (isMinor) {
-      if (!parentGuardianName.trim()) error = 'Parent/guardian full name is required for volunteers under 18.';
-      else if (!parentGuardianEmail.trim()) error = 'Parent/guardian email is required for volunteers under 18.';
-      else if (!parentSignatureName.trim()) error = 'Parent/guardian must sign (enter their full name) for volunteers under 18.';
-      if (error) return;
-    }
+    if (blocker) return;
 
     submitting = true;
     try {
@@ -126,10 +133,16 @@
       <h2>Liability Waiver</h2>
       <div class="waiver-text">{waiverText}</div>
 
-      <fieldset class="form-group">
+      <fieldset class="age-group">
         <legend>How old are you today?</legend>
-        <label><input type="radio" name="waiver-age" value="minor" bind:group={ageDeclaration} disabled={submitting} /> I am under 18 today</label>
-        <label><input type="radio" name="waiver-age" value="adult" bind:group={ageDeclaration} disabled={submitting} /> I am 18 or older today</label>
+        <label class="age-choice">
+          <input type="radio" name="waiver-age" value="minor" bind:group={ageDeclaration} disabled={submitting} />
+          <span>I am under 18 today</span>
+        </label>
+        <label class="age-choice">
+          <input type="radio" name="waiver-age" value="adult" bind:group={ageDeclaration} disabled={submitting} />
+          <span>I am 18 or older today</span>
+        </label>
       </fieldset>
 
       {#if isMinor}
@@ -146,7 +159,10 @@
           </div>
           <div class="form-group">
             <label for="parent-email">Parent/guardian email *</label>
-            <input type="email" id="parent-email" bind:value={parentGuardianEmail} placeholder="email@example.com" disabled={submitting} />
+            <input type="email" id="parent-email" bind:value={parentGuardianEmail} placeholder="email@example.com" disabled={submitting} aria-invalid={emailMessage ? true : undefined} aria-describedby={emailMessage ? 'parent-email-error' : undefined} />
+            {#if emailMessage}
+              <p id="parent-email-error" class="field-error" role="alert">{emailMessage}</p>
+            {/if}
           </div>
           <div class="form-group">
             <label for="parent-phone">Parent/guardian phone (optional)</label>
@@ -178,12 +194,16 @@
     </div>
 
     <div class="actions">
+      {#if blocker && blocker !== emailMessage}
+        <p id="waiver-missing" class="field-error waiver-missing" role="status">{blocker}</p>
+      {/if}
       <a href="#{returnUrl}" class="btn btn-secondary" class:disabled={submitting}>Cancel</a>
       <button
         type="button"
         class="btn btn-primary"
         on:click={handleSubmit}
-        disabled={submitting || !ageDeclaration || !waiverAgreed || (!isMinor && !signatureName.trim()) || (isMinor && (!parentGuardianName.trim() || !parentGuardianEmail.trim() || !parentSignatureName.trim()))}
+        disabled={submitting || !!blocker}
+        aria-describedby={blocker && blocker !== emailMessage ? 'waiver-missing' : (emailMessage ? 'parent-email-error' : undefined)}
       >
         {submitting ? 'Signing...' : 'Sign waiver'}
       </button>
@@ -290,6 +310,49 @@
     font-size: 1rem;
   }
 
+  .form-group input[aria-invalid='true'] {
+    border-color: var(--danger-border);
+  }
+
+  .age-group {
+    border: none;
+    margin: 0 0 1rem;
+    padding: 0;
+    min-inline-size: 0;
+  }
+
+  .age-group legend {
+    margin-bottom: 0.5rem;
+    padding: 0;
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--text-primary);
+  }
+
+  .age-choice {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    margin: 0 0 0.5rem;
+    font-weight: 400;
+    font-size: 1rem;
+    color: var(--text-primary);
+  }
+
+  .age-choice input {
+    width: 1rem;
+    height: 1rem;
+    margin: 0.2rem 0 0;
+    flex: 0 0 auto;
+  }
+
+  .field-error {
+    margin: 0.35rem 0 0;
+    color: var(--danger-text);
+    font-size: 0.875rem;
+    text-wrap: pretty;
+  }
+
   .parent-consent-section {
     margin: 1rem 0;
     padding: 1rem;
@@ -314,8 +377,15 @@
 
   .actions {
     display: flex;
-    gap: 1rem;
+    flex-wrap: wrap;
+    gap: 0.75rem 1rem;
     align-items: center;
+  }
+
+  .waiver-missing {
+    flex: 1 0 100%;
+    margin: 0;
+    max-width: 65ch;
   }
 
   .btn {
@@ -340,7 +410,8 @@
   }
 
   .btn-primary:disabled {
-    background: #6c757d;
+    background: #007bff;
+    opacity: 0.45;
     cursor: not-allowed;
   }
 
