@@ -6,15 +6,13 @@ import {
   nicaSpotWeightForSignup,
   volunteerSpotsForBeneficiary
 } from './nicaSpotMath';
-import { formatRoleScheduleDate, getRoleScheduleSortTime, isFlexibleTime } from './utils/timeDisplay';
+import { calculateDuration, formatRoleScheduleDate, getRoleScheduleSortTime, isFlexibleTime } from './utils/timeDisplay';
 
 function hoursForSignup(signup) {
   const role = signup?.role;
   if (!role) return 0;
   if (isFlexibleTime(role)) return 0;
-  const start = new Date(`2000-01-01 ${role.start_time}`);
-  const end = new Date(`2000-01-01 ${role.end_time}`);
-  const h = (end - start) / (1000 * 60 * 60);
+  const h = calculateDuration(role.start_time, role.end_time);
   return Math.round(h * 100) / 100;
 }
 

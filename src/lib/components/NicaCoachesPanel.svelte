@@ -5,6 +5,8 @@
   import { NICA_BENEFICIARIES } from '../nicaBeneficiaries';
   import { format } from 'date-fns';
   import { friendlyEmailDigestSettingsError } from '../utils/emailDigestSettingsError';
+  import { modalDialog } from '../actions/modalDialog';
+  import { confirmAction } from '../stores/notifications';
 
   export let affiliations = [];
 
@@ -266,7 +268,12 @@
 
   async function deleteCoach() {
     if (!editingCoach) return;
-    if (!confirm(`Remove ${editingCoach.first_name} ${editingCoach.last_name} from NICA coach emails?`)) return;
+    const confirmed = await confirmAction({
+      title: `Remove ${editingCoach.first_name} ${editingCoach.last_name}?`,
+      message: 'They will stop receiving NICA coach emails.',
+      confirmLabel: 'Remove coach'
+    });
+    if (!confirmed || !editingCoach) return;
 
     savingCoach = true;
     modalError = '';
@@ -423,17 +430,11 @@
 </div>
 
 {#if showCoachModal && editingCoach}
-  <!-- svelte-ignore a11y_click_events_have_key_events -->
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="modal-overlay" on:click={closeCoachModal}>
-    <div
-      class="modal-content coach-modal"
-      on:click|stopPropagation
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="coach-modal-title"
-      tabindex="-1"
-    >
+  <dialog
+    class="modal-content coach-modal"
+    aria-labelledby="coach-modal-title"
+    use:modalDialog={{ onClose: closeCoachModal }}
+  >
       <button type="button" class="modal-close" on:click={closeCoachModal} aria-label="Close">×</button>
       <h2 id="coach-modal-title">NICA coach</h2>
       <div class="modal-fields">
@@ -481,8 +482,7 @@
           </button>
         </div>
       </div>
-    </div>
-  </div>
+  </dialog>
 {/if}
 
 <style>
@@ -669,24 +669,12 @@
     border: 0;
   }
 
-  .modal-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.45);
-    z-index: 1000;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 1rem;
-  }
-
   .coach-modal {
     background: var(--bg-primary);
     border-radius: 12px;
     max-width: 480px;
-    width: 100%;
+    width: calc(100% - 2rem);
     padding: 1.5rem;
-    position: relative;
     max-height: 90vh;
     overflow-y: auto;
   }

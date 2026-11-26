@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { push } from 'svelte-spa-router';
   import { domains } from '../../lib/stores/domains';
+  import { notify } from '../../lib/stores/notifications';
   import { formatTimeRange, calculateDuration, formatRoleScheduleDate } from '../../lib/utils/timeDisplay';
 
   export let params = {};
@@ -51,7 +52,7 @@
 
     if (navigator.clipboard) {
       navigator.clipboard.writeText(shareUrl).then(() => {
-        alert('Invite link copied to your clipboard.');
+        notify('Invite link copied to your clipboard.');
       });
     }
   }

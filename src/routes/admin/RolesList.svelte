@@ -13,6 +13,8 @@ import { push } from 'svelte-spa-router';
 import RoleForm from '../../lib/components/RoleForm.svelte';
 import BulkUpload from '../../lib/components/BulkUpload.svelte';
 import AdminRoleInlineAdd from '../../lib/components/AdminRoleInlineAdd.svelte';
+import { modalDialog } from '../../lib/actions/modalDialog';
+import { confirmAction, notify } from '../../lib/stores/notifications';
 import { format } from 'date-fns';
 import {
   getCriticalOpenSpots,
@@ -787,7 +789,7 @@ import {
       }
 
       if (successCount > 0) {
-        alert(`Successfully imported ${successCount} roles!${failCount > 0 ? `\n\n${failCount} roles failed.` : ''}`);
+        notify(`Imported ${successCount} ${successCount === 1 ? 'role' : 'roles'}.${failCount > 0 ? ` ${failCount} failed; see the import errors below.` : ''}`);
       }
 
       if (errors.length > 0) {
@@ -809,9 +811,12 @@ import {
   }
 
   async function handleDelete(roleId) {
-    if (!confirm('Are you sure you want to delete this role? This action cannot be undone.')) {
-      return;
-    }
+    const confirmed = await confirmAction({
+      title: 'Delete this role?',
+      message: 'This action cannot be undone.',
+      confirmLabel: 'Delete role'
+    });
+    if (!confirmed) return;
 
     try {
       await roles.deleteRole(roleId);
@@ -1425,7 +1430,7 @@ import {
       };
       pendingDomainForNewLeader = null;
 
-      alert(`✅ ${newLeaderDetails.first_name} ${newLeaderDetails.last_name} is now the volunteer leader for ${domainName}.`);
+      notify(`${newLeaderDetails.first_name} ${newLeaderDetails.last_name} is now the volunteer leader for ${domainName}.`);
 
       sendLeaderInviteEmail({
         email: newLeaderDetails.email,
@@ -1435,7 +1440,7 @@ import {
         console.info(`Invite email sent to ${newLeaderDetails.email}`);
       }).catch(emailErr => {
         console.error('Leader invite email failed:', emailErr);
-        alert(`Leader created, but we couldn't send the invite email automatically. Please contact ${newLeaderDetails.email} manually.`);
+        notify(`Leader created, but we couldn't send the invite email automatically. Please contact ${newLeaderDetails.email} manually.`, { tone: 'error' });
       });
     } catch (err) {
       console.error('Create volunteer leader error:', err);
@@ -1930,10 +1935,13 @@ import {
 </div>
 
 {#if showDomainLeaderModal && selectedDomain}
-  <div class="modal-overlay" role="dialog" aria-modal="true">
-    <div class="modal-content">
+  <dialog
+    class="modal-content"
+    aria-labelledby="domain-leader-modal-title"
+    use:modalDialog={{ onClose: closeDomainLeaderModal, lightDismiss: false }}
+  >
       <div class="modal-header">
-        <h2>Assign Domain Leader</h2>
+        <h2 id="domain-leader-modal-title">Assign Domain Leader</h2>
         <button class="modal-close" on:click={closeDomainLeaderModal} aria-label="Close">
           ×
         </button>
@@ -1976,13 +1984,16 @@ import {
           {assigningLeader ? 'Saving...' : 'Save'}
         </button>
       </div>
-    </div>
-  </div>
+  </dialog>
 {/if}
 
 {#if emailModalGroup}
-  <div class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="email-domain-modal-title">
-    <div class="modal-content">
+  <dialog
+    class="modal-content"
+    aria-labelledby="email-domain-modal-title"
+    use:modalDialog={{ onClose: closeEmailModal, lightDismiss: false }}
+    on:cancel={(event) => sendingEmail && event.preventDefault()}
+  >
       <div class="modal-header">
         <h2 id="email-domain-modal-title">Send Email to This Domain's Volunteers</h2>
         <button class="modal-close" on:click={closeEmailModal} aria-label="Close" disabled={sendingEmail}>×</button>
@@ -2035,15 +2046,17 @@ import {
           </button>
         </div>
       {/if}
-    </div>
-  </div>
+  </dialog>
 {/if}
 
 {#if showAddVolunteerModal}
-  <div class="modal-overlay add-volunteer-modal" role="dialog" aria-modal="true">
-    <div class="modal-content large">
+  <dialog
+    class="modal-content large"
+    aria-labelledby="add-leader-modal-title"
+    use:modalDialog={{ onClose: closeAddVolunteerModal, lightDismiss: false }}
+  >
       <div class="modal-header">
-        <h2>Add Volunteer Leader</h2>
+        <h2 id="add-leader-modal-title">Add Volunteer Leader</h2>
         <button class="modal-close" on:click={closeAddVolunteerModal} aria-label="Close">×</button>
       </div>
       <div class="modal-body">
@@ -2135,8 +2148,7 @@ import {
           {addingVolunteer ? 'Creating...' : 'Create Leader'}
         </button>
       </div>
-    </div>
-  </div>
+  </dialog>
 {/if}
 
 <style>
@@ -2777,33 +2789,19 @@ import {
     padding: 0.5rem;
   }
 
-  .modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.4);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-    padding: 1.5rem;
-  }
-
-  .modal-overlay.add-volunteer-modal {
-    z-index: 1100;
-  }
-
   .modal-content {
     background: var(--bg-primary);
     border-radius: 12px;
     max-width: 480px;
-    width: 100%;
+    width: calc(100% - 3rem);
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+    max-height: 90vh;
+  }
+
+  /* Scope display to the open state so it never overrides the closed dialog. */
+  .modal-content[open] {
     display: flex;
     flex-direction: column;
-    max-height: 90vh;
   }
 
   .modal-content.large {

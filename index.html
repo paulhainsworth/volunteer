@@ -2,10 +2,12 @@
 <html lang="en" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
+    <meta name="color-scheme" content="dark" />
     <script>
       try {
         if (localStorage.getItem('theme') === 'light') {
           document.documentElement.dataset.theme = 'light';
+          document.querySelector('meta[name="color-scheme"]').content = 'light';
         }
       } catch {
         // Keep the default when browser storage is unavailable.

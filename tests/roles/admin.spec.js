@@ -339,8 +339,8 @@ test('admin creates, edits, duplicates, and deletes a role', async ({ page, back
   await page.getByRole('button', { name: 'Duplicate role', exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`${duplicateId}$`));
   expect(records.get(duplicateId).name).toBe('Fixture Updated Shift');
-  page.once('dialog', (dialog) => dialog.accept());
   await page.getByRole('button', { name: 'Delete role', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Delete this role?' }).getByRole('button', { name: 'Delete role' }).click();
   await expect(page).toHaveURL(/#\/admin\/roles$/);
   expect(records.has(duplicateId)).toBe(false);
 });
@@ -379,8 +379,13 @@ test('admin creates, edits, and deletes a domain', async ({ page, backend }) => 
   await page.getByLabel(/Domain Name/).fill('Fixture Updated Operations');
   await page.getByRole('button', { name: 'Update Domain', exact: true }).click();
   await expect(page.getByText('Fixture Updated Operations', { exact: true })).toBeVisible();
-  page.once('dialog', (dialog) => dialog.accept());
   await page.getByRole('button', { name: 'Delete', exact: true }).click();
+  const confirmation = page.getByRole('dialog', { name: 'Delete this domain?' });
+  await confirmation.getByRole('button', { name: 'Cancel' }).click();
+  await expect(confirmation).toHaveCount(0);
+  await expect(page.getByText('Fixture Updated Operations', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Delete', exact: true }).click();
+  await confirmation.getByRole('button', { name: 'Delete domain' }).click();
   await expect(page.getByRole('heading', { name: 'No domains yet' })).toBeVisible();
 });
 
@@ -454,9 +459,9 @@ test('admin previews a CSV before importing a role and can export the roster', a
   });
   await expect(page.getByText('Fixture CSV Shift', { exact: true })).toBeVisible();
   expect(backend.calls('POST', roles)).toBe(0);
-  page.once('dialog', (dialog) => dialog.accept());
   await page.getByRole('button', { name: 'Import 1 Role' }).click();
   await expect(page.getByRole('heading', { name: 'Volunteer Roles' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Notifications' })).toContainText('Imported 1 role.');
   await expect.poll(() => backend.calls('POST', roles)).toBe(1);
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export CSV', exact: true }).click();
@@ -555,8 +560,9 @@ test('admin grants the volunteer leader role to a selected account', async ({ pa
   await page.goto('/#/admin/volunteers');
   const row = page.getByRole('row').filter({ hasText: member.email });
   await expect(row).toBeVisible();
-  page.on('dialog', (dialog) => dialog.accept());
   await row.getByTitle('Make Leader').click();
+  await page.getByRole('dialog', { name: 'Change role to Volunteer Leader?' })
+    .getByRole('button', { name: 'Make Volunteer Leader' }).click();
   await expect.poll(() => backend.calls('POST', endpoint)).toBe(1);
   await expect(row.getByText('Leader', { exact: false }).first()).toBeVisible();
 });
@@ -588,8 +594,8 @@ test('admin assigns an existing volunteer to a role and cancels that assignment'
   await page.getByLabel('Select a role to assign').selectOption(role.id);
   await page.getByRole('button', { name: 'Add to Role' }).click();
   await expect(page.getByRole('heading', { name: 'Current Signups (1)' })).toBeVisible();
-  page.once('dialog', (dialog) => dialog.accept());
   await page.getByTitle('Remove signup').click();
+  await page.getByRole('dialog', { name: 'Remove this signup?' }).getByRole('button', { name: 'Remove signup' }).click();
   await expect(page.getByText('No confirmed signups')).toBeVisible();
 });
 
@@ -645,8 +651,8 @@ test('admin copies the NICA summary and manages team coaches and their digest', 
   await dialog.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(row.getByText('2099-04-19')).toBeVisible();
   await row.getByText('Fixture Coach', { exact: true }).click();
-  page.once('dialog', (confirmation) => confirmation.accept());
   await dialog.getByRole('button', { name: 'Delete', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Remove Fixture Coach?' }).getByRole('button', { name: 'Remove coach' }).click();
   await expect(page.getByText(/No NICA coaches yet/)).toBeVisible();
 });
 
@@ -676,4 +682,35 @@ test('admin role and schedule filters count each confirmed volunteer once', asyn
   await expect(page.getByRole('button', { name: 'Send Email to 2 Recipients' })).toBeEnabled();
   await page.locator('select.select-input').selectOption(`m:${monthlyRole.completion_month}`);
   await expect(page.getByRole('button', { name: 'Send Email to 1 Recipient' })).toBeEnabled();
+});
+
+test('volunteer table headers sort from the keyboard and expose the sort state', async ({ page, backend }) => {
+  await signInFixture(page, backend, 'admin');
+  await expect(page).toHaveURL(/#\/my-signups$/);
+  mockAdminReads(backend);
+  const people = [
+    { ...profile, id: 'bea', first_name: 'Bea', last_name: 'Able', email: 'bea@example.invalid', signups: [], waivers: [] },
+    { ...profile, id: 'ann', first_name: 'ann', last_name: 'Baker', email: 'ann@example.invalid', signups: [], waivers: [] },
+  ];
+  backend.handle('GET', '/rest/v1/profiles', () => ({ body: people }));
+  await page.goto('/#/admin/volunteers');
+  const firstName = page.getByRole('columnheader', { name: 'First Name' });
+  const lastName = page.getByRole('columnheader', { name: 'Last Name' });
+  const rows = page.getByRole('row').filter({ hasText: '@example.invalid' });
+  await expect(lastName).toHaveAttribute('aria-sort', 'ascending');
+  await expect(firstName).not.toHaveAttribute('aria-sort');
+  await expect(rows.first()).toContainText('bea@example.invalid');
+
+  await firstName.getByRole('button').focus();
+  await page.keyboard.press('Enter');
+  await expect(firstName).toHaveAttribute('aria-sort', 'ascending');
+  await expect(lastName).not.toHaveAttribute('aria-sort');
+  // Locale-aware comparison sorts a lowercase name with its capitalized neighbors.
+  await expect(rows.first()).toContainText('ann@example.invalid');
+  await expect(page.getByRole('status').filter({ hasText: 'Sorted by First Name, ascending' })).toBeAttached();
+
+  await page.keyboard.press('Enter');
+  await expect(firstName).toHaveAttribute('aria-sort', 'descending');
+  await expect(rows.first()).toContainText('bea@example.invalid');
+  await expect(firstName.getByRole('button')).toBeFocused();
 });

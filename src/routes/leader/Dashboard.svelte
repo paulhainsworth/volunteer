@@ -6,6 +6,7 @@
   import { fetchEmergencyContacts } from '../../lib/profileAccess';
   import { affiliations } from '../../lib/stores/affiliations';
   import { supabase } from '../../lib/supabaseClient';
+  import { confirmAction } from '../../lib/stores/notifications';
   import { push } from 'svelte-spa-router';
   import {
     formatRoleScheduleDate,
@@ -207,7 +208,7 @@ const shareTimers = {};
       };
     });
 
-    sortedRoles = [...myRoles].sort(compareRoles);
+    sortedRoles = myRoles.toSorted(compareRoles);
     initializeRoleForms(myRoles);
   }
 
@@ -701,9 +702,11 @@ const shareTimers = {};
 
   async function deleteVolunteerFromRole(role, signup) {
     closeActionMenu();
-    if (!confirm(`Remove ${signup.volunteer?.first_name || 'this volunteer'} from ${role.name}?`)) {
-      return;
-    }
+    const confirmed = await confirmAction({
+      title: `Remove ${signup.volunteer?.first_name || 'this volunteer'} from ${role.name}?`,
+      confirmLabel: 'Remove volunteer'
+    });
+    if (!confirmed) return;
 
     const roleId = role.id;
     addStates = {

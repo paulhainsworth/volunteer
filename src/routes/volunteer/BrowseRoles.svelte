@@ -1,5 +1,6 @@
 <script>
-  import { onMount, tick } from 'svelte';
+  import { onMount } from 'svelte';
+  import { modalDialog } from '../../lib/actions/modalDialog';
   import { formatWebsiteMessage, loadPublishedWebsiteMessages } from '../../lib/websiteMessages';
   import { roles } from '../../lib/stores/roles';
   import { auth } from '../../lib/stores/auth';
@@ -39,8 +40,6 @@
   const BSC_DATE = '2026-04-19'; // Sunday April 19, 2026
   let copyMessage = '';
   let copyMessageTimeout = null;
-  let infoDialog = null;
-  let signupDialog = null;
   let restoreFocusEl = null;
 
   function captureFocus() {
@@ -54,28 +53,6 @@
     el?.focus();
   }
 
-  async function focusNode(getNode) {
-    await tick();
-    getNode()?.focus();
-  }
-
-  function trapDialogTab(event) {
-    if (event.key !== 'Tab') return;
-    const root = event.currentTarget;
-    const focusable = [...root.querySelectorAll('button, a[href], input, select, textarea')].filter(
-      (el) => !el.disabled && el.tabIndex !== -1
-    );
-    if (focusable.length === 0) return;
-    const first = focusable[0];
-    const last = focusable[focusable.length - 1];
-    if (event.shiftKey && document.activeElement === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault();
-      first.focus();
-    }
-  }
 
   // PII modal for new volunteer signup (unauthenticated)
   let showPiiModal = false;
@@ -144,7 +121,6 @@
         const r = rolesData.find((x) => x.id === infoId);
         if (r) {
           selectedRole = r;
-          focusNode(() => infoDialog);
         }
       } else if (signupId) {
         const r = rolesData.find((x) => x.id === signupId);
@@ -163,7 +139,6 @@
           }
           piiRole = r;
           showPiiModal = true;
-          focusNode(() => signupDialog);
         }
       }
     }
@@ -213,7 +188,7 @@
 
   function domainWhenLabel(domainEntry) {
     const seen = [];
-    const ordered = [...domainEntry.roles].sort(
+    const ordered = domainEntry.roles.toSorted(
       (a, b) => getRoleScheduleSortTime(a) - getRoleScheduleSortTime(b)
     );
     for (const role of ordered) {
@@ -431,7 +406,7 @@
     return Array.from(map.values())
       .map((domainEntry) => ({
         ...domainEntry,
-        roles: isProspectiveVolunteer ? [...domainEntry.roles].sort(compareRolesForDomain) : domainEntry.roles
+        roles: isProspectiveVolunteer ? domainEntry.roles.toSorted(compareRolesForDomain) : domainEntry.roles
       }))
       .filter((domainEntry) => !isProspectiveVolunteer || domainEntry.openSpots > 0)
       .sort((a, b) => {
@@ -509,7 +484,6 @@
       awaitingVerification = false;
       showPiiModal = true;
       affiliations.fetchAffiliations().catch(() => {});
-      focusNode(() => signupDialog);
       return;
     }
     push(`/signup/${role?.id || roleOrId}`);
@@ -521,8 +495,8 @@
     piiError = '';
     awaitingVerification = false;
     piiSubmitting = false;
-    if (selectedRole) focusNode(() => infoDialog);
-    else restoreFocus();
+    // With the shift dialog still open, the browser returns focus inside it.
+    if (!selectedRole) restoreFocus();
   }
 
   async function submitPiiModal() {
@@ -584,10 +558,9 @@
         title: role.name,
         text: `Sign up to volunteer: ${role.name}`,
         url: url
-      });
+      }).catch(() => {});
     } else {
-      navigator.clipboard.writeText(url);
-      alert('Link copied to clipboard!');
+      copyRoleLink(role);
     }
   }
 
@@ -644,7 +617,6 @@
   function showMoreInfo(role) {
     if (!selectedRole && !showPiiModal) captureFocus();
     selectedRole = role;
-    focusNode(() => infoDialog);
   }
 
   function closeModal() {
@@ -652,15 +624,7 @@
     if (!showPiiModal) restoreFocus();
   }
 
-  function handleKeydown(event) {
-    if (event.key === 'Escape') {
-      if (showPiiModal) closePiiModal();
-      else if (selectedRole) closeModal();
-    }
-  }
 </script>
-
-<svelte:window on:keydown={handleKeydown} />
 
 <div class="browse-roles">
   <div class="header">
@@ -958,17 +922,11 @@
   {@const domainMeta = getDomainMeta(selectedRole)}
   {@const timeDisplay = formatTimeRange(selectedRole) + (duration != null ? ` (${duration}h)` : '')}
   
-  <div class="modal-overlay" on:click={closeModal}>
-    <div
-      class="modal-content"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="shift-info-title"
-      tabindex="-1"
-      bind:this={infoDialog}
-      on:click|stopPropagation
-      on:keydown={trapDialogTab}
-    >
+  <dialog
+    class="modal-content"
+    aria-labelledby="shift-info-title"
+    use:modalDialog={{ onClose: closeModal }}
+  >
       <button class="modal-close" on:click={closeModal} aria-label="Close">×</button>
       
       <div class="modal-header">
@@ -1061,27 +1019,22 @@
         </button>
       </div>
 
-      {#if copyMessage}
-        <div class="copy-message">
-          {copyMessage}
-        </div>
-      {/if}
-    </div>
-  </div>
+      <div role="status">
+        {#if copyMessage}
+          <div class="copy-message">
+            {copyMessage}
+          </div>
+        {/if}
+      </div>
+  </dialog>
 {/if}
 
 {#if showPiiModal && piiRole}
-  <div class="modal-overlay" on:click={closePiiModal}>
-    <div
-      class="modal-content pii-modal"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="shift-signup-title"
-      tabindex="-1"
-      bind:this={signupDialog}
-      on:click|stopPropagation
-      on:keydown={trapDialogTab}
-    >
+  <dialog
+    class="modal-content pii-modal"
+    aria-labelledby="shift-signup-title"
+    use:modalDialog={{ onClose: closePiiModal }}
+  >
       <button class="modal-close" on:click={closePiiModal} aria-label="Close">×</button>
       <div class="modal-header">
         <h2 id="shift-signup-title">Sign up for {piiRole.name}</h2>
@@ -1142,8 +1095,7 @@
         </button>
       </div>
       {/if}
-    </div>
-  </div>
+  </dialog>
 {/if}
 
 <style>
@@ -1610,28 +1562,13 @@
   }
 
   /* Modal Styles */
-  .modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-    padding: 1rem;
-  }
-
   .modal-content {
     background: var(--bg-primary);
     border-radius: 16px;
     max-width: 600px;
-    width: 100%;
+    width: calc(100% - 2rem);
     max-height: 90vh;
     overflow-y: auto;
-    position: relative;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
   }
 
@@ -1751,7 +1688,8 @@
     gap: 0.75rem;
   }
 
-  .pii-modal {
+  /* Scope display to the open state so it never overrides the closed dialog. */
+  .pii-modal[open] {
     display: flex;
     flex-direction: column;
     overflow: hidden;

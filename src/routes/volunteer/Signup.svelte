@@ -8,6 +8,7 @@
   import { formatTimeRange, calculateDuration, formatRoleScheduleDate } from '../../lib/utils/timeDisplay';
   import { createVolunteerAccount, sendGuestWelcomeEmail, sendVolunteerNotification } from '../../lib/volunteerSignup';
   import { affiliations } from '../../lib/stores/affiliations';
+  import { notify } from '../../lib/stores/notifications';
 
   export let params = {};
 
@@ -236,7 +237,7 @@
     }
 
     if (showWaiverForDemo) {
-      alert('Prototype: waiver/signup form shown for demo only. Backend not called. Remove ?demoWaiver=1 from the URL to use the real flow.');
+      notify('Prototype: waiver/signup form shown for demo only. Backend not called. Remove ?demoWaiver=1 from the URL to use the real flow.');
       return;
     }
 

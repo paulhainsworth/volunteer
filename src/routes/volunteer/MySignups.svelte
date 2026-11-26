@@ -1,5 +1,5 @@
 <script>
-  import { onDestroy, onMount, tick } from 'svelte';
+  import { onDestroy, onMount } from 'svelte';
   import { signups as signupsStore } from '../../lib/stores/signups';
   import { sendVolunteerNotification } from '../../lib/volunteerSignup';
   import { auth } from '../../lib/stores/auth';
@@ -7,11 +7,14 @@
   import { push } from 'svelte-spa-router';
   import { waiver as waiverStore } from '../../lib/stores/waiver';
   import ContactLeader from '../../lib/components/ContactLeader.svelte';
+  import { modalDialog } from '../../lib/actions/modalDialog';
+  import { notify } from '../../lib/stores/notifications';
   import {
     formatTimeRange,
     calculateDuration,
     formatRoleScheduleDate,
-    isRoleScheduleInPast
+    isRoleScheduleInPast,
+    buildRoleCalendarFile
   } from '../../lib/utils/timeDisplay';
 
   let loading = true;
@@ -22,8 +25,6 @@
   let cancellingSignup = null;
   let showContactLeaderModal = false;
   let contactLeaderSignup = null;
-  let cancelDialog = null;
-  let contactDialog = null;
   let restoreFocusEl = null;
 
   function captureFocus() {
@@ -38,29 +39,6 @@
     el?.focus();
   }
 
-  async function focusNode(getNode) {
-    await tick();
-    getNode()?.focus();
-  }
-
-  function trapDialogTab(event) {
-    if (event.key !== 'Tab') return;
-    const root = event.currentTarget;
-    const focusable = [...root.querySelectorAll('button, a[href], input, select, textarea')].filter(
-      (el) => !el.disabled && el.tabIndex !== -1
-    );
-    if (focusable.length === 0) return;
-    const first = focusable[0];
-    const last = focusable[focusable.length - 1];
-    const active = document.activeElement;
-    if (event.shiftKey && (active === first || active === root)) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && (active === last || active === root)) {
-      event.preventDefault();
-      first.focus();
-    }
-  }
 
   let active = true;
   onDestroy(() => { active = false; });
@@ -141,7 +119,6 @@
     captureFocus();
     cancellingSignup = signup;
     showCancelModal = true;
-    focusNode(() => cancelDialog);
   }
 
   function closeCancelModal() {
@@ -155,7 +132,6 @@
     showCancelModal = false;
     cancellingSignup = null;
     showContactLeaderModal = true;
-    focusNode(() => contactDialog);
   }
 
   function closeContactLeaderModal() {
@@ -170,7 +146,6 @@
     contactLeaderSignup = null;
     cancellingSignup = signup;
     showCancelModal = true;
-    focusNode(() => cancelDialog);
   }
 
   async function confirmCancel() {
@@ -197,42 +172,13 @@
     }
   }
 
-  function handleKeydown(event) {
-    if (event.key !== 'Escape') return;
-    if (showContactLeaderModal) closeContactLeaderModal();
-    else if (showCancelModal) closeCancelModal();
-  }
-
   function downloadCalendar(signup) {
     const role = signup.role;
-    const day = role.event_date || role.completion_month;
-    if (!day) {
-      alert('This role has no calendar date. Add it manually if needed.');
+    const icsContent = buildRoleCalendarFile(role, { uid: signup.id });
+    if (!icsContent) {
+      notify('This role has no calendar date. Add it to your calendar manually if needed.', { tone: 'error' });
       return;
     }
-    const padTime = (t) => (t && String(t).trim() ? String(t).trim().slice(0, 5) : '09:00');
-    const start = padTime(role.start_time);
-    const end = padTime(role.end_time);
-    const startDate = new Date(`${day}T${start}`);
-    const endDate = new Date(`${day}T${end}`);
-    if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
-      alert('Could not build a calendar entry for this role.');
-      return;
-    }
-
-    const icsContent = `BEGIN:VCALENDAR
-VERSION:2.0
-PRODID:-//Race Volunteer Manager//EN
-BEGIN:VEVENT
-UID:${signup.id}@volunteer-manager
-DTSTAMP:${formatDateForICS(new Date())}
-DTSTART:${formatDateForICS(startDate)}
-DTEND:${formatDateForICS(endDate)}
-SUMMARY:${role.name} - Volunteer
-DESCRIPTION:${role.description || ''}
-LOCATION:${role.location || ''}
-END:VEVENT
-END:VCALENDAR`;
 
     const blob = new Blob([icsContent], { type: 'text/calendar' });
     const url = URL.createObjectURL(blob);
@@ -243,9 +189,6 @@ END:VCALENDAR`;
     URL.revokeObjectURL(url);
   }
 
-  function formatDateForICS(date) {
-    return date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
-  }
 
   function getEffectiveLeader(role) {
     // Domain leader takes precedence over direct leader
@@ -262,7 +205,7 @@ END:VCALENDAR`;
   $: pastSignups = mySignups.filter((s) => isRoleScheduleInPast(s.role));
 </script>
 
-<svelte:window on:keydown={handleKeydown} />
+
 
 <div class="my-signups">
   <div class="header">
@@ -406,17 +349,11 @@ END:VCALENDAR`;
 </div>
 
 {#if showCancelModal && cancellingSignup}
-  <div class="modal-overlay" on:click={closeCancelModal}>
-    <div
-      class="modal-content"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="cancel-signup-title"
-      tabindex="-1"
-      bind:this={cancelDialog}
-      on:click|stopPropagation
-      on:keydown={trapDialogTab}
-    >
+  <dialog
+    class="modal-content"
+    aria-labelledby="cancel-signup-title"
+    use:modalDialog={{ onClose: closeCancelModal }}
+  >
       <button class="modal-close" on:click={closeCancelModal} aria-label="Close">×</button>
 
       <div class="modal-header">
@@ -473,24 +410,17 @@ END:VCALENDAR`;
           {cancellingId ? 'Cancelling...' : 'Yes, Cancel Signup'}
         </button>
       </div>
-    </div>
-  </div>
+  </dialog>
 {/if}
 
 {#if showContactLeaderModal && contactLeaderSignup}
   {@const leader = getEffectiveLeader(contactLeaderSignup.role)}
   
-  <div class="modal-overlay" on:click={closeContactLeaderModal}>
-    <div
-      class="modal-content contact-leader-modal"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="contact-leader-title"
-      tabindex="-1"
-      bind:this={contactDialog}
-      on:click|stopPropagation
-      on:keydown={trapDialogTab}
-    >
+  <dialog
+    class="modal-content contact-leader-modal"
+    aria-labelledby="contact-leader-title"
+    use:modalDialog={{ onClose: closeContactLeaderModal }}
+  >
       <button class="modal-close" on:click={closeContactLeaderModal} aria-label="Close">×</button>
 
       <div class="modal-header">
@@ -541,8 +471,7 @@ END:VCALENDAR`;
           Still Want to Cancel
         </button>
       </div>
-    </div>
-  </div>
+  </dialog>
 {/if}
 
 <style>
@@ -783,33 +712,14 @@ END:VCALENDAR`;
   }
 
   /* Modal Styles */
-  .modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-    padding: 1rem;
-  }
-
   .modal-content {
     background: var(--bg-primary);
     border-radius: 16px;
     max-width: 550px;
-    width: 100%;
+    width: calc(100% - 2rem);
     max-height: 90vh;
     overflow-y: auto;
-    position: relative;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-  }
-
-  .modal-content:focus {
-    outline: none;
   }
 
   .modal-close {

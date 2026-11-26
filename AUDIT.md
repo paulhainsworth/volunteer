@@ -89,6 +89,22 @@ The offline MG suite uses synthetic identities and intercepts all email delivery
 
 [Issue #41](https://github.com/paulhainsworth/volunteer/issues/41) · The offline mail handler test verifies provider diagnostics stay out of logs and error responses.
 
+## Modern web guidance audit
+
+November 26, 2026. A `modern-web-guidance` scan of `src/` and a review of dialogs, tables, dates, theme, and notifications found the items below. All are verified locally on branch `fix/modern-web-audit`. The PR is linked in the issue work log once opened.
+
+| Finding | Evidence | Status |
+| --- | --- | --- |
+| Calendar files shifted Pacific shifts by the device time zone | `MySignups.svelte` built times with `new Date()` in local time and wrote UTC. Text fields were unescaped. | Fixed with `buildRoleCalendarFile` in [timeDisplay.js](src/lib/utils/timeDisplay.js), which writes `TZID=America/Los_Angeles` and escaped text. A New York browser test passes. |
+| Custom modal overlays did not make the page inert, and most had no Escape handling | Eleven `div` overlays across six pages. Two used hand-built focus traps. | Replaced with native `<dialog>` and `showModal()` through the [modalDialog action](src/lib/actions/modalDialog.js). Click-outside closing is kept where it existed, with a Safari fallback. |
+| Native `alert()` and `confirm()` blocked the page | Twenty-one calls in nine files. | Replaced with an in-app confirmation dialog with Cancel focused first, and a Notifications region announced to screen readers. |
+| Users table sorting was mouse-only and did not re-sort rows | Clickable `<th>` cells without buttons or `aria-sort`. The reactive block never read the sort state, so only the arrow changed. | Header buttons with `aria-sort`, a status announcement, `Intl.Collator`, and a reactive dependency fix. Keyboard regression test passes. |
+| The theme did not set `<meta name="color-scheme">` and did not sync across tabs | `theme.js`, `index.html` | Fixed. Dark remains the documented default. |
+| Scrollbar colors relied on `::-webkit-scrollbar` only, with a low-contrast thumb | `app.css` | Standard `scrollbar-color` with at least 3:1 thumb contrast. The WebKit rules remain as an `@supports` fallback. |
+| Time arithmetic parsed a nonstandard date string | `new Date('2000-01-01 HH:MM')` in four modules | Replaced with `timeToMinutes`. Unparseable times no longer produce `NaN` hour totals. |
+
+Verification: `npm test` passed 104 browser and database checks and 23 Deno checks. `npm run test:roles` and `npm run test:release` passed 93 each. The build and `git diff --check` passed. In every suite, the only failure was `admin updates the event year and publishes website messages`. It also fails on unmodified `main` because it expects "Raised in 2026" against the current date.
+
 ## Notification monitoring follow-up
 
 [Issue #13](https://github.com/paulhainsworth/volunteer/issues/13) · Synthetic fixtures verify detection of schedule gaps longer than 45 minutes and count-only clinic receipt checks. The operations guide assigns monitoring by role. GitHub reports the workflow active with no scheduled run after August 11, 2026. The independently runnable freshness check detects this condition. Scheduling the check and confirming where alerts go remain open. See the [operations guide](docs/operations.md#notification-monitoring) and [PR #45](https://github.com/paulhainsworth/volunteer/pull/45).

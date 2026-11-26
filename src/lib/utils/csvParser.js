@@ -2,6 +2,8 @@
  * CSV Parser for Volunteer Roles
  */
 
+import { timeToMinutes } from './timeDisplay';
+
 export function parseCSV(csvText) {
   const lines = csvText.trim().split('\n');
   
@@ -121,9 +123,9 @@ function validateRole(role, rowNumber) {
 
   // Validate start_time < end_time (skip when flexible)
   if (role.start_time !== 'flexible' && role.end_time !== 'flexible') {
-    const start = new Date(`2000-01-01 ${role.start_time}`);
-    const end = new Date(`2000-01-01 ${role.end_time}`);
-    if (start >= end) {
+    const start = timeToMinutes(role.start_time);
+    const end = timeToMinutes(role.end_time);
+    if (start != null && end != null && start >= end) {
       errors.push('Start time must be before end time');
     }
   }

@@ -199,9 +199,123 @@ export function calculateDuration(startTime, endTime) {
   const start = normalizeTime(startTime);
   const end = normalizeTime(endTime);
   if (start === FLEXIBLE_START && end === FLEXIBLE_END) return null;
-  const s = new Date(`2000-01-01 ${start}`);
-  const e = new Date(`2000-01-01 ${end}`);
-  return (e.getTime() - s.getTime()) / (1000 * 60 * 60);
+  const s = timeToMinutes(start);
+  const e = timeToMinutes(end);
+  if (s == null || e == null) return Number.NaN;
+  return (e - s) / 60;
+}
+
+/** Minutes after midnight for "HH:MM" or "HH:MM:SS", or null when the value is not a time. */
+export function timeToMinutes(time) {
+  const match = /^(\d{1,2}):(\d{2})/.exec(String(time ?? '').trim());
+  if (!match) return null;
+  return Number(match[1]) * 60 + Number(match[2]);
+}
+
+const ICS_PACIFIC_TIMEZONE = [
+  'BEGIN:VTIMEZONE',
+  `TZID:${PACIFIC_TZ}`,
+  'BEGIN:DAYLIGHT',
+  'TZOFFSETFROM:-0800',
+  'TZOFFSETTO:-0700',
+  'TZNAME:PDT',
+  'DTSTART:19700308T020000',
+  'RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=2SU',
+  'END:DAYLIGHT',
+  'BEGIN:STANDARD',
+  'TZOFFSETFROM:-0700',
+  'TZOFFSETTO:-0800',
+  'TZNAME:PST',
+  'DTSTART:19701101T020000',
+  'RRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU',
+  'END:STANDARD',
+  'END:VTIMEZONE'
+];
+
+function escapeIcsText(value) {
+  return String(value ?? '')
+    .replace(/\\/g, '\\\\')
+    .replace(/;/g, '\\;')
+    .replace(/,/g, '\\,')
+    .replace(/\r?\n/g, '\\n');
+}
+
+/** Fold content lines at 75 octets as RFC 5545 requires. */
+function foldIcsLine(line) {
+  const encoder = new TextEncoder();
+  const parts = [];
+  let current = '';
+  let octets = 0;
+  for (const char of line) {
+    const size = encoder.encode(char).length;
+    if (octets + size > (parts.length ? 74 : 75)) {
+      parts.push(current);
+      current = '';
+      octets = 0;
+    }
+    current += char;
+    octets += size;
+  }
+  parts.push(current);
+  return parts.join('\r\n ');
+}
+
+/** Add days to a YYYY-MM-DD string and return YYYY-MM-DD. */
+function addDays(dateString, days) {
+  const [y, m, d] = dateString.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+}
+
+function icsLocalDateTime(dateString, minutes) {
+  const hh = String(Math.floor(minutes / 60)).padStart(2, '0');
+  const mm = String(minutes % 60).padStart(2, '0');
+  return `${dateString.replace(/-/g, '')}T${hh}${mm}00`;
+}
+
+/**
+ * Build an iCalendar file for a role. Times are Pacific wall-clock times tagged with
+ * TZID, so calendar apps place the shift correctly whatever the device time zone.
+ * Flexible or untimed roles become all-day events. Returns null when the role has no date.
+ */
+export function buildRoleCalendarFile(role, { uid, now = new Date() } = {}) {
+  const day = String(role?.event_date || role?.completion_month || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return null;
+
+  const start = timeToMinutes(role.start_time);
+  const end = timeToMinutes(role.end_time);
+  let when;
+  if (isFlexibleTime(role) || start == null || end == null) {
+    when = [
+      `DTSTART;VALUE=DATE:${day.replace(/-/g, '')}`,
+      `DTEND;VALUE=DATE:${addDays(day, 1).replace(/-/g, '')}`
+    ];
+  } else {
+    // A shift that ends at or before its start time runs past midnight.
+    const endDay = end > start ? day : addDays(day, 1);
+    when = [
+      `DTSTART;TZID=${PACIFIC_TZ}:${icsLocalDateTime(day, start)}`,
+      `DTEND;TZID=${PACIFIC_TZ}:${icsLocalDateTime(endDay, end)}`
+    ];
+  }
+
+  const stamp = now.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+  const lines = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Berkeley Omnium Volunteer Hub//EN',
+    'CALSCALE:GREGORIAN',
+    ...ICS_PACIFIC_TIMEZONE,
+    'BEGIN:VEVENT',
+    `UID:${uid}@volunteer-manager`,
+    `DTSTAMP:${stamp}`,
+    ...when,
+    `SUMMARY:${escapeIcsText(`${role.name} - Volunteer`)}`,
+    `DESCRIPTION:${escapeIcsText(role.description)}`,
+    `LOCATION:${escapeIcsText(role.location)}`,
+    'END:VEVENT',
+    'END:VCALENDAR'
+  ];
+  return lines.map(foldIcsLine).join('\r\n') + '\r\n';
 }
 
 /** Values to store in DB for "flexible" times. */
