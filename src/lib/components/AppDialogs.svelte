@@ -86,6 +86,9 @@
   }
 </script>
 
+<!-- A route change cancels a pending confirmation so it cannot act on a page that is gone. -->
+<svelte:window on:hashchange={() => $pendingConfirmation && settle('')} />
+
 <div class="visually-hidden" aria-live="polite">{announcement}</div>
 
 {#if visible.length}
