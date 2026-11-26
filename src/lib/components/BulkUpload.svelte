@@ -2,6 +2,7 @@
   import { createEventDispatcher } from 'svelte';
   import { parseCSV, downloadTemplate } from '../utils/csvParser';
   import { formatTimeRange } from '../utils/timeDisplay';
+  import { notify } from '../stores/notifications';
 
   const dispatch = createEventDispatcher();
 
@@ -16,7 +17,7 @@
     if (!file) return;
 
     if (!file.name.endsWith('.csv')) {
-      alert('Please select a CSV file');
+      notify('Please select a CSV file.', { tone: 'error' });
       return;
     }
 

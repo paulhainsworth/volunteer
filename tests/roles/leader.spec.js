@@ -70,8 +70,8 @@ test('leader edits a roster entry and removes it after confirmation', async ({ p
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(page.getByText('Updated Fixture', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Open volunteer actions' }).click();
-  page.once('dialog', (dialog) => dialog.accept());
   await page.getByRole('button', { name: 'Remove volunteer', exact: true }).click();
+  await page.getByRole('dialog', { name: /^Remove Updated/ }).getByRole('button', { name: 'Remove volunteer' }).click();
   await expect(page.getByText('Volunteer removed.')).toBeVisible();
   await expect(page.getByText('Updated Fixture', { exact: true })).toHaveCount(0);
 });

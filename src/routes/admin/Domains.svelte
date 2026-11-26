@@ -7,6 +7,8 @@
   import { push } from 'svelte-spa-router';
   import { get } from 'svelte/store';
   import { formatRoleScheduleDate } from '../../lib/utils/timeDisplay';
+  import { modalDialog } from '../../lib/actions/modalDialog';
+  import { confirmAction, notify } from '../../lib/stores/notifications';
 
   let loading = true;
   let error = '';
@@ -197,11 +199,6 @@ function waitForAuthReady() {
     addLeaderSuggestions = [];
   }
 
-  function handleKeydown(e) {
-    if (e.key === 'Escape' && showAddLeaderModal) {
-      closeAddLeaderModal();
-    }
-  }
 
   async function createLeaderAccount({ first_name, last_name, email, phone = null }) {
     const tempPassword = Math.random().toString(36).slice(-12) + Math.random().toString(36).slice(-12);
@@ -482,9 +479,12 @@ onMount(() => {
   async function handleDelete(domainId) {
     if (!isAdminUser) return;
 
-    if (!confirm('Are you sure you want to delete this domain? Roles will be unassigned.')) {
-      return;
-    }
+    const confirmed = await confirmAction({
+      title: 'Delete this domain?',
+      message: 'Its roles will be unassigned.',
+      confirmLabel: 'Delete domain'
+    });
+    if (!confirmed) return;
 
     try {
       await domains.deleteDomain(domainId);
@@ -492,7 +492,7 @@ onMount(() => {
       await fetchAllRoles();
     } catch (err) {
       error = err.message;
-      alert(err.message);
+      notify(err.message, { tone: 'error' });
     }
   }
 
@@ -549,7 +549,7 @@ onMount(() => {
     } catch (err) {
       console.error('Toggle assignment error:', err);
       error = err.message;
-      alert(`Error: ${err.message}`);
+      notify(`Error: ${err.message}`, { tone: 'error' });
     }
   }
 
@@ -583,7 +583,7 @@ onMount(() => {
   }
 </script>
 
-<svelte:window on:keydown={handleKeydown} />
+
 
 <div class="domains-page">
   <div class="header">
@@ -841,8 +841,11 @@ onMount(() => {
   {/if}
 
   {#if showAddLeaderModal}
-    <div class="modal-overlay" on:click={closeAddLeaderModal}>
-      <div class="modal-content add-leader-modal" role="dialog" aria-modal="true" aria-labelledby="add-leader-title" tabindex="-1" on:click|stopPropagation>
+      <dialog
+        class="modal-content add-leader-modal"
+        aria-labelledby="add-leader-title"
+        use:modalDialog={{ onClose: closeAddLeaderModal }}
+      >
         <button class="modal-close" on:click={closeAddLeaderModal} aria-label="Close">×</button>
         <div class="modal-header">
           <h2 id="add-leader-title">Add New Volunteer</h2>
@@ -928,8 +931,7 @@ onMount(() => {
             {addingLeader ? 'Creating...' : 'Create Volunteer'}
           </button>
         </div>
-      </div>
-    </div>
+      </dialog>
   {/if}
 </div>
 
@@ -1351,28 +1353,13 @@ onMount(() => {
     width: 18%;
   }
 
-  .modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-    padding: 1rem;
-  }
-
   .modal-content {
     background: var(--bg-primary);
     border-radius: 16px;
     max-width: 520px;
-    width: 100%;
+    width: calc(100% - 2rem);
     max-height: 90vh;
     overflow-y: auto;
-    position: relative;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
   }
 

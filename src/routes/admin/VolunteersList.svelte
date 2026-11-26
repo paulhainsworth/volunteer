@@ -6,6 +6,8 @@
   import { supabase } from '../../lib/supabaseClient';
   import { isArchivedShift } from '../../lib/volunteerSeason';
   import { createVolunteerAsAdmin } from '../../lib/adminVolunteerSignup';
+  import { modalDialog } from '../../lib/actions/modalDialog';
+  import { confirmAction, notify } from '../../lib/stores/notifications';
 
   import { push } from 'svelte-spa-router';
   import { format } from 'date-fns';
@@ -101,42 +103,27 @@
     }
   });
 
-  function sortVolunteers(volunteers) {
-    return [...volunteers].sort((a, b) => {
-      let aVal, bVal;
-      
-      switch (sortColumn) {
-        case 'first_name':
-          aVal = a.first_name || '';
-          bVal = b.first_name || '';
-          break;
-        case 'last_name':
-          aVal = a.last_name || '';
-          bVal = b.last_name || '';
-          break;
-        case 'email':
-          aVal = a.email;
-          bVal = b.email;
-          break;
-        case 'role':
-          aVal = a.role;
-          bVal = b.role;
-          break;
-        case 'signups':
-          aVal = a.totalSignups;
-          bVal = b.totalSignups;
-          break;
-        case 'hours':
-          aVal = a.totalHours;
-          bVal = b.totalHours;
-          break;
-        default:
-          aVal = a.last_name || '';
-          bVal = b.last_name || '';
-      }
-      
-      const comparison = aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
-      return sortDirection === 'asc' ? comparison : -comparison;
+  const sortColumns = [
+    { key: 'first_name', label: 'First Name', value: (v) => v.first_name || '' },
+    { key: 'last_name', label: 'Last Name', value: (v) => v.last_name || '' },
+    { key: 'email', label: 'Email', value: (v) => v.email || '' },
+    { key: 'role', label: 'Role', value: (v) => v.role || '' },
+    { key: 'signups', label: 'Signups', value: (v) => v.totalSignups ?? 0 },
+    { key: 'hours', label: 'Hours', value: (v) => v.totalHours ?? 0 }
+  ];
+  const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+  let sortStatus = '';
+
+  function sortVolunteers(volunteers, column, direction) {
+    const { value } = sortColumns.find(({ key }) => key === column) ?? sortColumns[1];
+    const factor = direction === 'asc' ? 1 : -1;
+    return volunteers.toSorted((a, b) => {
+      const aVal = value(a);
+      const bVal = value(b);
+      const comparison = typeof aVal === 'number' && typeof bVal === 'number'
+        ? aVal - bVal
+        : collator.compare(String(aVal), String(bVal));
+      return factor * comparison;
     });
   }
 
@@ -147,6 +134,8 @@
       sortColumn = column;
       sortDirection = 'asc';
     }
+    const label = sortColumns.find(({ key }) => key === column)?.label ?? column;
+    sortStatus = `Sorted by ${label}, ${sortDirection === 'asc' ? 'ascending' : 'descending'}`;
   }
 
   function collectAssignedShifts(people) {
@@ -164,7 +153,7 @@
   function groupUserSignups(signups, activeYear) {
     const current = [];
     const past = [];
-    const ordered = [...signups].sort((a, b) => getRoleScheduleSortTime(a.role) - getRoleScheduleSortTime(b.role));
+    const ordered = signups.toSorted((a, b) => getRoleScheduleSortTime(a.role) - getRoleScheduleSortTime(b.role));
     for (const signup of ordered) {
       const group = isArchivedShift(signup.role, activeYear) || isRoleScheduleInPast(signup.role) ? past : current;
       group.push(signup);
@@ -194,7 +183,8 @@
         return name.includes(query) || email.includes(query);
       });
     }
-    return sortVolunteers(filtered);
+    // Pass the sort state so this reactive block reruns when a header is activated.
+    return sortVolunteers(filtered, sortColumn, sortDirection);
   })();
 
   $: nicaSummaryRows = NICA_BENEFICIARIES.map((beneficiary) => {
@@ -483,7 +473,8 @@
   }
 
   async function removeUserSignup(signupId) {
-    if (!confirm('Remove this signup?')) return;
+    const confirmed = await confirmAction({ title: 'Remove this signup?', confirmLabel: 'Remove signup' });
+    if (!confirmed) return;
 
     try {
       const { error: deleteError } = await supabase
@@ -553,7 +544,7 @@
       await volunteers.fetchVolunteers({ includeEmergencyContacts: true });
       
       closeEditModal();
-      alert('User information updated successfully!');
+      notify('User information updated.');
     } catch (err) {
       console.error('Save user error:', err);
       error = 'Failed to update user: ' + err.message;
@@ -562,16 +553,6 @@
     }
   }
 
-  function handleKeydown(event) {
-    if (event.key === 'Escape') {
-      if (showEditModal) {
-        closeEditModal();
-      }
-      if (showAddVolunteerModal) {
-        closeAddVolunteerModal();
-      }
-    }
-  }
 
   async function openAddVolunteerModal() {
     showAddVolunteerModal = true;
@@ -755,7 +736,7 @@
       await volunteers.fetchVolunteers({ includeEmergencyContacts: true });
 
       closeAddVolunteerModal();
-      alert(`✅ Volunteer created successfully! A welcome email with sign-in link is being sent to ${createdVolunteerEmail}.`);
+      notify(`Volunteer created successfully. A welcome email with a sign-in link is being sent to ${createdVolunteerEmail}.`);
     } catch (err) {
       console.error('Create volunteer error:', err);
       const friendlyMessage = err?.message?.includes('non-2xx')
@@ -780,9 +761,13 @@
       'volunteer': 'change this user to a regular Volunteer?'
     };
 
-    if (!confirm(`Are you sure you want to ${confirmMessages[newRole]}`)) {
-      return;
-    }
+    const confirmed = await confirmAction({
+      title: `Change role to ${roleNames[newRole]}?`,
+      message: `Are you sure you want to ${confirmMessages[newRole]}`,
+      confirmLabel: `Make ${roleNames[newRole]}`,
+      destructive: newRole === 'admin'
+    });
+    if (!confirmed) return;
 
     try {
       const { error: updateError } = await supabase
@@ -793,11 +778,11 @@
       // Refresh volunteer list
       await volunteers.fetchVolunteers({ includeEmergencyContacts: true });
       
-      alert(`User role changed to ${roleNames[newRole]} successfully! Changes take effect on their next login.`);
+      notify(`User role changed to ${roleNames[newRole]}. Changes take effect on their next sign-in.`);
     } catch (err) {
       console.error('Change role error:', err);
       error = 'Failed to change role: ' + err.message;
-      alert(`Error: ${err.message}`);
+      notify(`Error: ${err.message}`, { tone: 'error' });
     }
   }
 
@@ -842,7 +827,7 @@
   }
 </script>
 
-<svelte:window on:keydown={handleKeydown} />
+
 
 <div class="volunteers-page">
   <div class="header">
@@ -1018,48 +1003,27 @@
     {#if filteredVolunteers.length === 0}
       <p class="no-signups">No volunteers match these filters.</p>
     {:else if viewMode === 'table'}
+      <p class="visually-hidden" role="status">{sortStatus}</p>
       <div class="table-view">
         <table>
           <thead>
             <tr>
-              <th on:click={() => handleSort('first_name')} class="sortable">
-                First Name
-                {#if sortColumn === 'first_name'}
-                  <span class="sort-arrow">{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                {/if}
-              </th>
-              <th on:click={() => handleSort('last_name')} class="sortable">
-                Last Name
-                {#if sortColumn === 'last_name'}
-                  <span class="sort-arrow">{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                {/if}
-              </th>
-              <th on:click={() => handleSort('email')} class="sortable">
-                Email
-                {#if sortColumn === 'email'}
-                  <span class="sort-arrow">{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                {/if}
-              </th>
-              <th on:click={() => handleSort('role')} class="sortable">
-                Role
-                {#if sortColumn === 'role'}
-                  <span class="sort-arrow">{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                {/if}
-              </th>
-              <th on:click={() => handleSort('signups')} class="sortable">
-                Signups
-                {#if sortColumn === 'signups'}
-                  <span class="sort-arrow">{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                {/if}
-              </th>
-              <th on:click={() => handleSort('hours')} class="sortable">
-                Hours
-                {#if sortColumn === 'hours'}
-                  <span class="sort-arrow">{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                {/if}
-              </th>
-              <th>Waiver</th>
-              <th>Actions</th>
+              {#each sortColumns as column (column.key)}
+                <th
+                  scope="col"
+                  class="sortable"
+                  aria-sort={sortColumn === column.key ? (sortDirection === 'asc' ? 'ascending' : 'descending') : undefined}
+                >
+                  <button type="button" class="sort-button" on:click={() => handleSort(column.key)}>
+                    {column.label}
+                    {#if sortColumn === column.key}
+                      <span class="sort-arrow" aria-hidden="true">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                    {/if}
+                  </button>
+                </th>
+              {/each}
+              <th scope="col">Waiver</th>
+              <th scope="col">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -1296,14 +1260,13 @@
 </div>
 
 {#if showEditModal && editingUser}
-  <div class="modal-overlay" on:click={closeEditModal}>
-    <div class="modal-content" on:click|stopPropagation>
+  <dialog class="modal-content" aria-labelledby="edit-user-title" use:modalDialog={{ onClose: closeEditModal }}>
       <button class="modal-close" on:click={closeEditModal} aria-label="Close">
         ✕
       </button>
       
       <div class="modal-header">
-        <h2>Edit User Information</h2>
+        <h2 id="edit-user-title">Edit User Information</h2>
         <p class="modal-subtitle">{editingUser.email}</p>
       </div>
 
@@ -1507,19 +1470,17 @@
           {saving ? 'Saving...' : 'Save Changes'}
         </button>
       </div>
-    </div>
-  </div>
+  </dialog>
 {/if}
 
 {#if showAddVolunteerModal}
-  <div class="modal-overlay" on:click={closeAddVolunteerModal}>
-    <div class="modal-content" on:click|stopPropagation>
+  <dialog class="modal-content" aria-labelledby="add-volunteer-title" use:modalDialog={{ onClose: closeAddVolunteerModal }}>
       <button class="modal-close" on:click={closeAddVolunteerModal} aria-label="Close">
         ✕
       </button>
       
       <div class="modal-header">
-        <h2>Add New Volunteer</h2>
+        <h2 id="add-volunteer-title">Add New Volunteer</h2>
         <p class="modal-subtitle">Create a new volunteer user and optionally assign them to a role</p>
       </div>
 
@@ -1654,8 +1615,7 @@
           {addingVolunteer ? 'Creating...' : 'Create Volunteer'}
         </button>
       </div>
-    </div>
-  </div>
+  </dialog>
 {/if}
 
 <style>
@@ -1948,14 +1908,33 @@
     white-space: nowrap;
   }
 
+  /* The button supplies the cell padding so the whole header is the target. */
   .table-view th.sortable {
-    cursor: pointer;
-    user-select: none;
+    padding: 0;
+  }
+
+  .sort-button {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    min-height: 44px;
+    padding: 1rem 0.75rem;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    white-space: nowrap;
     transition: background 0.2s;
   }
 
-  .table-view th.sortable:hover {
+  .sort-button:hover {
     background: var(--bg-tertiary);
+  }
+
+  .sort-button:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: -2px;
   }
 
   .sort-arrow {
@@ -2248,28 +2227,13 @@
   }
 
   /* Modal Styles */
-  .modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-    padding: 1rem;
-  }
-
   .modal-content {
     background: var(--bg-primary);
     border-radius: 16px;
     max-width: 600px;
-    width: 100%;
+    width: calc(100% - 2rem);
     max-height: 90vh;
     overflow-y: auto;
-    position: relative;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
   }
 

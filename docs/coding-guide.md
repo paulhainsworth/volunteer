@@ -37,6 +37,7 @@ Use PascalCase for Svelte route and component files and camelCase for JavaScript
 - Build forms that work with a keyboard and on narrow screens. Use visible labels and focus indicators, and place validation messages near the affected field.
 - Announce submission errors and success states when they update dynamically. Use text to convey status, including when color or an icon also appears.
 - Check the affected flow in both themes and at phone width when changing layout or shared styles.
+- Build dialogs with `<dialog>` and the [modalDialog action](../src/lib/actions/modalDialog.js) rather than overlay `div` elements. Use `confirmAction()` and `notify()` from the [notifications store](../src/lib/stores/notifications.js) instead of `confirm()` and `alert()`.
 
 ## Test and review
 

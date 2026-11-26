@@ -37,11 +37,8 @@ test('an organizer creates one volunteer assignment and requests a welcome email
   });
 
   await fillAdminAssignment(page, newVolunteer.email);
-  const confirmation = page.waitForEvent('dialog');
-  await page.getByRole('button', { name: 'Create Volunteer' }).click({ noWaitAfter: true });
-  const dialog = await confirmation;
-  expect(dialog.message()).toContain('Volunteer created successfully');
-  await dialog.accept();
+  await page.getByRole('button', { name: 'Create Volunteer' }).click();
+  await expect(page.getByRole('region', { name: 'Notifications' })).toContainText('Volunteer created successfully');
   await expect(page.getByText(newVolunteer.email, { exact: true })).toBeVisible();
   await expect(page.getByTitle('Has emergency contact')).toBeVisible();
   expect(backend.calls('POST', assignment)).toBe(1);

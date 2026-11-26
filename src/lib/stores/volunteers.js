@@ -3,6 +3,7 @@ import { supabase } from '../supabaseClient';
 import { fetchEmergencyContacts } from '../profileAccess';
 import { withSupabaseReadTimeout } from '../utils/withTimeout';
 import { isArchivedShift, readVolunteerSeason } from '../volunteerSeason';
+import { calculateDuration } from '../utils/timeDisplay';
 
 const roster = writable({ activeYear: null, active: [], archived: [] });
 export const archivedVolunteers = derived(roster, ($roster) => $roster.archived);
@@ -65,11 +66,8 @@ function createVolunteersStore() {
         const totalHours = confirmedSignups.reduce((sum, signup) => {
           if (!signup.role) return sum;
           
-          const start = new Date(`2000-01-01 ${signup.role.start_time}`);
-          const end = new Date(`2000-01-01 ${signup.role.end_time}`);
-          const hours = (end - start) / (1000 * 60 * 60);
-          
-          return sum + hours;
+          // Flexible or unparseable times count as zero hours.
+          return sum + (calculateDuration(signup.role.start_time, signup.role.end_time) || 0);
         }, 0);
 
         const list = isArchived ? archived : active;

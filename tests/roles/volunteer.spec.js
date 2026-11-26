@@ -10,6 +10,8 @@ test('dark mode is the default and the header logo adapts to both themes', async
   const login = page.locator('.auth-card');
   await expect(themeToggle).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('html')).toHaveCSS('color-scheme', 'dark');
+  const colorSchemeMeta = page.locator('meta[name="color-scheme"]');
+  await expect(colorSchemeMeta).toHaveAttribute('content', 'dark');
   await expect(login).toHaveCSS('background-color', 'rgb(27, 30, 36)');
   await expect(logo).toBeVisible();
   await expect.poll(() => logo.evaluate((img) => img.naturalWidth)).toBeGreaterThan(0);
@@ -24,12 +26,14 @@ test('dark mode is the default and the header logo adapts to both themes', async
   await themeToggle.click();
   const lightThemeToggle = page.getByRole('button', { name: 'Switch to dark mode' });
   await expect(lightThemeToggle).toHaveAttribute('aria-pressed', 'false');
+  await expect(colorSchemeMeta).toHaveAttribute('content', 'light');
   await expect(logo).toHaveCSS('filter', 'none');
   await expect(page.locator('.domain-section')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
 
   await page.reload();
   await expect(lightThemeToggle).toHaveAttribute('aria-pressed', 'false');
   await expect(page.locator('html')).toHaveCSS('color-scheme', 'light');
+  await expect(colorSchemeMeta).toHaveAttribute('content', 'light');
 });
 
 test('the My Signups footer fills the viewport on short pages and follows long pages', async ({ page, backend }) => {

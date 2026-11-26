@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { test, expect, ownProfile, fixtureSession, profile, role, signInFixture, user, waiver } from '../helpers/browser.js';
 
 const confirmation = '/rest/v1/rpc/confirm_volunteer_signup';
@@ -165,4 +166,43 @@ test('a guest with an immediate session signs the waiver before confirming the s
   await confirm.click();
   await expect(page.getByText("You're all set!")).toBeVisible();
   expect(backend.calls('POST', confirmation)).toBe(1);
+});
+
+test('the cancel dialog is a native modal that closes on Escape and returns focus', async ({ page, backend }) => {
+  await signInFixture(page, backend, 'volunteer', {
+    signups: [{ id: 'fixture-signup', role_id: role.id, status: 'confirmed', role }],
+  });
+  const opener = page.getByRole('button', { name: 'Cancel Signup', exact: true });
+  await opener.click();
+  const dialog = page.getByRole('dialog', { name: 'Cancel Signup Confirmation' });
+  await expect(dialog).toBeVisible();
+  expect(await dialog.evaluate((node) => node.matches(':modal'))).toBe(true);
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  await expect(opener).toBeFocused();
+  expect(backend.calls('PATCH', '/rest/v1/signups')).toBe(0);
+});
+
+test.describe('calendar export from a device outside Pacific time', () => {
+  test.use({ timezoneId: 'America/New_York' });
+
+  test('keeps the Pacific shift time and escapes text fields', async ({ page, backend }) => {
+    const detailedRole = {
+      ...role,
+      description: 'Bring water, sunscreen; arrive early.\nCheck in at the tent.',
+      location: 'Start/finish, Tilden',
+    };
+    await signInFixture(page, backend, 'volunteer', {
+      signups: [{ id: 'fixture-signup', role_id: role.id, status: 'confirmed', role: detailedRole }],
+    });
+    const download = page.waitForEvent('download');
+    await page.getByRole('button', { name: /Add to Calendar/ }).click();
+    const ics = await readFile(await (await download).path(), 'utf8');
+    expect(ics).toContain('BEGIN:VTIMEZONE\r\nTZID:America/Los_Angeles');
+    expect(ics).toContain('DTSTART;TZID=America/Los_Angeles:20990418T080000');
+    expect(ics).toContain('DTEND;TZID=America/Los_Angeles:20990418T100000');
+    expect(ics).not.toMatch(/DTSTART:\d{8}T\d{6}Z/);
+    expect(ics).toContain('DESCRIPTION:Bring water\\, sunscreen\\; arrive early.\\nCheck in at the tent.');
+    expect(ics).toContain('LOCATION:Start/finish\\, Tilden');
+  });
 });

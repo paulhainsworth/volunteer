@@ -5,6 +5,7 @@
   
   // Layout
   import Layout from './lib/components/Layout.svelte';
+  import AppDialogs from './lib/components/AppDialogs.svelte';
   
   // Routes
   import Home from './routes/Home.svelte';
@@ -124,3 +125,5 @@
 <Layout>
   <Router {routes} />
 </Layout>
+
+<AppDialogs />
